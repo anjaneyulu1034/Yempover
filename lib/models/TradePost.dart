@@ -35,5 +35,6 @@ class TradePost {
     required this.canClubItems,
     required this.isSold,
     required this.hasAcceptedOffer,
+    required String type,
   });
 }

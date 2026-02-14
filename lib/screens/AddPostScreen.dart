@@ -1,1421 +1,238 @@
-// import 'package:flutter/material.dart';
-// import 'package:intl/intl.dart';
-// import 'package:yempower_app/models/TradePost.dart';
-
-// class PostDetailScreen extends StatelessWidget {
-//   final TradePost post;
-
-//   const PostDetailScreen({
-//     super.key,
-//     required this.post,
-//     required List<dynamic> userItems,
-//   });
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Container(
-//       height: MediaQuery.of(context).size.height * 0.9,
-//       decoration: const BoxDecoration(
-//         color: Colors.white,
-//         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-//       ),
-//       child: Column(
-//         children: [
-//           // Header
-//           Padding(
-//             padding: const EdgeInsets.all(16),
-//             child: Row(
-//               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//               children: [
-//                 const Text(
-//                   'Post Details',
-//                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-//                 ),
-//                 IconButton(
-//                   onPressed: () => Navigator.pop(context),
-//                   icon: const Icon(Icons.close),
-//                 ),
-//               ],
-//             ),
-//           ),
-
-//           // Images
-//           SizedBox(
-//             height: 200,
-//             child: PageView.builder(
-//               itemCount: post.images.length,
-//               itemBuilder: (context, index) {
-//                 return Container(
-//                   margin: const EdgeInsets.symmetric(horizontal: 16),
-//                   decoration: BoxDecoration(
-//                     borderRadius: BorderRadius.circular(12),
-//                     image: DecorationImage(
-//                       image: NetworkImage(post.images[index]),
-//                       fit: BoxFit.cover,
-//                     ),
-//                   ),
-//                 );
-//               },
-//             ),
-//           ),
-
-//           // Details
-//           Expanded(
-//             child: SingleChildScrollView(
-//               padding: const EdgeInsets.all(16),
-//               child: Column(
-//                 crossAxisAlignment: CrossAxisAlignment.start,
-//                 children: [
-//                   // Title and Date
-//                   Row(
-//                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                     children: [
-//                       Text(
-//                         post.title,
-//                         style: const TextStyle(
-//                           fontSize: 24,
-//                           fontWeight: FontWeight.bold,
-//                         ),
-//                       ),
-//                       Text(
-//                         DateFormat('MMM dd, yyyy').format(post.postedDateTime),
-//                         style: const TextStyle(
-//                           fontSize: 12,
-//                           color: Colors.grey,
-//                         ),
-//                       ),
-//                     ],
-//                   ),
-
-//                   const SizedBox(height: 16),
-
-//                   // Views and Offers
-//                   Row(
-//                     children: [
-//                       Row(
-//                         children: [
-//                           const Icon(
-//                             Icons.remove_red_eye,
-//                             size: 16,
-//                             color: Colors.grey,
-//                           ),
-//                           const SizedBox(width: 4),
-//                           Text(
-//                             '${post.views} views',
-//                             style: const TextStyle(
-//                               fontSize: 14,
-//                               color: Colors.grey,
-//                             ),
-//                           ),
-//                         ],
-//                       ),
-//                       const SizedBox(width: 16),
-//                       GestureDetector(
-//                         onTap: () {
-//                           // Navigate to offers inbox
-//                         },
-//                         child: Row(
-//                           children: [
-//                             const Icon(
-//                               Icons.local_offer,
-//                               size: 16,
-//                               color: Colors.blue,
-//                             ),
-//                             const SizedBox(width: 4),
-//                             Text(
-//                               '${post.openOffers} Open Offers',
-//                               style: const TextStyle(
-//                                 fontSize: 14,
-//                                 color: Colors.blue,
-//                                 fontWeight: FontWeight.w600,
-//                               ),
-//                             ),
-//                           ],
-//                         ),
-//                       ),
-//                     ],
-//                   ),
-
-//                   const SizedBox(height: 24),
-
-//                   // Price
-//                   if (post.price.isNotEmpty)
-//                     Column(
-//                       crossAxisAlignment: CrossAxisAlignment.start,
-//                       children: [
-//                         const Text(
-//                           'Price:',
-//                           style: TextStyle(
-//                             fontSize: 16,
-//                             fontWeight: FontWeight.bold,
-//                           ),
-//                         ),
-//                         const SizedBox(height: 8),
-//                         Text(
-//                           post.price,
-//                           style: const TextStyle(
-//                             fontSize: 20,
-//                             color: Colors.green,
-//                             fontWeight: FontWeight.bold,
-//                           ),
-//                         ),
-//                         const SizedBox(height: 24),
-//                       ],
-//                     ),
-
-//                   // Description
-//                   const Text(
-//                     'Description:',
-//                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-//                   ),
-//                   const SizedBox(height: 8),
-//                   Text(
-//                     post.description,
-//                     style: const TextStyle(fontSize: 14, color: Colors.black87),
-//                   ),
-
-//                   const SizedBox(height: 24),
-
-//                   // Barter Details
-//                   if (post.isOpenForBarter)
-//                     Column(
-//                       crossAxisAlignment: CrossAxisAlignment.start,
-//                       children: [
-//                         const Text(
-//                           'Barter:',
-//                           style: TextStyle(
-//                             fontSize: 16,
-//                             fontWeight: FontWeight.bold,
-//                           ),
-//                         ),
-//                         const SizedBox(height: 8),
-//                         Text(
-//                           post.returnDetails,
-//                           style: const TextStyle(
-//                             fontSize: 14,
-//                             color: Colors.black87,
-//                           ),
-//                         ),
-//                         if (post.wishListCategory.isNotEmpty)
-//                           Padding(
-//                             padding: const EdgeInsets.only(top: 4),
-//                             child: Text(
-//                               'Looking for: ${post.wishListCategory}',
-//                               style: const TextStyle(
-//                                 fontSize: 12,
-//                                 color: Colors.green,
-//                               ),
-//                             ),
-//                           ),
-//                         const SizedBox(height: 24),
-//                       ],
-//                     ),
-
-//                   // Location
-//                   const Text(
-//                     'Product Location:',
-//                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-//                   ),
-//                   const SizedBox(height: 8),
-//                   Text(
-//                     post.location,
-//                     style: const TextStyle(fontSize: 14, color: Colors.black87),
-//                   ),
-
-//                   const SizedBox(height: 24),
-
-//                   // Transportation Flexibility
-//                   const Text(
-//                     'Transportation:',
-//                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-//                   ),
-//                   const SizedBox(height: 8),
-//                   Text(
-//                     post.transportationFlexibility,
-//                     style: const TextStyle(fontSize: 14, color: Colors.black87),
-//                   ),
-
-//                   const SizedBox(height: 40),
-//                 ],
-//               ),
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-// }
-
-// class AddPostScreen extends StatefulWidget {
-//   final TradePost? editPost;
-
-//   const AddPostScreen({super.key, this.editPost});
-
-//   @override
-//   _AddPostScreenState createState() => _AddPostScreenState();
-// }
-
-// class _AddPostScreenState extends State<AddPostScreen> {
-//   int _selectedOption = 1;
-//   String _postType = 'Product';
-//   final TextEditingController _titleController = TextEditingController();
-//   final TextEditingController _descriptionController = TextEditingController();
-//   final TextEditingController _locationController = TextEditingController();
-//   String? _selectedCategory;
-//   final List<String> _categories = [
-//     'Furniture',
-//     'Electronics',
-//     'Home Decor',
-//     'Plumbing',
-//     'Clothing',
-//     'Books',
-//     'Services',
-//   ];
-
-//   // Step 2 variables
-//   bool _barterAvailable = false;
-//   String? _barterCategory;
-//   final TextEditingController _barterWishController = TextEditingController();
-//   bool _canClubItems = true;
-//   bool _soldForMoney = false;
-//   final TextEditingController _priceController = TextEditingController();
-//   String _transportationOption = 'transport_desired';
-
-//   // Looking for variables
-//   bool _willPay = false;
-//   final TextEditingController _willPayAmountController =
-//       TextEditingController();
-
-//   @override
-//   void initState() {
-//     super.initState();
-//     if (widget.editPost != null) {
-//       _initializeEditMode();
-//     }
-//   }
-
-//   void _initializeEditMode() {
-//     final post = widget.editPost!;
-//     _titleController.text = post.title;
-//     _descriptionController.text = post.description;
-//     _locationController.text = post.location;
-//     _selectedCategory = post.category;
-//     _barterAvailable = post.isOpenForBarter;
-//     _canClubItems = post.canClubItems;
-//     _barterWishController.text = post.wishListCategory;
-//     _transportationOption = _getTransportationOption(
-//       post.transportationFlexibility,
-//     );
-
-//     if (post.price.isNotEmpty && post.price.startsWith('\$')) {
-//       _soldForMoney = true;
-//       _priceController.text = post.price
-//           .replaceAll('\$', '')
-//           .replaceAll(',', '');
-//     }
-//   }
-
-//   String _getTransportationOption(String flexibility) {
-//     if (flexibility.contains('transported to desired location')) {
-//       return 'transport_desired';
-//     } else if (flexibility.contains('picked from location')) {
-//       return 'pickup_only';
-//     } else {
-//       return 'transport_with_charge';
-//     }
-//   }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Container(
-//       height: MediaQuery.of(context).size.height * 0.95,
-//       decoration: const BoxDecoration(
-//         color: Colors.white,
-//         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-//       ),
-//       child: Column(
-//         children: [
-//           // Header
-//           Padding(
-//             padding: const EdgeInsets.all(16),
-//             child: Row(
-//               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//               children: [
-//                 Text(
-//                   widget.editPost != null ? 'Edit Post' : 'Add Post',
-//                   style: const TextStyle(
-//                     fontSize: 20,
-//                     fontWeight: FontWeight.bold,
-//                   ),
-//                 ),
-//                 IconButton(
-//                   onPressed: () => Navigator.pop(context),
-//                   icon: const Icon(Icons.close),
-//                 ),
-//               ],
-//             ),
-//           ),
-
-//           Expanded(
-//             child: SingleChildScrollView(
-//               padding: const EdgeInsets.symmetric(horizontal: 16),
-//               child: Column(
-//                 crossAxisAlignment: CrossAxisAlignment.start,
-//                 children: [
-//                   if (widget.editPost == null) ...[
-//                     const Text(
-//                       'Select Your Post Type',
-//                       style: TextStyle(
-//                         fontSize: 18,
-//                         fontWeight: FontWeight.w600,
-//                       ),
-//                     ),
-//                     const SizedBox(height: 16),
-//                     _buildOptionCard(
-//                       1,
-//                       'You want to add your product/service to barter/sell in Marketplace.',
-//                     ),
-//                     const SizedBox(height: 12),
-//                     _buildOptionCard(
-//                       2,
-//                       'You need (or are you looking for) a specific product or service in the Marketplace.',
-//                     ),
-//                     const SizedBox(height: 24),
-//                   ],
-
-//                   // Step 1: Basic Details
-//                   if (_selectedOption == 1 || widget.editPost != null)
-//                     _buildStep1(),
-
-//                   if (_selectedOption == 2 && widget.editPost == null)
-//                     _buildLookingForStep1(),
-
-//                   const SizedBox(height: 40),
-//                 ],
-//               ),
-//             ),
-//           ),
-
-//           // Navigation Buttons
-//           Padding(
-//             padding: const EdgeInsets.all(16),
-//             child: Row(
-//               children: [
-//                 Expanded(
-//                   child: OutlinedButton(
-//                     onPressed: () => Navigator.pop(context),
-//                     style: OutlinedButton.styleFrom(
-//                       padding: const EdgeInsets.symmetric(vertical: 16),
-//                       shape: RoundedRectangleBorder(
-//                         borderRadius: BorderRadius.circular(12),
-//                       ),
-//                     ),
-//                     child: const Text('Back'),
-//                   ),
-//                 ),
-//                 const SizedBox(width: 12),
-//                 Expanded(
-//                   child: ElevatedButton(
-//                     onPressed: _proceedToNextStep,
-//                     style: ElevatedButton.styleFrom(
-//                       backgroundColor: const Color(0xFF2E5BFF),
-//                       padding: const EdgeInsets.symmetric(vertical: 16),
-//                       shape: RoundedRectangleBorder(
-//                         borderRadius: BorderRadius.circular(12),
-//                       ),
-//                     ),
-//                     child: Text(
-//                       widget.editPost != null ? 'Re-post' : 'Next',
-//                       style: const TextStyle(color: Colors.white),
-//                     ),
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-
-//   Widget _buildOptionCard(int option, String description) {
-//     return Card(
-//       elevation: 2,
-//       shape: RoundedRectangleBorder(
-//         borderRadius: BorderRadius.circular(12),
-//         side: BorderSide(
-//           color: _selectedOption == option
-//               ? const Color(0xFF2E5BFF)
-//               : Colors.transparent,
-//           width: 2,
-//         ),
-//       ),
-//       child: InkWell(
-//         onTap: () => setState(() => _selectedOption = option),
-//         borderRadius: BorderRadius.circular(12),
-//         child: Padding(
-//           padding: const EdgeInsets.all(16),
-//           child: Row(
-//             children: [
-//               Container(
-//                 width: 24,
-//                 height: 24,
-//                 decoration: BoxDecoration(
-//                   shape: BoxShape.circle,
-//                   border: Border.all(
-//                     color: _selectedOption == option
-//                         ? const Color(0xFF2E5BFF)
-//                         : Colors.grey,
-//                     width: 2,
-//                   ),
-//                 ),
-//                 child: _selectedOption == option
-//                     ? const Icon(
-//                         Icons.circle,
-//                         size: 12,
-//                         color: Color(0xFF2E5BFF),
-//                       )
-//                     : null,
-//               ),
-//               const SizedBox(width: 16),
-//               Expanded(
-//                 child: Text(description, style: const TextStyle(fontSize: 14)),
-//               ),
-//             ],
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-
-//   Widget _buildStep1() {
-//     return Column(
-//       crossAxisAlignment: CrossAxisAlignment.start,
-//       children: [
-//         const Text(
-//           'Create a New Post',
-//           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-//         ),
-//         const SizedBox(height: 24),
-
-//         // Post Type
-//         const Text(
-//           'Post Type',
-//           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-//         ),
-//         const SizedBox(height: 8),
-//         Row(
-//           children: [
-//             Expanded(
-//               child: ChoiceChip(
-//                 label: const Text('Product'),
-//                 selected: _postType == 'Product',
-//                 onSelected: (selected) => setState(() => _postType = 'Product'),
-//               ),
-//             ),
-//             const SizedBox(width: 16),
-//             Expanded(
-//               child: ChoiceChip(
-//                 label: const Text('Service'),
-//                 selected: _postType == 'Service',
-//                 onSelected: (selected) => setState(() => _postType = 'Service'),
-//               ),
-//             ),
-//           ],
-//         ),
-
-//         const SizedBox(height: 24),
-
-//         // Title
-//         const Text(
-//           'Title *',
-//           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-//         ),
-//         const SizedBox(height: 8),
-//         TextField(
-//           controller: _titleController,
-//           decoration: InputDecoration(
-//             hintText: 'Enter product/service title',
-//             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-//           ),
-//         ),
-
-//         const SizedBox(height: 24),
-
-//         // Category
-//         const Text(
-//           'Category *',
-//           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-//         ),
-//         const SizedBox(height: 8),
-//         DropdownButtonFormField<String>(
-//           value: _selectedCategory,
-//           decoration: InputDecoration(
-//             hintText: 'Select category',
-//             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-//           ),
-//           items: _categories.map((category) {
-//             return DropdownMenuItem(value: category, child: Text(category));
-//           }).toList(),
-//           onChanged: (value) => setState(() => _selectedCategory = value),
-//         ),
-
-//         const SizedBox(height: 24),
-
-//         // Description
-//         const Text(
-//           'Description *',
-//           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-//         ),
-//         const SizedBox(height: 8),
-//         TextField(
-//           controller: _descriptionController,
-//           maxLines: 4,
-//           decoration: InputDecoration(
-//             hintText: 'Describe your product/service',
-//             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-//           ),
-//         ),
-
-//         const SizedBox(height: 24),
-
-//         // Upload Photos
-//         const Text(
-//           'Upload Photos *',
-//           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-//         ),
-//         const SizedBox(height: 8),
-//         Container(
-//           height: 120,
-//           decoration: BoxDecoration(
-//             border: Border.all(color: Colors.grey.shade300),
-//             borderRadius: BorderRadius.circular(8),
-//           ),
-//           child: Column(
-//             mainAxisAlignment: MainAxisAlignment.center,
-//             children: [
-//               const Icon(Icons.cloud_upload, size: 40, color: Colors.grey),
-//               const SizedBox(height: 8),
-//               const Text(
-//                 'Upload your Images',
-//                 style: TextStyle(color: Colors.grey),
-//               ),
-//               const SizedBox(height: 4),
-//               const Text(
-//                 'Image Here, or click to upload',
-//                 style: TextStyle(fontSize: 12, color: Colors.grey),
-//               ),
-//               const SizedBox(height: 8),
-//               if (_postType == 'Product')
-//                 const Text(
-//                   '*At least 1 image required for products',
-//                   style: TextStyle(fontSize: 11, color: Colors.red),
-//                 ),
-//             ],
-//           ),
-//         ),
-
-//         const SizedBox(height: 24),
-
-//         // Location
-//         const Text(
-//           'Enter Product Location *',
-//           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-//         ),
-//         const SizedBox(height: 8),
-//         TextField(
-//           controller: _locationController,
-//           decoration: InputDecoration(
-//             hintText: 'Enter location',
-//             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-//             prefixIcon: const Icon(Icons.location_on),
-//             suffixIcon: IconButton(
-//               icon: const Icon(Icons.my_location),
-//               onPressed: () {
-//                 // Get current location
-//                 _locationController.text = 'Current Location';
-//               },
-//             ),
-//           ),
-//         ),
-//         const SizedBox(height: 8),
-//         Row(
-//           children: [
-//             Checkbox(value: true, onChanged: (value) {}),
-//             const Expanded(
-//               child: Text(
-//                 'Use my current location: 1062 Clarksburg Park Road, Hollenberg, Kansas, 66946',
-//                 style: TextStyle(fontSize: 12),
-//               ),
-//             ),
-//           ],
-//         ),
-//       ],
-//     );
-//   }
-
-//   Widget _buildLookingForStep1() {
-//     return Column(
-//       crossAxisAlignment: CrossAxisAlignment.start,
-//       children: [
-//         const Text(
-//           'Looking For',
-//           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-//         ),
-//         const SizedBox(height: 24),
-
-//         // Similar fields as Step 1 but for "Looking For"
-//         const Text(
-//           'Post Type',
-//           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-//         ),
-//         const SizedBox(height: 8),
-//         Row(
-//           children: [
-//             Expanded(
-//               child: ChoiceChip(
-//                 label: const Text('Product'),
-//                 selected: _postType == 'Product',
-//                 onSelected: (selected) => setState(() => _postType = 'Product'),
-//               ),
-//             ),
-//             const SizedBox(width: 16),
-//             Expanded(
-//               child: ChoiceChip(
-//                 label: const Text('Service'),
-//                 selected: _postType == 'Service',
-//                 onSelected: (selected) => setState(() => _postType = 'Service'),
-//               ),
-//             ),
-//           ],
-//         ),
-
-//         const SizedBox(height: 24),
-
-//         const Text(
-//           'Title *',
-//           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-//         ),
-//         const SizedBox(height: 8),
-//         TextField(
-//           decoration: InputDecoration(
-//             hintText: 'What are you looking for?',
-//             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-//           ),
-//         ),
-
-//         const SizedBox(height: 24),
-
-//         const Text(
-//           'Category *',
-//           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-//         ),
-//         const SizedBox(height: 8),
-//         DropdownButtonFormField<String>(
-//           decoration: InputDecoration(
-//             hintText: 'Select category',
-//             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-//           ),
-//           items: const [],
-//           onChanged: (String? value) {},
-//         ),
-
-//         const SizedBox(height: 24),
-
-//         const Text(
-//           'Description *',
-//           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-//         ),
-//         const SizedBox(height: 8),
-//         TextField(
-//           maxLines: 4,
-//           decoration: InputDecoration(
-//             hintText: 'Describe what you are looking for',
-//             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-//           ),
-//         ),
-
-//         const SizedBox(height: 24),
-
-//         const Text(
-//           'Upload Photos (Optional)',
-//           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-//         ),
-//         const SizedBox(height: 8),
-//         Container(
-//           height: 120,
-//           decoration: BoxDecoration(
-//             border: Border.all(color: Colors.grey.shade300),
-//             borderRadius: BorderRadius.circular(8),
-//           ),
-//           child: const Column(
-//             mainAxisAlignment: MainAxisAlignment.center,
-//             children: [
-//               Icon(Icons.cloud_upload, size: 40, color: Colors.grey),
-//               SizedBox(height: 8),
-//               Text(
-//                 'Add reference images (optional)',
-//                 style: TextStyle(color: Colors.grey),
-//               ),
-//             ],
-//           ),
-//         ),
-
-//         const SizedBox(height: 24),
-
-//         const Text(
-//           'Location *',
-//           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-//         ),
-//         const SizedBox(height: 8),
-//         TextField(
-//           decoration: InputDecoration(
-//             hintText: 'Enter preferred location',
-//             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-//             prefixIcon: const Icon(Icons.location_on),
-//           ),
-//         ),
-//       ],
-//     );
-//   }
-
-//   void _proceedToNextStep() {
-//     if (_selectedOption == 1 && widget.editPost == null) {
-//       _showStep2Dialog();
-//     } else {
-//       _submitPost();
-//     }
-//   }
-
-//   void _showStep2Dialog() {
-//     showModalBottomSheet(
-//       context: context,
-//       isScrollControlled: true,
-//       backgroundColor: Colors.transparent,
-//       builder: (context) => _buildStep2Dialog(),
-//     );
-//   }
-
-//   Widget _buildStep2Dialog() {
-//     return StatefulBuilder(
-//       builder: (context, setState) {
-//         return Container(
-//           height: MediaQuery.of(context).size.height * 0.9,
-//           decoration: const BoxDecoration(
-//             color: Colors.white,
-//             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-//           ),
-//           child: Column(
-//             children: [
-//               Padding(
-//                 padding: const EdgeInsets.all(16),
-//                 child: Row(
-//                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                   children: [
-//                     const Text(
-//                       'Additional Details',
-//                       style: TextStyle(
-//                         fontSize: 20,
-//                         fontWeight: FontWeight.bold,
-//                       ),
-//                     ),
-//                     IconButton(
-//                       onPressed: () => Navigator.pop(context),
-//                       icon: const Icon(Icons.close),
-//                     ),
-//                   ],
-//                 ),
-//               ),
-
-//               Expanded(
-//                 child: SingleChildScrollView(
-//                   padding: const EdgeInsets.symmetric(horizontal: 16),
-//                   child: Column(
-//                     crossAxisAlignment: CrossAxisAlignment.start,
-//                     children: [
-//                       // Barter Available
-//                       Row(
-//                         children: [
-//                           Checkbox(
-//                             value: _barterAvailable,
-//                             onChanged: (value) =>
-//                                 setState(() => _barterAvailable = value!),
-//                           ),
-//                           const Text('Barter Available'),
-//                         ],
-//                       ),
-
-//                       if (_barterAvailable) ...[
-//                         const SizedBox(height: 16),
-//                         const Text(
-//                           'Select Barter Category',
-//                           style: TextStyle(
-//                             fontSize: 14,
-//                             fontWeight: FontWeight.w500,
-//                           ),
-//                         ),
-//                         const SizedBox(height: 8),
-//                         DropdownButtonFormField<String>(
-//                           value: _barterCategory,
-//                           decoration: InputDecoration(
-//                             hintText: 'What do you want in return?',
-//                             border: OutlineInputBorder(
-//                               borderRadius: BorderRadius.circular(8),
-//                             ),
-//                           ),
-//                           items: _categories.map((category) {
-//                             return DropdownMenuItem(
-//                               value: category,
-//                               child: Text(category),
-//                             );
-//                           }).toList(),
-//                           onChanged: (value) =>
-//                               setState(() => _barterCategory = value),
-//                         ),
-
-//                         const SizedBox(height: 16),
-
-//                         const Text(
-//                           'Describe Barter Wish',
-//                           style: TextStyle(
-//                             fontSize: 14,
-//                             fontWeight: FontWeight.w500,
-//                           ),
-//                         ),
-//                         const SizedBox(height: 8),
-//                         TextField(
-//                           controller: _barterWishController,
-//                           decoration: InputDecoration(
-//                             hintText: 'Describe what you want in return',
-//                             border: OutlineInputBorder(
-//                               borderRadius: BorderRadius.circular(8),
-//                             ),
-//                           ),
-//                         ),
-//                       ],
-
-//                       const SizedBox(height: 24),
-
-//                       // Club Items Option
-//                       const Text(
-//                         'Item Clubbing Option',
-//                         style: TextStyle(
-//                           fontSize: 14,
-//                           fontWeight: FontWeight.w500,
-//                         ),
-//                       ),
-//                       const SizedBox(height: 8),
-//                       Column(
-//                         children: [
-//                           RadioListTile<bool>(
-//                             title: const Text(
-//                               'This item can be clubbed with other items in your list while users make an offer',
-//                             ),
-//                             value: true,
-//                             groupValue: _canClubItems,
-//                             onChanged: (value) =>
-//                                 setState(() => _canClubItems = value!),
-//                           ),
-//                           RadioListTile<bool>(
-//                             title: const Text(
-//                               'No, this item cannot be clubbed and traded as a single product',
-//                             ),
-//                             value: false,
-//                             groupValue: _canClubItems,
-//                             onChanged: (value) =>
-//                                 setState(() => _canClubItems = value!),
-//                           ),
-//                         ],
-//                       ),
-
-//                       const SizedBox(height: 24),
-
-//                       // Sold for Money
-//                       Row(
-//                         children: [
-//                           Checkbox(
-//                             value: _soldForMoney,
-//                             onChanged: (value) =>
-//                                 setState(() => _soldForMoney = value!),
-//                           ),
-//                           const Text('This item is sold for money'),
-//                         ],
-//                       ),
-
-//                       if (_soldForMoney) ...[
-//                         const SizedBox(height: 8),
-//                         TextField(
-//                           controller: _priceController,
-//                           decoration: InputDecoration(
-//                             hintText: 'Enter price',
-//                             prefixText: '\$ ',
-//                             border: OutlineInputBorder(
-//                               borderRadius: BorderRadius.circular(8),
-//                             ),
-//                           ),
-//                           keyboardType: TextInputType.number,
-//                         ),
-//                       ],
-
-//                       const SizedBox(height: 24),
-
-//                       // Transportation Flexibility
-//                       const Text(
-//                         'Transportation Flexibility',
-//                         style: TextStyle(
-//                           fontSize: 14,
-//                           fontWeight: FontWeight.w500,
-//                         ),
-//                       ),
-//                       const SizedBox(height: 8),
-//                       Column(
-//                         children: [
-//                           RadioListTile<String>(
-//                             title: const Text(
-//                               'This item can be transported to desired location',
-//                             ),
-//                             value: 'transport_desired',
-//                             groupValue: _transportationOption,
-//                             onChanged: (value) =>
-//                                 setState(() => _transportationOption = value!),
-//                           ),
-//                           RadioListTile<String>(
-//                             title: const Text(
-//                               'This item has to be picked from location',
-//                             ),
-//                             value: 'pickup_only',
-//                             groupValue: _transportationOption,
-//                             onChanged: (value) =>
-//                                 setState(() => _transportationOption = value!),
-//                           ),
-//                           RadioListTile<String>(
-//                             title: const Text(
-//                               'This item can be transported with a delivery charge',
-//                             ),
-//                             value: 'transport_with_charge',
-//                             groupValue: _transportationOption,
-//                             onChanged: (value) =>
-//                                 setState(() => _transportationOption = value!),
-//                           ),
-//                         ],
-//                       ),
-
-//                       const SizedBox(height: 40),
-//                     ],
-//                   ),
-//                 ),
-//               ),
-
-//               // Action Buttons
-//               Padding(
-//                 padding: const EdgeInsets.all(16),
-//                 child: Row(
-//                   children: [
-//                     Expanded(
-//                       child: OutlinedButton(
-//                         onPressed: () => Navigator.pop(context),
-//                         style: OutlinedButton.styleFrom(
-//                           padding: const EdgeInsets.symmetric(vertical: 16),
-//                           shape: RoundedRectangleBorder(
-//                             borderRadius: BorderRadius.circular(12),
-//                           ),
-//                         ),
-//                         child: const Text('Back'),
-//                       ),
-//                     ),
-//                     const SizedBox(width: 12),
-//                     Expanded(
-//                       child: ElevatedButton(
-//                         onPressed: _submitPost,
-//                         style: ElevatedButton.styleFrom(
-//                           backgroundColor: const Color(0xFF2E5BFF),
-//                           padding: const EdgeInsets.symmetric(vertical: 16),
-//                           shape: RoundedRectangleBorder(
-//                             borderRadius: BorderRadius.circular(12),
-//                           ),
-//                         ),
-//                         child: const Text(
-//                           'Post',
-//                           style: TextStyle(color: Colors.white),
-//                         ),
-//                       ),
-//                     ),
-//                   ],
-//                 ),
-//               ),
-//             ],
-//           ),
-//         );
-//       },
-//     );
-//   }
-
-//   void _submitPost() {
-//     Navigator.pop(context); // Close bottom sheet
-//     Navigator.pop(context); // Close add post screen
-
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       SnackBar(
-//         content: Text(
-//           widget.editPost != null
-//               ? 'Post updated successfully!'
-//               : 'Post added successfully!',
-//         ),
-//         backgroundColor: Colors.green,
-//       ),
-//     );
-//   }
-// }
-
+// lib/screens/AddPostScreen.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:yempower_app/models/TradePost.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:convert';
+import 'package:yempower_app/services/category_service.dart';
+import 'package:yempower_app/services/add_post_service.dart';
+import 'package:yempower_app/models/add_post_model.dart';
+import 'package:yempower_app/services/token_service.dart';
+import 'package:yempower_app/services/location_service.dart';
 
-class PostDetailScreen extends StatelessWidget {
-  final TradePost post;
+class AddPostScreen extends StatefulWidget {
+  final Function()? onPostAdded;
 
-  const PostDetailScreen({
-    super.key,
-    required this.post,
-    required List<dynamic> userItems,
-  });
+  const AddPostScreen({super.key, this.onPostAdded});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.9,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Post Details',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-          ),
+  State<AddPostScreen> createState() => _AddPostScreenState();
+}
 
-          // Images
-          SizedBox(
-            height: 200,
-            child: PageView.builder(
-              itemCount: post.images.length,
-              itemBuilder: (context, index) {
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    image: DecorationImage(
-                      image: NetworkImage(post.images[index]),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
+class _AddPostScreenState extends State<AddPostScreen> {
+  // Services
+  final CategoryService _categoryService = CategoryService();
+  final AddPostService _addPostService = AddPostService();
+  final LocationService _locationService = LocationService();
 
-          // Details
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Title and Date
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        post.title,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        DateFormat('MMM dd, yyyy').format(post.postedDateTime),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
+  // Step 1 variables
+  int _selectedOption = 1;
+  String _postType = 'Product';
 
-                  const SizedBox(height: 16),
+  // Form controllers
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _barterWishController = TextEditingController();
+  final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _willPayAmountController =
+      TextEditingController();
 
-                  // Views and Offers
-                  Row(
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.remove_red_eye,
-                            size: 16,
-                            color: Colors.grey,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${post.views} views',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 16),
-                      GestureDetector(
-                        onTap: () {
-                          // Navigate to offers inbox
-                        },
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.local_offer,
-                              size: 16,
-                              color: Colors.blue,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${post.openOffers} Open Offers',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.blue,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+  // Category data
+  List<Map<String, dynamic>> _childCategories = [];
+  String? _selectedCategoryId;
+  String? _selectedCategoryName;
+  bool _isLoadingCategories = false;
+  String? _categoryError;
 
-                  const SizedBox(height: 24),
+  // Step 2 variables
+  bool _barterAvailable = false;
+  String? _barterCategoryId;
+  String? _barterCategoryName;
+  bool _canClubItems = true;
+  bool _soldForMoney = false;
+  String _transportationOption = 'transport_desired';
 
-                  // Price
-                  if (post.price.isNotEmpty)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Price:',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          post.price,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            color: Colors.green,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
+  // Image upload variables
+  List<File> _selectedImages = [];
+  bool _isUploadingImages = false;
+  final ImagePicker _picker = ImagePicker();
+  bool _isSubmitting = false;
 
-                  // Description
-                  const Text(
-                    'Description:',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    post.description,
-                    style: const TextStyle(fontSize: 14, color: Colors.black87),
-                  ),
+  // Location variables
+  bool _isGettingLocation = false;
+  double? _currentLatitude;
+  double? _currentLongitude;
 
-                  const SizedBox(height: 24),
+  @override
+  void initState() {
+    super.initState();
+    _checkLoginAndLoadCategories();
+  }
 
-                  // Barter Details
-                  if (post.isOpenForBarter)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Barter:',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          post.returnDetails,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        if (post.wishListCategory.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              'Looking for: ${post.wishListCategory}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.green,
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _locationController.dispose();
+    _barterWishController.dispose();
+    _priceController.dispose();
+    _willPayAmountController.dispose();
+    _categoryService.dispose();
+    _addPostService.dispose();
+    super.dispose();
+  }
 
-                  // Location
-                  const Text(
-                    'Product Location:',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    post.location,
-                    style: const TextStyle(fontSize: 14, color: Colors.black87),
-                  ),
+  Future<void> _checkLoginAndLoadCategories() async {
+    final isLoggedIn = await TokenService().isLoggedIn();
+    if (!isLoggedIn) {
+      _showLoginDialog();
+      return;
+    }
+    _loadCategories();
+  }
 
-                  const SizedBox(height: 24),
-
-                  // Transportation Flexibility
-                  const Text(
-                    'Transportation:',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    post.transportationFlexibility,
-                    style: const TextStyle(fontSize: 14, color: Colors.black87),
-                  ),
-
-                  const SizedBox(height: 40),
-                ],
-              ),
-            ),
+  void _showLoginDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Session Expired'),
+        content: const Text('Please login again to continue.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context); // Close AddPostScreen
+              Navigator.pushReplacementNamed(context, '/login');
+            },
+            child: const Text('OK'),
           ),
         ],
       ),
     );
   }
-}
 
-class AddPostScreen extends StatefulWidget {
-  final TradePost? editPost;
+  Future<void> _loadCategories() async {
+    if (_postType.isEmpty) return;
 
-  const AddPostScreen({super.key, this.editPost});
+    setState(() {
+      _isLoadingCategories = true;
+      _categoryError = null;
+    });
 
-  @override
-  _AddPostScreenState createState() => _AddPostScreenState();
-}
+    try {
+      final type = _postType.toLowerCase();
+      final response = await _categoryService.getCategories(type: type);
 
-class _AddPostScreenState extends State<AddPostScreen> {
-  int _selectedOption = 1;
-  String _postType = 'Product';
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
-  String? _selectedCategory;
-  final List<String> _categories = [
-    'Furniture',
-    'Electronics',
-    'Home Decor',
-    'Plumbing',
-    'Clothing',
-    'Books',
-    'Services',
-  ];
+      setState(() {
+        _childCategories = _categoryService.getAllChildCategories(response);
+        _isLoadingCategories = false;
+      });
 
-  // Step 2 variables
-  bool _barterAvailable = false;
-  String? _barterCategory;
-  final TextEditingController _barterWishController = TextEditingController();
-  bool _canClubItems = true;
-  bool _soldForMoney = false;
-  final TextEditingController _priceController = TextEditingController();
-  String _transportationOption = 'transport_desired';
-
-  // Looking for variables
-  bool _willPay = false;
-  final TextEditingController _willPayAmountController =
-      TextEditingController();
-
-  // Image upload variables
-  List<File> _selectedImages = [];
-  final ImagePicker _picker = ImagePicker();
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.editPost != null) {
-      _initializeEditMode();
+      debugPrint('✅ Loaded ${_childCategories.length} child categories');
+    } catch (e) {
+      setState(() {
+        _isLoadingCategories = false;
+        _categoryError = e.toString().replaceAll('Exception: ', '');
+      });
+      _showErrorSnackBar('Failed to load categories: ${e.toString()}');
     }
   }
 
-  void _initializeEditMode() {
-    final post = widget.editPost!;
-    _titleController.text = post.title;
-    _descriptionController.text = post.description;
-    _locationController.text = post.location;
-    _selectedCategory = post.category;
-    _barterAvailable = post.isOpenForBarter;
-    _canClubItems = post.canClubItems;
-    _barterWishController.text = post.wishListCategory;
-    _transportationOption = _getTransportationOption(
-      post.transportationFlexibility,
+  // Location Methods
+  Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isGettingLocation = true;
+    });
+
+    try {
+      bool serviceEnabled = await _locationService.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showLocationServiceDialog();
+        return;
+      }
+
+      Position? position = await _locationService.getCurrentLocation();
+
+      if (position == null) {
+        _showError('Unable to get your current location');
+        return;
+      }
+
+      _currentLatitude = position.latitude;
+      _currentLongitude = position.longitude;
+
+      String? address = await _locationService.getAddressFromLatLng(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (address != null && address.isNotEmpty) {
+        setState(() {
+          _locationController.text = address;
+        });
+        _showSuccessSnackBar('Location updated successfully');
+      } else {
+        setState(() {
+          _locationController.text =
+              '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+        });
+      }
+    } catch (e) {
+      debugPrint('🔴 Error getting location: $e');
+      _showError('Failed to get location: ${e.toString()}');
+    } finally {
+      setState(() {
+        _isGettingLocation = false;
+      });
+    }
+  }
+
+  void _showLocationServiceDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Location Services Disabled'),
+        content: const Text(
+          'Please enable location services to use this feature.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await Geolocator.openLocationSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
     );
-
-    if (post.price.isNotEmpty && post.price.startsWith('\$')) {
-      _soldForMoney = true;
-      _priceController.text = post.price
-          .replaceAll('\$', '')
-          .replaceAll(',', '');
-    }
   }
 
-  String _getTransportationOption(String flexibility) {
-    if (flexibility.contains('transported to desired location')) {
-      return 'transport_desired';
-    } else if (flexibility.contains('picked from location')) {
-      return 'pickup_only';
-    } else {
-      return 'transport_with_charge';
-    }
-  }
-
+  // Updated image picker with compression
   Future<void> _pickImage(ImageSource source) async {
     try {
-      final XFile? image = await _picker.pickImage(source: source);
+      final XFile? image = await _picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 70, // Reduced quality for smaller payload
+      );
+
       if (image != null) {
         setState(() {
           _selectedImages.add(File(image.path));
         });
+        debugPrint('✅ Image selected: ${image.path}');
       }
     } catch (e) {
-      print('Error picking image: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to pick image'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      debugPrint('🔴 Error picking image: $e');
+      _showErrorSnackBar('Failed to pick image');
     }
   }
 
@@ -1480,13 +297,36 @@ class _AddPostScreenState extends State<AddPostScreen> {
     });
   }
 
+  // Updated image upload section with better UI feedback
   Widget _buildImageUploadSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Upload Photos *',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        Row(
+          children: [
+            Text(
+              'Upload Photos',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color:
+                    _postType == 'Product' &&
+                        _selectedOption == 1 &&
+                        _selectedImages.isEmpty
+                    ? Colors.red
+                    : Colors.black,
+              ),
+            ),
+            if (_postType == 'Product' && _selectedOption == 1)
+              Text(
+                ' *',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.red,
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: 8),
 
@@ -1542,46 +382,71 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
         // Upload Button
         GestureDetector(
-          onTap: _showImageSourceDialog,
+          onTap: _isUploadingImages ? null : _showImageSourceDialog,
           child: Container(
             height: 120,
             width: double.infinity,
             decoration: BoxDecoration(
               border: Border.all(
-                color: _postType == 'Product' && _selectedImages.isEmpty
+                color:
+                    _postType == 'Product' &&
+                        _selectedOption == 1 &&
+                        _selectedImages.isEmpty
                     ? Colors.red
                     : Colors.grey.shade300,
-                width: 1.5,
+                width:
+                    _postType == 'Product' &&
+                        _selectedOption == 1 &&
+                        _selectedImages.isEmpty
+                    ? 2
+                    : 1.5,
               ),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.cloud_upload, size: 40, color: Colors.grey),
-                const SizedBox(height: 8),
-                const Text(
-                  'Upload your Images',
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Tap to upload',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const SizedBox(height: 8),
-                if (_postType == 'Product')
-                  Text(
-                    _selectedImages.isEmpty
-                        ? '*At least 1 image required for products'
-                        : 'Add more images (optional)',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: _selectedImages.isEmpty ? Colors.red : Colors.grey,
+            child: _isUploadingImages
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 8),
+                        Text('Uploading images...'),
+                      ],
                     ),
+                  )
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.cloud_upload,
+                        size: 40,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Upload your Images',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Tap to upload',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_postType == 'Product' && _selectedOption == 1)
+                        Text(
+                          _selectedImages.isEmpty
+                              ? '*At least 1 image required'
+                              : 'Add more images (optional)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: _selectedImages.isEmpty
+                                ? Colors.red
+                                : Colors.grey,
+                          ),
+                        ),
+                    ],
                   ),
-              ],
-            ),
           ),
         ),
       ],
@@ -1650,7 +515,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
         // Upload Button
         GestureDetector(
-          onTap: _showImageSourceDialog,
+          onTap: _isUploadingImages ? null : _showImageSourceDialog,
           child: Container(
             height: 120,
             width: double.infinity,
@@ -1658,25 +523,287 @@ class _AddPostScreenState extends State<AddPostScreen> {
               border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.cloud_upload, size: 40, color: Colors.grey),
-                const SizedBox(height: 8),
-                const Text(
-                  'Add reference images (optional)',
-                  style: TextStyle(color: Colors.grey),
-                ),
-                if (_selectedImages.isEmpty) ...[
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Tap to upload',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+            child: _isUploadingImages
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 8),
+                        Text('Uploading images...'),
+                      ],
+                    ),
+                  )
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.cloud_upload,
+                        size: 40,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Add reference images (optional)',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                      if (_selectedImages.isEmpty) ...[
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Tap to upload',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Category',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const Text(
+              ' *',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.red,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        if (_isLoadingCategories)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (_categoryError != null)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.red.shade700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _categoryError!,
+                    style: TextStyle(color: Colors.red.shade700),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _loadCategories,
+                  child: const Text('Retry'),
+                ),
               ],
             ),
+          )
+        else if (_childCategories.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'No categories available for $_postType',
+                  style: TextStyle(color: Colors.grey.shade600),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: _loadCategories,
+                  child: const Text('Refresh'),
+                ),
+              ],
+            ),
+          )
+        else
+          DropdownButtonFormField<Map<String, dynamic>>(
+            value: _selectedCategoryId != null
+                ? _childCategories.firstWhere(
+                    (cat) => cat['id'] == _selectedCategoryId,
+                    orElse: () => _childCategories.first,
+                  )
+                : null,
+            decoration: InputDecoration(
+              hintText: 'Select a category',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+            ),
+            items: _childCategories.map((category) {
+              return DropdownMenuItem(
+                value: category,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      category['name'],
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    Text(
+                      category['parentName'] ?? '',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() {
+                  _selectedCategoryId = value['id'];
+                  _selectedCategoryName = value['name'];
+                });
+              }
+            },
+            validator: (value) {
+              if (_selectedCategoryId == null) {
+                return 'Please select a category';
+              }
+              return null;
+            },
           ),
+      ],
+    );
+  }
+
+  Widget _buildBarterCategoryDropdown() {
+    if (_childCategories.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Select Barter Category',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<Map<String, dynamic>>(
+          value: _barterCategoryId != null
+              ? _childCategories.firstWhere(
+                  (cat) => cat['id'] == _barterCategoryId,
+                  orElse: () => _childCategories.first,
+                )
+              : null,
+          decoration: InputDecoration(
+            hintText: 'What do you want in return?',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+          ),
+          items: _childCategories.map((category) {
+            return DropdownMenuItem(
+              value: category,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    category['name'],
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  Text(
+                    category['parentName'] ?? '',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: (value) {
+            if (value != null) {
+              setState(() {
+                _barterCategoryId = value['id'];
+                _barterCategoryName = value['name'];
+              });
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLocationField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Enter Product Location',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const Text(
+              ' *',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.red,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _locationController,
+          readOnly: true,
+          decoration: InputDecoration(
+            hintText: 'Tap location icon to get current location',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            prefixIcon: const Icon(Icons.location_on, color: Colors.blue),
+            suffixIcon: _isGettingLocation
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.my_location, color: Colors.blue),
+                    onPressed: _getCurrentLocation,
+                    tooltip: 'Get current location',
+                  ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Your current location will be used to find nearby items',
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
       ],
     );
@@ -1698,12 +825,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  widget.editPost != null ? 'Edit Post' : 'Add Post',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                const Text(
+                  'Add Post',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
@@ -1719,33 +843,25 @@ class _AddPostScreenState extends State<AddPostScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (widget.editPost == null) ...[
-                    const Text(
-                      'Select Your Post Type',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildOptionCard(
-                      1,
-                      'You want to add your product/service to barter/sell in Marketplace.',
-                    ),
-                    const SizedBox(height: 12),
-                    _buildOptionCard(
-                      2,
-                      'You need (or are you looking for) a specific product or service in the Marketplace.',
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+                  const Text(
+                    'Select Your Post Type',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildOptionCard(
+                    1,
+                    'You want to add your product/service to barter/sell in Marketplace.',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildOptionCard(
+                    2,
+                    'You need (or are you looking for) a specific product or service in the Marketplace.',
+                  ),
+                  const SizedBox(height: 24),
 
                   // Step 1: Basic Details
-                  if (_selectedOption == 1 || widget.editPost != null)
-                    _buildStep1(),
-
-                  if (_selectedOption == 2 && widget.editPost == null)
-                    _buildLookingForStep1(),
+                  if (_selectedOption == 1) _buildStep1(),
+                  if (_selectedOption == 2) _buildLookingForStep1(),
 
                   const SizedBox(height: 40),
                 ],
@@ -1767,13 +883,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text('Back'),
+                    child: const Text('Cancel'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _validateAndProceed,
+                    onPressed: _isSubmitting ? null : _validateAndProceed,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2E5BFF),
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1781,10 +897,19 @@ class _AddPostScreenState extends State<AddPostScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Text(
-                      widget.editPost != null ? 'Re-post' : 'Next',
-                      style: const TextStyle(color: Colors.white),
-                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Next',
+                            style: TextStyle(color: Colors.white),
+                          ),
                   ),
                 ),
               ],
@@ -1867,7 +992,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
               child: ChoiceChip(
                 label: const Text('Product'),
                 selected: _postType == 'Product',
-                onSelected: (selected) => setState(() => _postType = 'Product'),
+                onSelected: (selected) {
+                  setState(() {
+                    _postType = 'Product';
+                    _selectedCategoryId = null;
+                    _selectedCategoryName = null;
+                    _barterCategoryId = null;
+                    _barterCategoryName = null;
+                  });
+                  _loadCategories();
+                },
               ),
             ),
             const SizedBox(width: 16),
@@ -1875,7 +1009,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
               child: ChoiceChip(
                 label: const Text('Service'),
                 selected: _postType == 'Service',
-                onSelected: (selected) => setState(() => _postType = 'Service'),
+                onSelected: (selected) {
+                  setState(() {
+                    _postType = 'Service';
+                    _selectedCategoryId = null;
+                    _selectedCategoryName = null;
+                    _barterCategoryId = null;
+                    _barterCategoryName = null;
+                  });
+                  _loadCategories();
+                },
               ),
             ),
           ],
@@ -1884,53 +1027,74 @@ class _AddPostScreenState extends State<AddPostScreen> {
         const SizedBox(height: 24),
 
         // Title
-        const Text(
-          'Title *',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        Row(
+          children: [
+            const Text(
+              'Title',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const Text(
+              ' *',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.red,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _titleController,
           decoration: InputDecoration(
-            hintText: 'Enter product/service title',
+            hintText: _postType == 'Product'
+                ? 'Enter product title'
+                : 'Enter service title',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
           ),
         ),
 
         const SizedBox(height: 24),
 
         // Category
-        const Text(
-          'Category *',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: _selectedCategory,
-          decoration: InputDecoration(
-            hintText: 'Select category',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          items: _categories.map((category) {
-            return DropdownMenuItem(value: category, child: Text(category));
-          }).toList(),
-          onChanged: (value) => setState(() => _selectedCategory = value),
-        ),
+        _buildCategoryDropdown(),
 
         const SizedBox(height: 24),
 
         // Description
-        const Text(
-          'Description *',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        Row(
+          children: [
+            const Text(
+              'Description',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const Text(
+              ' *',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.red,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _descriptionController,
           maxLines: 4,
           decoration: InputDecoration(
-            hintText: 'Describe your product/service',
+            hintText: _postType == 'Product'
+                ? 'Describe your product'
+                : 'Describe your service',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
           ),
         ),
 
@@ -1939,41 +1103,12 @@ class _AddPostScreenState extends State<AddPostScreen> {
         // Upload Photos
         _buildImageUploadSection(),
 
-        const SizedBox(height: 24),
+        if (_postType == 'Product') ...[
+          const SizedBox(height: 24),
 
-        // Location
-        const Text(
-          'Enter Product Location *',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _locationController,
-          decoration: InputDecoration(
-            hintText: 'Enter location',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            prefixIcon: const Icon(Icons.location_on),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.my_location),
-              onPressed: () {
-                // Get current location
-                _locationController.text = 'Current Location';
-              },
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Checkbox(value: true, onChanged: (value) {}),
-            const Expanded(
-              child: Text(
-                'Use my current location: 1062 Clarksburg Park Road, Hollenberg, Kansas, 66946',
-                style: TextStyle(fontSize: 12),
-              ),
-            ),
-          ],
-        ),
+          // Location with current location feature
+          _buildLocationField(),
+        ],
       ],
     );
   }
@@ -1988,7 +1123,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
         ),
         const SizedBox(height: 24),
 
-        // Similar fields as Step 1 but for "Looking For"
+        // Post Type
         const Text(
           'Post Type',
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
@@ -2000,7 +1135,14 @@ class _AddPostScreenState extends State<AddPostScreen> {
               child: ChoiceChip(
                 label: const Text('Product'),
                 selected: _postType == 'Product',
-                onSelected: (selected) => setState(() => _postType = 'Product'),
+                onSelected: (selected) {
+                  setState(() {
+                    _postType = 'Product';
+                    _selectedCategoryId = null;
+                    _selectedCategoryName = null;
+                  });
+                  _loadCategories();
+                },
               ),
             ),
             const SizedBox(width: 16),
@@ -2008,7 +1150,14 @@ class _AddPostScreenState extends State<AddPostScreen> {
               child: ChoiceChip(
                 label: const Text('Service'),
                 selected: _postType == 'Service',
-                onSelected: (selected) => setState(() => _postType = 'Service'),
+                onSelected: (selected) {
+                  setState(() {
+                    _postType = 'Service';
+                    _selectedCategoryId = null;
+                    _selectedCategoryName = null;
+                  });
+                  _loadCategories();
+                },
               ),
             ),
           ],
@@ -2016,9 +1165,22 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
         const SizedBox(height: 24),
 
-        const Text(
-          'Title *',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        // Title
+        Row(
+          children: [
+            const Text(
+              'Title',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const Text(
+              ' *',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.red,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         TextField(
@@ -2026,33 +1188,36 @@ class _AddPostScreenState extends State<AddPostScreen> {
           decoration: InputDecoration(
             hintText: 'What are you looking for?',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
           ),
         ),
 
         const SizedBox(height: 24),
 
-        const Text(
-          'Category *',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: _selectedCategory,
-          decoration: InputDecoration(
-            hintText: 'Select category',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          items: _categories.map((category) {
-            return DropdownMenuItem(value: category, child: Text(category));
-          }).toList(),
-          onChanged: (value) => setState(() => _selectedCategory = value),
-        ),
+        // Category
+        _buildCategoryDropdown(),
 
         const SizedBox(height: 24),
 
-        const Text(
-          'Description *',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        // Description
+        Row(
+          children: [
+            const Text(
+              'Description',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const Text(
+              ' *',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.red,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         TextField(
@@ -2061,6 +1226,10 @@ class _AddPostScreenState extends State<AddPostScreen> {
           decoration: InputDecoration(
             hintText: 'Describe what you are looking for',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
           ),
         ),
 
@@ -2071,39 +1240,66 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
         const SizedBox(height: 24),
 
-        const Text(
-          'Location *',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        // Location
+        _buildLocationField(),
+
+        const SizedBox(height: 24),
+
+        // Will Pay Amount
+        Row(
+          children: [
+            const Text(
+              'Will Pay Amount',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const Text(
+              ' *',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.red,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         TextField(
-          controller: _locationController,
+          controller: _willPayAmountController,
           decoration: InputDecoration(
-            hintText: 'Enter preferred location',
+            hintText: 'Enter amount you are willing to pay',
+            prefixText: '\$ ',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            prefixIcon: const Icon(Icons.location_on),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
           ),
+          keyboardType: TextInputType.number,
         ),
       ],
     );
   }
 
   void _validateAndProceed() {
-    if (_selectedOption == 1 && widget.editPost == null) {
-      // Validate required fields for regular post
-      if (_titleController.text.isEmpty) {
-        _showError('Please enter a title');
-        return;
-      }
-      if (_selectedCategory == null) {
-        _showError('Please select a category');
-        return;
-      }
-      if (_descriptionController.text.isEmpty) {
-        _showError('Please enter a description');
-        return;
-      }
-      if (_postType == 'Product' && _selectedImages.isEmpty) {
+    // Validate required fields
+    if (_titleController.text.isEmpty) {
+      _showError('Please enter a title');
+      return;
+    }
+
+    if (_selectedCategoryId == null) {
+      _showError('Please select a category');
+      return;
+    }
+
+    if (_descriptionController.text.isEmpty) {
+      _showError('Please enter a description');
+      return;
+    }
+
+    // For product posts (selling), require at least one image
+    if (_postType == 'Product' && _selectedOption == 1) {
+      if (_selectedImages.isEmpty) {
         _showError('Please upload at least one image for products');
         return;
       }
@@ -2111,15 +1307,57 @@ class _AddPostScreenState extends State<AddPostScreen> {
         _showError('Please enter a location');
         return;
       }
-      _showStep2Dialog();
-    } else {
-      _submitPost();
     }
+
+    // For "Looking For" posts, require location
+    if (_selectedOption == 2) {
+      if (_locationController.text.isEmpty) {
+        _showError('Please enter a location');
+        return;
+      }
+      if (_willPayAmountController.text.isEmpty) {
+        _showError('Please enter the amount you are willing to pay');
+        return;
+      }
+    }
+
+    // For service posts (selling), no image required
+    if (_postType == 'Service' && _selectedOption == 1) {
+      // Location is optional for services
+    }
+
+    // Show step 2 dialog
+    _showStep2Dialog();
   }
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -2169,102 +1407,86 @@ class _AddPostScreenState extends State<AddPostScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Barter Available
-                      Row(
-                        children: [
-                          Checkbox(
-                            value: _barterAvailable,
-                            onChanged: (value) =>
-                                setState(() => _barterAvailable = value!),
+                      // Barter Available - Only show for selling posts
+                      if (_selectedOption == 1) ...[
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: _barterAvailable,
+                              onChanged: (value) =>
+                                  setState(() => _barterAvailable = value!),
+                            ),
+                            const Text('Barter Available'),
+                          ],
+                        ),
+
+                        if (_barterAvailable) ...[
+                          const SizedBox(height: 16),
+                          _buildBarterCategoryDropdown(),
+
+                          const SizedBox(height: 16),
+
+                          const Text(
+                            'Describe Barter Wish',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                          const Text('Barter Available'),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _barterWishController,
+                            decoration: InputDecoration(
+                              hintText: 'Describe what you want in return',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                            ),
+                          ),
                         ],
-                      ),
 
-                      if (_barterAvailable) ...[
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Select Barter Category',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          value: _barterCategory,
-                          decoration: InputDecoration(
-                            hintText: 'What do you want in return?',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          items: _categories.map((category) {
-                            return DropdownMenuItem(
-                              value: category,
-                              child: Text(category),
-                            );
-                          }).toList(),
-                          onChanged: (value) =>
-                              setState(() => _barterCategory = value),
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        const Text(
-                          'Describe Barter Wish',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _barterWishController,
-                          decoration: InputDecoration(
-                            hintText: 'Describe what you want in return',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
+                        const SizedBox(height: 24),
                       ],
 
-                      const SizedBox(height: 24),
-
-                      // Club Items Option
-                      const Text(
-                        'Item Clubbing Option',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                      // Club Items Option - Only for selling posts
+                      if (_selectedOption == 1) ...[
+                        const Text(
+                          'Item Clubbing Option',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Column(
-                        children: [
-                          RadioListTile<bool>(
-                            title: const Text(
-                              'This item can be clubbed with other items in your list while users make an offer',
+                        const SizedBox(height: 8),
+                        Column(
+                          children: [
+                            RadioListTile<bool>(
+                              title: const Text(
+                                'This item can be clubbed with other items in your list while users make an offer',
+                              ),
+                              value: true,
+                              groupValue: _canClubItems,
+                              onChanged: (value) =>
+                                  setState(() => _canClubItems = value!),
                             ),
-                            value: true,
-                            groupValue: _canClubItems,
-                            onChanged: (value) =>
-                                setState(() => _canClubItems = value!),
-                          ),
-                          RadioListTile<bool>(
-                            title: const Text(
-                              'No, this item cannot be clubbed and traded as a single product',
+                            RadioListTile<bool>(
+                              title: const Text(
+                                'No, this item cannot be clubbed and traded as a single product',
+                              ),
+                              value: false,
+                              groupValue: _canClubItems,
+                              onChanged: (value) =>
+                                  setState(() => _canClubItems = value!),
                             ),
-                            value: false,
-                            groupValue: _canClubItems,
-                            onChanged: (value) =>
-                                setState(() => _canClubItems = value!),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
 
-                      const SizedBox(height: 24),
+                        const SizedBox(height: 24),
+                      ],
 
                       // Sold for Money
                       Row(
@@ -2288,6 +1510,10 @@ class _AddPostScreenState extends State<AddPostScreen> {
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
                           ),
                           keyboardType: TextInputType.number,
                         ),
@@ -2295,46 +1521,51 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
                       const SizedBox(height: 24),
 
-                      // Transportation Flexibility
-                      const Text(
-                        'Transportation Flexibility',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                      // Transportation Flexibility - Only for product posts
+                      if (_postType == 'Product' && _selectedOption == 1) ...[
+                        const Text(
+                          'Transportation Flexibility',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Column(
-                        children: [
-                          RadioListTile<String>(
-                            title: const Text(
-                              'This item can be transported to desired location',
+                        const SizedBox(height: 8),
+                        Column(
+                          children: [
+                            RadioListTile<String>(
+                              title: const Text(
+                                'This item can be transported to desired location',
+                              ),
+                              value: 'transport_desired',
+                              groupValue: _transportationOption,
+                              onChanged: (value) => setState(
+                                () => _transportationOption = value!,
+                              ),
                             ),
-                            value: 'transport_desired',
-                            groupValue: _transportationOption,
-                            onChanged: (value) =>
-                                setState(() => _transportationOption = value!),
-                          ),
-                          RadioListTile<String>(
-                            title: const Text(
-                              'This item has to be picked from location',
+                            RadioListTile<String>(
+                              title: const Text(
+                                'This item has to be picked from location',
+                              ),
+                              value: 'pickup_only',
+                              groupValue: _transportationOption,
+                              onChanged: (value) => setState(
+                                () => _transportationOption = value!,
+                              ),
                             ),
-                            value: 'pickup_only',
-                            groupValue: _transportationOption,
-                            onChanged: (value) =>
-                                setState(() => _transportationOption = value!),
-                          ),
-                          RadioListTile<String>(
-                            title: const Text(
-                              'This item can be transported with a delivery charge',
+                            RadioListTile<String>(
+                              title: const Text(
+                                'This item can be transported with a delivery charge',
+                              ),
+                              value: 'transport_with_charge',
+                              groupValue: _transportationOption,
+                              onChanged: (value) => setState(
+                                () => _transportationOption = value!,
+                              ),
                             ),
-                            value: 'transport_with_charge',
-                            groupValue: _transportationOption,
-                            onChanged: (value) =>
-                                setState(() => _transportationOption = value!),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                      ],
 
                       const SizedBox(height: 40),
                     ],
@@ -2362,7 +1593,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: _submitPost,
+                        onPressed: _isSubmitting ? null : _submitPost,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2E5BFF),
                           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -2370,10 +1601,19 @@ class _AddPostScreenState extends State<AddPostScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Text(
-                          'Post',
-                          style: TextStyle(color: Colors.white),
-                        ),
+                        child: _isSubmitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Post',
+                                style: TextStyle(color: Colors.white),
+                              ),
                       ),
                     ),
                   ],
@@ -2386,23 +1626,172 @@ class _AddPostScreenState extends State<AddPostScreen> {
     );
   }
 
-  void _submitPost() {
-    // Here you would typically upload the images to your server
-    // and create the post with the image URLs
-    print('Selected images: ${_selectedImages.length}');
+  Future<void> _submitPost() async {
+    if (_isSubmitting) return;
 
-    Navigator.pop(context); // Close bottom sheet if open
-    Navigator.pop(context); // Close add post screen
+    setState(() {
+      _isSubmitting = true;
+    });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          widget.editPost != null
-              ? 'Post updated successfully!'
-              : 'Post added successfully!',
-        ),
-        backgroundColor: Colors.green,
-      ),
-    );
+    try {
+      // Check login status
+      final isLoggedIn = await TokenService().isLoggedIn();
+      if (!isLoggedIn) {
+        _showLoginDialog();
+        return;
+      }
+
+      // Show processing status
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Converting images...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // Convert images to base64 data URLs - NO SEPARATE UPLOAD
+      List<String> imageUrls = [];
+      if (_selectedImages.isNotEmpty) {
+        setState(() {
+          _isUploadingImages = true;
+        });
+
+        debugPrint(
+          '📤 Converting ${_selectedImages.length} images to base64...',
+        );
+
+        // Direct conversion to base64 - bypass the broken upload endpoint
+        imageUrls = await _addPostService.getImageUrlsFromBase64(
+          _selectedImages,
+        );
+
+        debugPrint('✅ Converted ${imageUrls.length} images to base64');
+
+        setState(() {
+          _isUploadingImages = false;
+        });
+      }
+
+      if (_selectedOption == 1) {
+        // Create product/service post
+        if (_postType == 'Product') {
+          final request = CreateProductRequest(
+            title: _titleController.text.trim(),
+            description: _descriptionController.text.trim(),
+            categoryId: _selectedCategoryId!,
+            images: imageUrls, // Send base64 images directly
+            location: _locationController.text.trim(),
+            barterStatus: _barterAvailable ? 'OPEN_FOR_BARTER' : 'NO_BARTER',
+            price: double.tryParse(_priceController.text) ?? 0.0,
+          );
+
+          debugPrint(
+            '📦 Creating product post with ${imageUrls.length} images',
+          );
+          final response = await _addPostService.createProductPost(request);
+          debugPrint('✅ Product created successfully');
+        } else {
+          // Create service
+          final request = CreateServiceRequest(
+            title: _titleController.text.trim(),
+            description: _descriptionController.text.trim(),
+            categoryId: _selectedCategoryId!,
+            images: imageUrls, // Send base64 images directly
+            status: 'PROVIDE_SERVICE',
+            price: double.tryParse(_priceController.text) ?? 0.0,
+          );
+
+          debugPrint(
+            '📦 Creating service post with ${imageUrls.length} images',
+          );
+          final response = await _addPostService.createServicePost(request);
+          debugPrint('✅ Service created successfully');
+        }
+      } else {
+        // Handle "Looking For" posts
+        if (_postType == 'Product') {
+          final request = CreateProductRequest(
+            title: _titleController.text.trim(),
+            description: _descriptionController.text.trim(),
+            categoryId: _selectedCategoryId!,
+            images: imageUrls, // Send base64 images directly
+            location: _locationController.text.trim(),
+            barterStatus: 'LOOKING_FOR',
+            price: double.tryParse(_willPayAmountController.text) ?? 0.0,
+          );
+
+          debugPrint(
+            '📦 Creating looking for product post with ${imageUrls.length} images',
+          );
+          final response = await _addPostService.createProductPost(request);
+          debugPrint('✅ Looking for product created');
+        } else {
+          final request = CreateServiceRequest(
+            title: _titleController.text.trim(),
+            description: _descriptionController.text.trim(),
+            categoryId: _selectedCategoryId!,
+            images: imageUrls, // Send base64 images directly
+            status: 'LOOKING_FOR_SERVICE',
+            price: double.tryParse(_willPayAmountController.text) ?? 0.0,
+          );
+
+          debugPrint(
+            '📦 Creating looking for service post with ${imageUrls.length} images',
+          );
+          final response = await _addPostService.createServicePost(request);
+          debugPrint('✅ Looking for service created');
+        }
+      }
+
+      // Close all dialogs
+      Navigator.pop(context); // Close step 2 dialog
+      Navigator.pop(context); // Close add post screen
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Post added successfully!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        // Callback to refresh posts
+        widget.onPostAdded?.call();
+      }
+    } catch (e) {
+      debugPrint('🔴 Error submitting post: $e');
+
+      if (mounted) {
+        String errorMessage = e.toString();
+        if (errorMessage.contains('400')) {
+          errorMessage =
+              'Failed to create post: Please check all required fields';
+        } else if (errorMessage.contains('401')) {
+          errorMessage = 'Session expired. Please login again.';
+        } else if (errorMessage.contains('images')) {
+          errorMessage =
+              'Failed to process images. Please try again with smaller images.';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _isUploadingImages = false;
+        });
+      }
+    }
   }
 }

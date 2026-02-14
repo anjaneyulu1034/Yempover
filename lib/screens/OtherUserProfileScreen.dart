@@ -315,14 +315,14 @@ class _OtherUserProfileScreenState extends State<OtherUserProfileScreen> {
 
   Widget _buildPostCard(ProductPost post) {
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PostDetailScreen(post: post, userItems: []),
-          ),
-        );
-      },
+      // onTap: () {
+      //   Navigator.push(
+      //   //  context,
+      //     // MaterialPageRoute(
+      //     // //  builder: (context) => PostDetailScreen(post: post, userItems: []),
+      //     // ),
+      //  // );
+      // },
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(16),

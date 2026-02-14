@@ -1,160 +1,150 @@
-import 'dart:convert';
-
-class SignupRequest {
-  final String name;
-  final String phone;
+class RegisterRequest {
+  final String firstName;
+  final String lastName;
   final String email;
-  final bool termsAccepted;
+  final String mobileNumber;
+  final bool acceptedTerms; // ✅ NEW
 
-  SignupRequest({
-    required this.name,
-    required this.phone,
+  RegisterRequest({
+    required this.firstName,
+    required this.lastName,
     required this.email,
-    required this.termsAccepted,
+    required this.mobileNumber,
+    required this.acceptedTerms, // ✅ NEW
   });
 
   Map<String, dynamic> toJson() {
     return {
-      'name': name,
-      'phone': phone,
+      'firstName': firstName,
+      'lastName': lastName,
       'email': email,
-      'termsAccepted': termsAccepted,
+      'mobileNumber': mobileNumber,
+      'acceptedTerms': acceptedTerms, // ✅ NEW
     };
   }
 }
 
-class LoginRequest {
-  final String phone;
+class SendOtpRequest {
+  final String mobileNumber;
 
-  LoginRequest({required this.phone});
-
-  Map<String, dynamic> toJson() {
-    return {'phone': phone};
-  }
-}
-
-class LoginOtpRequest {
-  final String phone;
-  final String otp;
-
-  LoginOtpRequest({required this.phone, required this.otp});
+  SendOtpRequest({required this.mobileNumber});
 
   Map<String, dynamic> toJson() {
-    return {'phone': phone, 'otp': otp};
-  }
-}
-
-class OtpRequest {
-  final String phone;
-
-  OtpRequest({required this.phone});
-
-  Map<String, dynamic> toJson() {
-    return {'phone': phone};
+    return {'mobileNumber': mobileNumber};
   }
 }
 
 class VerifyOtpRequest {
-  final String phone;
+  final String mobileNumber;
   final String otp;
 
-  VerifyOtpRequest({required this.phone, required this.otp});
+  VerifyOtpRequest({required this.mobileNumber, required this.otp});
 
   Map<String, dynamic> toJson() {
-    return {'phone': phone, 'otp': otp};
-  }
-}
-
-class OtpResponse {
-  final bool success;
-  final String message;
-  final String otp;
-  final bool devMode;
-  final String phoneUsed;
-
-  OtpResponse({
-    required this.success,
-    required this.message,
-    required this.otp,
-    required this.devMode,
-    required this.phoneUsed,
-  });
-
-  factory OtpResponse.fromJson(Map<String, dynamic> json) {
-    return OtpResponse(
-      success: json['success'] ?? false,
-      message: json['message'] ?? '',
-      otp: json['otp'] ?? '',
-      devMode: json['devMode'] ?? false,
-      phoneUsed: json['phoneUsed'] ?? '',
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'success': success,
-      'message': message,
-      'otp': otp,
-      'devMode': devMode,
-      'phoneUsed': phoneUsed,
-    };
+    return {'mobileNumber': mobileNumber, 'otp': otp};
   }
 }
 
 class User {
   final String id;
-  final String name;
+  final String firstName;
+  final String lastName;
   final String email;
-  final String phone;
-  final String subscriptionStatus;
-  final DateTime subscriptionValidUntil;
+  final String mobileNumber;
+  final String? profileImage;
 
   User({
     required this.id,
-    required this.name,
+    required this.firstName,
+    required this.lastName,
     required this.email,
-    required this.phone,
-    required this.subscriptionStatus,
-    required this.subscriptionValidUntil,
+    required this.mobileNumber,
+    this.profileImage,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id'] ?? '',
-      name: json['name'] ?? '',
+      firstName: json['firstName'] ?? '',
+      lastName: json['lastName'] ?? '',
       email: json['email'] ?? '',
-      phone: json['phone'] ?? '',
-      subscriptionStatus: json['subscriptionStatus'] ?? 'TRIAL',
-      subscriptionValidUntil: DateTime.parse(json['subscriptionValidUntil']),
+      mobileNumber: json['mobileNumber'] ?? '',
+      profileImage: json['profileImage'],
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'email': email,
-      'phone': phone,
-      'subscriptionStatus': subscriptionStatus,
-      'subscriptionValidUntil': subscriptionValidUntil.toIso8601String(),
-    };
+  String get fullName => '$firstName $lastName';
+}
+
+class AuthResponse<T> {
+  final String status;
+  final String message;
+  final T? data;
+
+  AuthResponse({
+    required this.status,
+    required this.message,
+    this.data,
+    required bool isSuccess,
+  });
+
+  factory AuthResponse.fromJson(
+    Map<String, dynamic> json,
+    T Function(Map<String, dynamic>)? fromJson,
+  ) {
+    return AuthResponse(
+      status: json['status'] ?? '',
+      message: json['message'] ?? '',
+      data: fromJson != null && json['data'] != null
+          ? fromJson(json['data'])
+          : null,
+      isSuccess: json['isSuccess'] ?? false,
+    );
+  }
+
+  bool get isSuccess => status == 'success';
+}
+
+class RegisterResponseData {
+  final User user;
+
+  RegisterResponseData({required this.user});
+
+  factory RegisterResponseData.fromJson(Map<String, dynamic> json) {
+    return RegisterResponseData(user: User.fromJson(json['user']));
   }
 }
 
-class AuthResponse {
-  final User user;
-  final String token;
+class SendOtpResponseData {
+  final bool success;
+  final String message;
 
-  AuthResponse({required this.user, required this.token});
+  SendOtpResponseData({required this.success, required this.message});
 
-  factory AuthResponse.fromJson(Map<String, dynamic> json) {
-    return AuthResponse(
-      user: User.fromJson(json['user']),
-      token: json['token'] ?? '',
+  factory SendOtpResponseData.fromJson(Map<String, dynamic> json) {
+    return SendOtpResponseData(
+      success: json['success'] ?? false,
+      message: json['message'] ?? '',
     );
   }
+}
 
-  Map<String, dynamic> toJson() {
-    return {'user': user.toJson(), 'token': token};
+class VerifyOtpResponseData {
+  final User user;
+  final String token;
+  final String refreshToken;
+
+  VerifyOtpResponseData({
+    required this.user,
+    required this.token,
+    required this.refreshToken,
+  });
+
+  factory VerifyOtpResponseData.fromJson(Map<String, dynamic> json) {
+    return VerifyOtpResponseData(
+      user: User.fromJson(json['user']),
+      token: json['token'] ?? '',
+      refreshToken: json['refreshToken'] ?? '',
+    );
   }
 }

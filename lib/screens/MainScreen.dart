@@ -1,7 +1,7 @@
 // main_screen.dart
 import 'package:flutter/material.dart';
 import 'package:yempower_app/models/ProductPost.dart';
-import 'package:yempower_app/screens/PostDetailScreen.dart';
+import 'package:yempower_app/screens/PostDetailScreen.dart' hide UserItem;
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -173,13 +173,13 @@ class _MainScreenState extends State<MainScreen> {
       margin: const EdgeInsets.all(8),
       child: InkWell(
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  PostDetailScreen(post: post, userItems: _userItems),
-            ),
-          );
+          // Navigator.push(
+          //   context,
+          //   // MaterialPageRoute(
+          //   //   builder: (context) =>
+          //   //     //  PostDetailScreen(post: post, userItems: _userItems),
+          //   // ),
+          // );
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,301 +1,11 @@
-// import 'package:flutter/material.dart';
-// import 'package:yempower_app/screens/Home_screen.dart';
-// import 'package:yempower_app/screens/OTPVerificationScreen.dart';
-// import 'package:yempower_app/screens/SignupScreen.dart';
-
-// class LoginScreen extends StatefulWidget {
-//   const LoginScreen({super.key});
-
-//   @override
-//   State<LoginScreen> createState() => _LoginScreenState();
-// }
-
-// class _LoginScreenState extends State<LoginScreen> {
-//   final TextEditingController _phoneController = TextEditingController(
-//     text: '(555) 555-1234',
-//   );
-//   bool _isLoading = false;
-
-//   void _loginAsGuest() {
-//     showDialog(
-//       context: context,
-//       builder: (_) => AlertDialog(
-//         title: const Text('Guest Mode'),
-//         content: const Text(
-//           'You are now browsing as a guest. Some features may be limited.',
-//         ),
-//         actions: [
-//           TextButton(
-//             onPressed: () => Navigator.pop(context),
-//             child: const Text('Cancel'),
-//           ),
-//           ElevatedButton(
-//             onPressed: () {
-//               Navigator.pop(context); // Close dialog
-//               _navigateToHomeScreen(); // Navigate to home screen
-//             },
-//             style: ElevatedButton.styleFrom(
-//               backgroundColor: const Color(0xFF1A73E8),
-//             ),
-//             child: const Text('Continue as Guest'),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-
-//   void _navigateToHomeScreen() {
-//     Navigator.pushReplacement(
-//       context,
-//       MaterialPageRoute(builder: (_) => const HomeScreen()),
-//     );
-//   }
-
-//   void _handleLogin() {
-//     if (_phoneController.text.isEmpty) {
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         const SnackBar(
-//           content: Text('Please enter your phone number'),
-//           backgroundColor: Colors.red,
-//         ),
-//       );
-//       return;
-//     }
-
-//     // Show loading
-//     setState(() {
-//       _isLoading = true;
-//     });
-
-//     // Simulate API call to send OTP
-//     Future.delayed(const Duration(seconds: 2), () {
-//       setState(() {
-//         _isLoading = false;
-//       });
-
-//       // Navigate to OTP screen for login
-//       Navigator.push(
-//         context,
-//         MaterialPageRoute(
-//           builder: (_) => OTPVerificationScreen(
-//             phoneNumber: _phoneController.text,
-//             onVerificationSuccess: _navigateToHomeScreen,
-//             isSignupFlow: false,
-//           ),
-//         ),
-//       );
-//     });
-//   }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       backgroundColor: Colors.white,
-//       body: SafeArea(
-//         child: Padding(
-//           padding: const EdgeInsets.all(24),
-//           child: Column(
-//             mainAxisAlignment: MainAxisAlignment.center,
-//             children: [
-//               // Logo
-//               Container(
-//                 height: 80,
-//                 width: 80,
-//                 decoration: BoxDecoration(
-//                   color: const Color(0xFF1A73E8),
-//                   borderRadius: BorderRadius.circular(16),
-//                 ),
-//                 child: const Icon(
-//                   Icons.battery_charging_full,
-//                   color: Colors.white,
-//                   size: 40,
-//                 ),
-//               ),
-
-//               const SizedBox(height: 24),
-
-//               const Text(
-//                 'YemPower',
-//                 style: TextStyle(
-//                   fontSize: 22,
-//                   fontWeight: FontWeight.bold,
-//                   color: Color(0xFF1A73E8),
-//                 ),
-//               ),
-//               const Text(
-//                 'Battery Systems',
-//                 style: TextStyle(fontSize: 14, color: Colors.grey),
-//               ),
-
-//               const SizedBox(height: 40),
-
-//               // Welcome Text
-//               const Text(
-//                 'Hello Again!',
-//                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-//               ),
-//               const SizedBox(height: 6),
-//               const Text(
-//                 'Welcome back.',
-//                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-//               ),
-//               const SizedBox(height: 8),
-//               const Text(
-//                 'Login to your account',
-//                 style: TextStyle(fontSize: 16, color: Colors.grey),
-//               ),
-
-//               const SizedBox(height: 32),
-
-//               // Phone Field
-//               TextField(
-//                 controller: _phoneController,
-//                 keyboardType: TextInputType.phone,
-//                 decoration: InputDecoration(
-//                   hintText: 'Enter your phone number',
-//                   filled: true,
-//                   fillColor: Colors.grey.shade100,
-//                   contentPadding: const EdgeInsets.symmetric(
-//                     horizontal: 16,
-//                     vertical: 18,
-//                   ),
-//                   border: OutlineInputBorder(
-//                     borderRadius: BorderRadius.circular(12),
-//                     borderSide: BorderSide.none,
-//                   ),
-//                   prefixIcon: const Icon(Icons.phone, color: Colors.grey),
-//                 ),
-//               ),
-
-//               const SizedBox(height: 24),
-
-//               // Login Button
-//               SizedBox(
-//                 width: double.infinity,
-//                 height: 56,
-//                 child: _isLoading
-//                     ? ElevatedButton(
-//                         onPressed: null,
-//                         style: ElevatedButton.styleFrom(
-//                           backgroundColor: const Color(
-//                             0xFF1A73E8,
-//                           ).withOpacity(0.7),
-//                           shape: RoundedRectangleBorder(
-//                             borderRadius: BorderRadius.circular(28),
-//                           ),
-//                         ),
-//                         child: const SizedBox(
-//                           width: 24,
-//                           height: 24,
-//                           child: CircularProgressIndicator(
-//                             strokeWidth: 2,
-//                             color: Colors.white,
-//                           ),
-//                         ),
-//                       )
-//                     : ElevatedButton(
-//                         onPressed: _handleLogin,
-//                         style: ElevatedButton.styleFrom(
-//                           backgroundColor: const Color(0xFF1A73E8),
-//                           shape: RoundedRectangleBorder(
-//                             borderRadius: BorderRadius.circular(28),
-//                           ),
-//                         ),
-//                         child: const Text(
-//                           'Login',
-//                           style: TextStyle(
-//                             fontSize: 18,
-//                             fontWeight: FontWeight.w600,
-//                             color: Colors.white,
-//                           ),
-//                         ),
-//                       ),
-//               ),
-
-//               const SizedBox(height: 20),
-
-//               // Sign Up
-//               GestureDetector(
-//                 onTap: () {
-//                   Navigator.pushReplacement(
-//                     context,
-//                     MaterialPageRoute(builder: (_) => const SignupScreen()),
-//                   );
-//                 },
-//                 child: const Text.rich(
-//                   TextSpan(
-//                     text: "Don't have account? ",
-//                     style: TextStyle(color: Colors.grey),
-//                     children: [
-//                       TextSpan(
-//                         text: 'Sign Up',
-//                         style: TextStyle(
-//                           color: Color(0xFF1A73E8),
-//                           fontWeight: FontWeight.w600,
-//                         ),
-//                       ),
-//                     ],
-//                   ),
-//                 ),
-//               ),
-
-//               const SizedBox(height: 32),
-
-//               // Guest Login
-//               Container(
-//                 padding: const EdgeInsets.all(16),
-//                 decoration: BoxDecoration(
-//                   color: Colors.grey.shade50,
-//                   borderRadius: BorderRadius.circular(12),
-//                   border: Border.all(color: Colors.grey.shade300),
-//                 ),
-//                 child: Column(
-//                   children: [
-//                     const Text(
-//                       'Skip this process to login as:',
-//                       style: TextStyle(color: Colors.grey, fontSize: 14),
-//                     ),
-//                     const SizedBox(height: 12),
-//                     SizedBox(
-//                       width: double.infinity,
-//                       height: 48,
-//                       child: OutlinedButton(
-//                         onPressed: _loginAsGuest,
-//                         style: OutlinedButton.styleFrom(
-//                           side: BorderSide(color: Colors.grey.shade400),
-//                           shape: RoundedRectangleBorder(
-//                             borderRadius: BorderRadius.circular(12),
-//                           ),
-//                         ),
-//                         child: const Text(
-//                           'Guest user',
-//                           style: TextStyle(
-//                             fontSize: 16,
-//                             fontWeight: FontWeight.w600,
-//                             color: Color(0xFF1A73E8),
-//                           ),
-//                         ),
-//                       ),
-//                     ),
-//                   ],
-//                 ),
-//               ),
-//             ],
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-// }
-
 import 'package:flutter/material.dart';
 import 'package:yempower_app/constants/api_constants.dart';
-
 import 'package:yempower_app/screens/Home_screen.dart';
 import 'package:yempower_app/screens/OTPVerificationScreen.dart';
 import 'package:yempower_app/screens/SignupScreen.dart';
+import 'package:yempower_app/services/api_service.dart' hide ErrorMessages;
 import 'package:yempower_app/services/auth_service.dart';
-import 'package:yempower_app/utils/validators.dart';
+import 'package:yempower_app/services/token_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -306,28 +16,45 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _phoneController = TextEditingController();
+  bool _isLoading = false;
   final AuthService _authService = AuthService();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-
-  bool _isLoading = false;
-  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _loadStoredData();
+    debugPrint('🟣 LoginScreen: initState() called');
+    //_checkIfAlreadyLoggedIn();
   }
 
-  Future<void> _loadStoredData() async {
-    final storedPhone = await _authService.getStoredPhone();
-    if (storedPhone != null && mounted) {
-      setState(() {
-        _phoneController.text = storedPhone;
-      });
+  // Future<void> _checkIfAlreadyLoggedIn() async {
+  //   final isLoggedIn = await TokenService().isLoggedIn();
+  //   if (isLoggedIn && mounted) {
+  //     debugPrint('🟣 LoginScreen: User already logged in, navigating to home');
+  //     _navigateToHomeScreen();
+  //   }
+  // }
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    debugPrint('🟣 LoginScreen: dispose() called');
+    super.dispose();
+  }
+
+  String? _validatePhone(String? value) {
+    debugPrint('🟣 LoginScreen: _validatePhone called with value: "$value"');
+    if (value == null || value.isEmpty) {
+      return ErrorMessages.emptyField;
     }
+    if (!ValidationRegex.phoneRegex.hasMatch(value)) {
+      return ErrorMessages.invalidPhoneNumber;
+    }
+    return null;
   }
 
-  Future<void> _loginAsGuest() async {
+  void _loginAsGuest() {
+    debugPrint('🟣 LoginScreen: _loginAsGuest() called');
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -337,18 +64,17 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              debugPrint('🟣 LoginScreen: Guest mode cancelled');
+              Navigator.pop(context);
+            },
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () async {
+            onPressed: () {
+              debugPrint('🟣 LoginScreen: Continuing as guest');
               Navigator.pop(context); // Close dialog
-
-              // Set guest mode
-              await _authService.setGuestMode(true);
-
-              // Navigate to home screen
-              _navigateToHomeScreen();
+              _navigateToHomeScreen(); // Navigate to home screen
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppConstants.primaryColor,
@@ -361,61 +87,82 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _navigateToHomeScreen() {
+    debugPrint('🟣 LoginScreen: _navigateToHomeScreen() called');
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const HomeScreen()),
     );
   }
 
-  Future<void> _handleLogin() async {
-    // Reset error message
-    setState(() {
-      _errorMessage = null;
-    });
+  void _navigateToSignupScreen() {
+    debugPrint('🟣 LoginScreen: _navigateToSignupScreen() called');
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const SignupScreen()),
+    );
+  }
 
-    // Validate form
+  Future<void> _handleLogin() async {
+    debugPrint('🟣 LoginScreen: _handleLogin() called');
+
     if (!_formKey.currentState!.validate()) {
+      debugPrint('🔴 LoginScreen: Form validation failed');
       return;
     }
 
-    final phone = _phoneController.text.trim();
+    debugPrint('🟢 LoginScreen: Form validation passed');
+    debugPrint('📱 LoginScreen: Phone number: ${_phoneController.text}');
 
-    // Show loading
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // Call API to send login OTP
-      final otpResponse = await _authService.sendLoginOtp(phone);
+      debugPrint('🔄 LoginScreen: Calling sendOtp API...');
+      // First send OTP
+      final otpResponse = await _authService.sendOtp(
+        mobileNumber: _phoneController.text.trim(),
+      );
 
-      if (otpResponse.success) {
+      debugPrint(
+        '📨 LoginScreen: API Response - Success: ${otpResponse.isSuccess}, Message: ${otpResponse.message}',
+      );
+
+      if (otpResponse.isSuccess) {
+        debugPrint(
+          '🟢 LoginScreen: OTP sent successfully, navigating to OTP screen',
+        );
         // Navigate to OTP screen for login
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => OTPVerificationScreen(
-              phoneNumber: phone,
-              onVerificationSuccess: (authResponse) {
-                // After OTP verification, navigate to home screen
-                _navigateToHomeScreen();
-              },
+              phoneNumber: _phoneController.text.trim(),
+              onVerificationSuccess: (_) => _navigateToHomeScreen(),
               isSignupFlow: false,
-              devOtp: otpResponse.devMode ? otpResponse.otp : null,
             ),
           ),
         );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(otpResponse.message),
+            backgroundColor: Colors.green,
+          ),
+        );
       } else {
-        setState(() {
-          _errorMessage = otpResponse.message;
-        });
+        debugPrint('🔴 LoginScreen: OTP send failed: ${otpResponse.message}');
+        AuthService.showErrorDialog(context, otpResponse.message);
       }
+    } on ApiException catch (e) {
+      debugPrint('🔴 LoginScreen: ApiException caught: ${e.message}');
+      AuthService.showErrorDialog(context, e.message);
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-      });
+      debugPrint('🔴 LoginScreen: General exception caught: $e');
+      AuthService.showErrorDialog(context, ErrorMessages.unknownError);
     } finally {
       if (mounted) {
+        debugPrint('🟣 LoginScreen: Setting isLoading to false');
         setState(() {
           _isLoading = false;
         });
@@ -425,8 +172,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('🟣 LoginScreen: build() called');
+
     return Scaffold(
-      backgroundColor: AppConstants.backgroundColor,
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -452,20 +201,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 24),
 
-                Text(
+                const Text(
                   AppConstants.appName,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: AppConstants.primaryColor,
                   ),
                 ),
-                Text(
+                const Text(
                   AppConstants.appTagline,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppConstants.greyColor,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey),
                 ),
 
                 const SizedBox(height: 40),
@@ -483,51 +229,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
                 const Text(
                   'Login to your account',
-                  style: TextStyle(fontSize: 16, color: AppConstants.greyColor),
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
                 ),
 
                 const SizedBox(height: 32),
-
-                // Error Message
-                if (_errorMessage != null)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: AppConstants.primaryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppConstants.primaryColor.withOpacity(0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: AppConstants.primaryColor,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _errorMessage!,
-                            style: const TextStyle(
-                              color: AppConstants.primaryColor,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
 
                 // Phone Field
                 TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
                   decoration: InputDecoration(
-                    hintText: 'Enter your phone number (e.g., +919876543210)',
+                    hintText: 'Enter your phone number (e.g., +1234567890)',
                     filled: true,
                     fillColor: Colors.grey.shade100,
                     contentPadding: const EdgeInsets.symmetric(
@@ -538,13 +250,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
                     ),
-                    prefixIcon: const Icon(
-                      Icons.phone,
-                      color: AppConstants.greyColor,
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Colors.red),
                     ),
+                    prefixIcon: const Icon(Icons.phone, color: Colors.grey),
                   ),
-                  validator: Validators.validatePhone,
-                  textInputAction: TextInputAction.done,
+                  validator: _validatePhone,
                 ),
 
                 const SizedBox(height: 24),
@@ -581,7 +293,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           child: const Text(
-                            'Send OTP',
+                            'Login',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -594,31 +306,23 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 20),
 
                 // Sign Up
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      "Don't have an account? ",
-                      style: TextStyle(color: AppConstants.greyColor),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SignupScreen(),
+                GestureDetector(
+                  onTap: _navigateToSignupScreen,
+                  child: const Text.rich(
+                    TextSpan(
+                      text: "Don't have account? ",
+                      style: TextStyle(color: Colors.grey),
+                      children: [
+                        TextSpan(
+                          text: 'Sign Up',
+                          style: TextStyle(
+                            color: AppConstants.primaryColor,
+                            fontWeight: FontWeight.w600,
                           ),
-                        );
-                      },
-                      child: Text(
-                        'Sign Up',
-                        style: TextStyle(
-                          color: AppConstants.primaryColor,
-                          fontWeight: FontWeight.w600,
                         ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
 
                 const SizedBox(height: 32),
@@ -635,10 +339,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       const Text(
                         'Skip this process to login as:',
-                        style: TextStyle(
-                          color: AppConstants.greyColor,
-                          fontSize: 14,
-                        ),
+                        style: TextStyle(color: Colors.grey, fontSize: 14),
                       ),
                       const SizedBox(height: 12),
                       SizedBox(
@@ -652,7 +353,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: Text(
+                          child: const Text(
                             'Guest user',
                             style: TextStyle(
                               fontSize: 16,
