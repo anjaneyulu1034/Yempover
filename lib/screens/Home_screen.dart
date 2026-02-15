@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:yempower_app/models/ProductPostmain.dart';
+import 'package:yempower_app/models/get_my_profile_response.dart';
 import 'package:yempower_app/services/api_service.dart';
 import 'package:yempower_app/payment/SubscriptionScreen.dart';
 import 'package:yempower_app/screens/PostDetailScreen.dart';
@@ -8,7 +9,10 @@ import 'package:yempower_app/screens/TradeBoothScreen.dart';
 import 'package:yempower_app/screens/HamburgerMenuScreen.dart';
 import 'package:yempower_app/screens/TradeHistoryScreen.dart';
 import 'package:yempower_app/screens/NotificationsScreen.dart';
+import 'package:yempower_app/services/my_profile_service.dart';
+import 'package:yempower_app/services/profile_session_manager.dart';
 import 'package:yempower_app/services/token_service.dart';
+import 'package:yempower_app/utils/snackbar_utils.dart';
 
 // Extended Post class with the required properties
 class ExtendedPost {
@@ -91,11 +95,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final ApiService _apiService = ApiService();
+  final MyProfileService _MyProfileService = MyProfileService();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
 
   // API state variables - using ExtendedPost
   List<ExtendedPost> _posts = [];
+  ProfileData? profileData;
   List<ExtendedPost> _filteredPosts = [];
   bool _isLoading = true;
   bool _hasMore = true;
@@ -122,9 +128,171 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _checkFirstTimeUser();
-    _loadNotifications();
-    _fetchPosts();
+    debugPrint("111");
+
+    WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
+      _checkFirstTimeUser();
+      _loadNotifications();
+      await _fetchMyProfile();
+      await _fetchPosts();
+    });
+  }
+
+  String? _errorMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F8FF),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                _buildHeader(),
+                _buildLocationRow(),
+                _buildSearchBar(),
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : RefreshIndicator(
+                          onRefresh: _refreshPosts,
+                          child: _filteredPosts.isEmpty
+                              ? Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(
+                                        Icons.search_off,
+                                        size: 64,
+                                        color: Colors.grey,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      const Text(
+                                        'No posts found',
+                                        style: TextStyle(
+                                          color: Colors.grey,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      const Text(
+                                        'Try changing your filters or search terms',
+                                        style: TextStyle(color: Colors.grey),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      ElevatedButton(
+                                        onPressed: _clearAllFilters,
+                                        child: const Text('Clear All Filters'),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : ListView.builder(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  itemCount: _filteredPosts.length + 1,
+                                  itemBuilder: (context, index) {
+                                    if (index == 0) {
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 16,
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text(
+                                              'Near You',
+                                              style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            if (_selectedTradeType != null ||
+                                                _selectedPostType != null ||
+                                                _selectedCategory != null)
+                                              Chip(
+                                                label: const Text(
+                                                  'Filters Active',
+                                                ),
+                                                backgroundColor:
+                                                    Colors.blue[50],
+                                                deleteIcon: const Icon(
+                                                  Icons.close,
+                                                  size: 16,
+                                                ),
+                                                onDeleted: _clearAllFilters,
+                                              ),
+                                          ],
+                                        ),
+                                      );
+                                    }
+                                    return _buildProductCard(
+                                      _filteredPosts[index - 1],
+                                    );
+                                  },
+                                ),
+                        ),
+                ),
+              ],
+            ),
+
+            // Push Notification Permission Dialog
+            if (_showPushNotificationDialog) _buildPushNotificationDialog(),
+          ],
+        ),
+      ),
+      bottomNavigationBar: _buildBottomNav(),
+    );
+  }
+
+  Future<void> _fetchMyProfile() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final isLoggedIn = await TokenService().isLoggedIn();
+      if (!isLoggedIn) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Please login to view your posts';
+        });
+        if (mounted) {
+          SnackbarUtils.showLoginDialog(context);
+        }
+        return;
+      }
+
+      final response = await _MyProfileService.getMyProfile();
+      setState(() {
+        profileData = response.data;
+        ProfileSessionManager.instance.setProfile(profileData);
+      });
+
+      if (!mounted) return;
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
+
+      if (_errorMessage!.contains('Session expired') ||
+          _errorMessage!.contains('Unauthorized') ||
+          _errorMessage!.contains('No authentication token')) {
+        if (mounted) {
+          SnackbarUtils.showLoginDialog(context);
+        }
+      } else {
+        SnackbarUtils.showError(context, _errorMessage!);
+      }
+    }
   }
 
   void _checkFirstTimeUser() {
@@ -906,115 +1074,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return extendedPost.formattedPrice;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FF),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                _buildHeader(),
-                _buildLocationRow(),
-                _buildSearchBar(),
-                Expanded(
-                  child: _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : RefreshIndicator(
-                          onRefresh: _refreshPosts,
-                          child: _filteredPosts.isEmpty
-                              ? Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(
-                                        Icons.search_off,
-                                        size: 64,
-                                        color: Colors.grey,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      const Text(
-                                        'No posts found',
-                                        style: TextStyle(
-                                          color: Colors.grey,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      const Text(
-                                        'Try changing your filters or search terms',
-                                        style: TextStyle(color: Colors.grey),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      ElevatedButton(
-                                        onPressed: _clearAllFilters,
-                                        child: const Text('Clear All Filters'),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : ListView.builder(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  itemCount: _filteredPosts.length + 1,
-                                  itemBuilder: (context, index) {
-                                    if (index == 0) {
-                                      return Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            const Text(
-                                              'Near You',
-                                              style: TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            if (_selectedTradeType != null ||
-                                                _selectedPostType != null ||
-                                                _selectedCategory != null)
-                                              Chip(
-                                                label: const Text(
-                                                  'Filters Active',
-                                                ),
-                                                backgroundColor:
-                                                    Colors.blue[50],
-                                                deleteIcon: const Icon(
-                                                  Icons.close,
-                                                  size: 16,
-                                                ),
-                                                onDeleted: _clearAllFilters,
-                                              ),
-                                          ],
-                                        ),
-                                      );
-                                    }
-                                    return _buildProductCard(
-                                      _filteredPosts[index - 1],
-                                    );
-                                  },
-                                ),
-                        ),
-                ),
-              ],
-            ),
-
-            // Push Notification Permission Dialog
-            if (_showPushNotificationDialog) _buildPushNotificationDialog(),
-          ],
-        ),
-      ),
-      bottomNavigationBar: _buildBottomNav(),
-    );
-  }
-
   Widget _buildPushNotificationDialog() {
     return Container(
       color: Colors.black54,
@@ -1110,21 +1169,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.blue, width: 2),
               ),
-              child: const CircleAvatar(
-                radius: 20,
-                backgroundImage: NetworkImage(
-                  'https://i.pravatar.cc/150?img=11',
-                ),
-              ),
+              child: profileData != null
+                  ? CircleAvatar(
+                      radius: 20,
+                      backgroundImage: NetworkImage(
+                        '${profileData?.profileImage}',
+                      ),
+                    )
+                  : Container(),
             ),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Hello James',
+                  "${profileData?.firstName} ${profileData?.lastName}",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                 ),
                 Text(
@@ -1792,6 +1854,7 @@ class FilterScreen extends StatefulWidget {
 }
 
 class _FilterScreenState extends State<FilterScreen> {
+  bool _isLoading = true;
   late String? _selectedTradeType;
   late String? _selectedPostType;
   late String? _selectedCategory;
@@ -1819,6 +1882,7 @@ class _FilterScreenState extends State<FilterScreen> {
     _selectedCategory = widget.selectedCategory;
     _selectedWishListCategory = widget.selectedWishListCategory;
     _selectedRadius = widget.selectedRadius;
+    debugPrint("2222filter ");
   }
 
   @override

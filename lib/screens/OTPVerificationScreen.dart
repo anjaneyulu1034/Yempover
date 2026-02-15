@@ -287,7 +287,7 @@ Future<void> _verifyOTP() async {
     );
 
     debugPrint(
-      '📨 OTPVerificationScreen: Verify API Response - Success: ${response.isSuccess}, Message: ${response.message}',
+      '📨 OTPVerificationScreen: Verify API Response - Success: ${response.isSuccess}, Message: ${response.message} otp:::: ${otp}',
     );
 
     if (response.isSuccess) {
@@ -300,7 +300,7 @@ Future<void> _verifyOTP() async {
           token: response.data!.token,
           refreshToken: response.data!.refreshToken,
         );
-        debugPrint('🔐 OTPVerificationScreen: Token saved successfully');
+        debugPrint('🔐 OTPVerificationScreen: Token saved successfully--${response.data?.token}');
       }
 
       // Pass user data to callback

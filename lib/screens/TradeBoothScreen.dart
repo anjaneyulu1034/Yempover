@@ -111,7 +111,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              Navigator.pushReplacementNamed(context, '/LoginScreen');
+              Navigator.pushReplacementNamed(context, '/login');
             },
             child: const Text('OK'),
           ),

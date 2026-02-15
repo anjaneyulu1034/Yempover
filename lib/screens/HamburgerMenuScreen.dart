@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:yempower_app/models/ProductPostmain.dart';
 import 'package:yempower_app/payment/SubscriptionScreen.dart';
 import 'package:yempower_app/screens/HelpSupportScreen.dart';
@@ -6,6 +7,7 @@ import 'package:yempower_app/screens/Home_screen.dart' hide AppNotification;
 import 'package:yempower_app/screens/NotificationsScreen.dart';
 import 'package:yempower_app/screens/SettingsScreen.dart';
 import 'package:yempower_app/screens/TradeHistoryScreen.dart';
+import 'package:yempower_app/services/profile_session_manager.dart';
 
 class HamburgerMenuScreen extends StatelessWidget {
   const HamburgerMenuScreen({super.key});
@@ -19,7 +21,7 @@ class HamburgerMenuScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Profile Section
-            _buildProfileSection(),
+            _buildProfileSection(context),
 
             // Divider
             const Divider(height: 1, thickness: 0.5),
@@ -32,7 +34,8 @@ class HamburgerMenuScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildProfileSection() {
+  Widget _buildProfileSection(BuildContext context) {
+    final profile = ProfileSessionManager.instance.profile;
     return Container(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -47,10 +50,10 @@ class HamburgerMenuScreen extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.blue, width: 3),
                 ),
-                child: const CircleAvatar(
+                child: CircleAvatar(
                   radius: 48,
                   backgroundImage: NetworkImage(
-                    'https://i.pravatar.cc/150?img=11',
+                    profile?.profileImage ?? 'https://i.pravatar.cc/150?img=11',
                   ),
                 ),
               ),
@@ -78,8 +81,8 @@ class HamburgerMenuScreen extends StatelessWidget {
           const SizedBox(height: 16),
 
           // Name
-          const Text(
-            'James William',
+          Text(
+            "${profile?.firstName} ${profile?.lastName}" ?? 'James William',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -125,8 +128,17 @@ class HamburgerMenuScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildStatItem('Joined', '10 May 2023', Icons.calendar_today),
-              _buildStatItem('Trades', '12', Icons.swap_horiz),
+              _buildStatItem(
+                'Joined',
+                formatJoinedDate(profile?.registrationDate),
+                Icons.calendar_today,
+              ),
+
+              _buildStatItem(
+                'Trades',
+                '${profile?.totalTradesCompleted}',
+                Icons.swap_horiz,
+              ),
               _buildStatItem('Subscription', 'Valid', Icons.verified_user),
             ],
           ),
@@ -162,7 +174,14 @@ class HamburgerMenuScreen extends StatelessWidget {
                   ],
                 ),
                 ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SubscriptionScreen(),
+                      ),
+                    );
+
                     // Navigate to subscription screen
                   },
                   style: ElevatedButton.styleFrom(
@@ -414,6 +433,19 @@ class HamburgerMenuScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  String formatJoinedDate(String? isoDate) {
+    if (isoDate == null || isoDate.isEmpty) return "-";
+
+    try {
+      final parsed = DateTime.parse(
+        isoDate,
+      ).toLocal(); // important for India timezone
+      return DateFormat('dd MMM yyyy').format(parsed);
+    } catch (e) {
+      return "-";
+    }
   }
 
   Widget _buildMenuItem({
