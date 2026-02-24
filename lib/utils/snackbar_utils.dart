@@ -1,6 +1,6 @@
 // core/utils/snackbar_utils.dart
 import 'package:flutter/material.dart';
-import 'package:yempover_app/screens/LoginScreen.dart';
+import 'package:Yempover_app/screens/LoginScreen.dart';
 
 class SnackbarUtils {
   static void showSuccess(BuildContext context, String message) {

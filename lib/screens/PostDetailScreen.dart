@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:yempover_app/models/ProductPost.dart';
-import 'package:yempover_app/models/ProductPostmain.dart' hide UserItem;
-import 'package:yempover_app/models/post_model.dart' hide Post;
-import 'package:yempover_app/services/api_service.dart';
-import 'package:yempover_app/screens/OfferDeckScreen.dart';
-import 'package:yempover_app/screens/PurchaseOfferScreen.dart';
+import 'package:Yempover_app/models/ProductPostmain.dart';
+import 'package:Yempover_app/screens/OfferDeckScreen.dart';
+import 'package:Yempover_app/services/api_service.dart';
+import 'package:Yempover_app/services/token_service.dart';
+import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:Yempover_app/utils/loading_widget.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -22,15 +22,29 @@ class PostDetailScreen extends StatefulWidget {
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final ApiService _apiService = ApiService();
+  final TradeChatService _chatService = TradeChatService();
+  final TokenService _tokenService = TokenService();
+
   late Post _post;
   bool _isLoading = false;
   bool _isFavorite = false;
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
     _post = widget.post;
+    _loadCurrentUser();
     _loadPostDetails();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    try {
+      _currentUserId = await _tokenService.getUserId();
+      print('👤 Current user ID: $_currentUserId');
+    } catch (e) {
+      print('❌ Error loading current user: $e');
+    }
   }
 
   Future<void> _loadPostDetails() async {
@@ -55,82 +69,34 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
-  void _toggleFavorite() {
-    setState(() {
-      _isFavorite = !_isFavorite;
-      // TODO: Call API to update favorite status
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _isFavorite ? 'Added to favorites' : 'Removed from favorites',
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  void _showMakeOfferDialog(BuildContext context) {
-    final isForBarter = _post.barterDetails != null;
-
-    if (isForBarter && _post.price! > 0) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Make an Offer'),
-          content: const Text(
-            'This item is available for both barter and purchase. '
-            'How would you like to proceed?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            OutlinedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _navigateToPurchaseScreen(context);
-              },
-              child: const Text('Purchase'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _navigateToOfferDeck(context);
-              },
-              child: const Text('Barter'),
-            ),
-          ],
-        ),
-      );
-    } else if (isForBarter) {
-      _navigateToOfferDeck(context);
-    } else if (_post.price! > 0) {
-      _navigateToPurchaseScreen(context);
-    } else {
+  // New method to navigate to Offer Deck
+  void _navigateToOfferDeck() {
+    if (_currentUserId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('This item is not available for offers'),
-          duration: Duration(seconds: 2),
+          content: Text('Please login to make an offer'),
+          backgroundColor: Colors.orange,
         ),
       );
+      return;
     }
-  }
 
-  void _navigateToOfferDeck(BuildContext context) {
-    // TODO: Update OfferDeckScreen to accept Post model instead of ProductPost
-    // For now, you may need to convert or adapt the data
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Navigate to offer deck functionality')),
-    );
-  }
+    // Don't allow offering on own post
+    if (_currentUserId == _post.postedById) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You cannot make an offer on your own post'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
-  void _navigateToPurchaseScreen(BuildContext context) {
-    // TODO: Update PurchaseOfferScreen to accept Post model instead of ProductPost
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Navigate to purchase screen functionality'),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            OfferDeckScreen(post: _post, currentUserId: _currentUserId!),
       ),
     );
   }
@@ -150,18 +116,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             CircleAvatar(
               radius: 50,
               backgroundColor: Colors.grey.shade200,
-              child: _post.postedBy?.profileImage != null
+              child: _post.postedBy.profileImage != null
                   ? ClipOval(
                       child: Image.network(
-                        _post.postedBy!.profileImage!,
+                        _post.postedBy.profileImage!,
                         width: 100,
                         height: 100,
                         fit: BoxFit.cover,
                       ),
                     )
                   : Text(
-                      _post.postedBy!.firstName.isNotEmpty
-                          ? _post.postedBy!.firstName[0]
+                      _post.postedBy.firstName.isNotEmpty
+                          ? _post.postedBy.firstName[0]
                           : 'U',
                       style: const TextStyle(
                         fontSize: 36,
@@ -172,7 +138,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              '${_post.postedBy?.firstName} ${_post.postedBy?.lastName}',
+              _post.postedBy.fullName,
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -210,28 +176,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             ),
 
             const SizedBox(height: 20),
-
-            // Contact Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  // TODO: Implement chat functionality
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Opening chat...')),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: const Text(
-                  'Message User',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -260,7 +204,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             itemCount: _post.images.length,
             itemBuilder: (context, index) {
               return Image.network(
-                _post.images[index],
+                _post.processedImages[index],
                 width: double.infinity,
                 fit: BoxFit.cover,
                 loadingBuilder: (context, child, loadingProgress) {
@@ -285,7 +229,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               );
             },
           ),
-
           Positioned(
             bottom: 20,
             left: 0,
@@ -312,6 +255,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   Widget _buildBarterSection() {
+    if (_post.barterDetails == null) return const SizedBox();
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       padding: const EdgeInsets.all(16),
@@ -339,8 +284,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           ),
           const SizedBox(height: 12),
 
-          if (_post.barterDetails != null &&
-              _post.barterDetails!.barterCategories.isNotEmpty)
+          if (_post.barterDetails!.barterCategories.isNotEmpty)
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -365,11 +309,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             ),
 
           const SizedBox(height: 12),
-          if (_post.barterDetails != null)
-            Text(
-              'Barter status: ${_post.barterDetails!.barterCategories}',
-              style: const TextStyle(fontSize: 14, color: Colors.black87),
-            ),
+          Text(
+            'Barter status: ${_post.barterDetails!.barterCategories.length} categories',
+            style: const TextStyle(fontSize: 14, color: Colors.black87),
+          ),
         ],
       ),
     );
@@ -447,7 +390,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const LoadingWidget()
           : SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,16 +412,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               child: CircleAvatar(
                                 radius: 22,
                                 backgroundColor: Colors.grey.shade200,
-                                child: _post.postedBy.profileImage != null
-                                    ? ClipOval(
-                                        child: Image.network(
-                                          _post.postedBy.profileImage!,
-                                          width: 44,
-                                          height: 44,
-                                          fit: BoxFit.cover,
-                                        ),
-                                      )
-                                    : Text(
+                                backgroundImage:
+                                    _post.postedBy.profileImage != null
+                                    ? NetworkImage(_post.postedBy.profileImage!)
+                                    : null,
+                                child: _post.postedBy.profileImage == null
+                                    ? Text(
                                         _post.postedBy.firstName.isNotEmpty
                                             ? _post.postedBy.firstName[0]
                                             : 'U',
@@ -486,7 +425,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
                                         ),
-                                      ),
+                                      )
+                                    : null,
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -495,7 +435,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '${_post.postedBy?.firstName} ${_post.postedBy.lastName}',
+                                    _post.postedBy.fullName,
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,
@@ -720,13 +660,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     ),
                   ),
 
-                  // Make Offer Button
+                  // Action Buttons - ONLY ONE BUTTON NOW
                   Padding(
                     padding: const EdgeInsets.all(20),
                     child: SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () => _showMakeOfferDialog(context),
+                        onPressed: _navigateToOfferDeck,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2E5BFF),
                           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -734,11 +674,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: Text(
-                          _post.isForBarter
-                              ? 'Make a Barter Offer'
-                              : 'Make an Offer',
-                          style: const TextStyle(
+                        child: const Text(
+                          'Make an Offer',
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
@@ -750,6 +688,20 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  void _toggleFavorite() {
+    setState(() {
+      _isFavorite = !_isFavorite;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _isFavorite ? 'Added to favorites' : 'Removed from favorites',
+        ),
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 

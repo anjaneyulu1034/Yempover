@@ -1,12 +1,14 @@
-// lib/screens/EditProfileScreen.dart
+import 'dart:convert';
+import 'dart:io';
+import 'package:Yempover_app/services/api_service.dart';
 import 'package:flutter/material.dart';
-import 'package:yempover_app/constants/api_constants.dart';
-
-import 'package:yempover_app/models/get_my_profile_response.dart'; // Import ProfileData
-import 'package:yempover_app/models/profile_update_request.dart';
-import 'package:yempover_app/services/profile_service.dart';
-import 'package:yempover_app/services/profile_session_manager.dart';
-import 'package:yempover_app/utils/loading_overlay.dart';
+import 'package:Yempover_app/constants/api_constants.dart';
+import 'package:Yempover_app/models/get_my_profile_response.dart';
+import 'package:Yempover_app/models/profile_update_request.dart';
+import 'package:Yempover_app/services/profile_service.dart';
+import 'package:Yempover_app/services/profile_session_manager.dart';
+import 'package:Yempover_app/utils/loading_overlay.dart';
+import 'package:image_picker/image_picker.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -18,6 +20,7 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _profileService = ProfileService();
+  final ImagePicker _imagePicker = ImagePicker();
 
   late TextEditingController _firstNameController;
   late TextEditingController _lastNameController;
@@ -28,13 +31,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _sharePhone = true;
   bool _notificationEnabled = true;
   bool _isLoading = false;
+  bool _isUploadingImage = false;
 
-  ProfileData? _profile; // Changed from ProfileModel to ProfileData
+  ProfileData? _profile;
+  File? _selectedImageFile;
+  String? _base64Image;
+  String? _imageMimeType;
 
   @override
   void initState() {
     super.initState();
-    _profile = ProfileSessionManager.instance.profile; // No cast needed
+    _profile = ProfileSessionManager.instance.profile;
     _initializeControllers();
   }
 
@@ -45,7 +52,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _lastNameController = TextEditingController(text: _profile?.lastName ?? '');
     _emailController = TextEditingController(text: _profile?.email ?? '');
     _homeAddressController = TextEditingController(
-      text: _profile?.homeAddress?.toString() ?? '', // Handle dynamic type
+      text: _profile?.homeAddress?.toString() ?? '',
     );
 
     _shareEmail = _profile?.shareEmail ?? true;
@@ -62,6 +69,124 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 500,
+        maxHeight: 500,
+        imageQuality: 80,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _isUploadingImage = true;
+        });
+
+        final File imageFile = File(pickedFile.path);
+
+        // Read image file as bytes
+        final bytes = await imageFile.readAsBytes();
+
+        // Convert to base64
+        final base64Image = base64Encode(bytes);
+
+        // Get mime type from file extension
+        final extension = pickedFile.path.split('.').last.toLowerCase();
+        String mimeType;
+        switch (extension) {
+          case 'jpg':
+          case 'jpeg':
+            mimeType = 'image/jpeg';
+            break;
+          case 'png':
+            mimeType = 'image/png';
+            break;
+          case 'gif':
+            mimeType = 'image/gif';
+            break;
+          default:
+            mimeType = 'image/jpeg';
+        }
+
+        setState(() {
+          _selectedImageFile = imageFile;
+          _base64Image = base64Image;
+          _imageMimeType = mimeType;
+          _isUploadingImage = false;
+        });
+
+        // Optional: Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Image selected successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isUploadingImage = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error picking image: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showImageSourceDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Select Image Source'),
+          content: const Text('Choose where to pick the image from'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.camera_alt, color: AppConstants.primaryColor),
+                  SizedBox(width: 8),
+                  Text('Camera'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.photo_library, color: AppConstants.primaryColor),
+                  SizedBox(width: 8),
+                  Text('Gallery'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _updateProfile() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -70,6 +195,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // If there's a selected image, upload it first
+      if (_base64Image != null && _imageMimeType != null) {
+        final apiService = ApiService();
+        final imageResponse = await apiService.uploadProfileImageBase64(
+          base64Image: _base64Image!,
+          mimeType: _imageMimeType!,
+        );
+
+        print('Profile image uploaded: ${imageResponse.data.url}');
+
+        // The profile session is automatically updated in the service
+      }
+
+      // Then update the rest of the profile data
       final request = ProfileUpdateRequest(
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
@@ -80,11 +219,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         shareEmail: _shareEmail,
         sharePhone: _sharePhone,
         notificationEnabled: _notificationEnabled,
+        // Note: You don't need to send base64 here as it's already uploaded
+        // profileImage: _base64Image, // Remove this
+        // profileImageMimeType: _imageMimeType, // Remove this
       );
 
       final updatedProfile = await _profileService.updateProfile(request);
 
       if (mounted) {
+        // Clear the selected image after successful update
+        setState(() {
+          _selectedImageFile = null;
+          _base64Image = null;
+          _imageMimeType = null;
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Profile updated successfully'),
@@ -186,23 +335,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             width: 3,
                           ),
                         ),
-                        child: CircleAvatar(
-                          radius: 48,
-                          backgroundColor: Colors.blue.shade100,
-                          backgroundImage: _profile?.profileImage != null
-                              ? NetworkImage(_profile!.profileImage!)
-                              : null,
-                          child: _profile?.profileImage == null
-                              ? Text(
-                                  _getInitials(),
-                                  style: const TextStyle(
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppConstants.primaryColor,
-                                  ),
-                                )
-                              : null,
-                        ),
+                        child: ClipOval(child: _buildProfileImage()),
                       ),
                       Positioned(
                         bottom: 0,
@@ -214,20 +347,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             color: AppConstants.primaryColor,
                             shape: BoxShape.circle,
                           ),
-                          child: IconButton(
-                            icon: const Icon(
-                              Icons.camera_alt,
-                              size: 20,
-                              color: Colors.white,
-                            ),
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Feature coming soon'),
+                          child: _isUploadingImage
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : IconButton(
+                                  icon: const Icon(
+                                    Icons.camera_alt,
+                                    size: 20,
+                                    color: Colors.white,
+                                  ),
+                                  onPressed: _showImageSourceDialog,
                                 ),
-                              );
-                            },
-                          ),
                         ),
                       ),
                     ],
@@ -525,6 +665,63 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 const SizedBox(height: 20),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileImage() {
+    if (_selectedImageFile != null) {
+      // Show selected image
+      return Image.file(
+        _selectedImageFile!,
+        fit: BoxFit.cover,
+        width: 120,
+        height: 120,
+      );
+    } else if (_profile?.profileImage != null &&
+        _profile!.profileImage!.isNotEmpty) {
+      // Show existing profile image from network
+      return Image.network(
+        _profile!.profileImage!,
+        fit: BoxFit.cover,
+        width: 120,
+        height: 120,
+        errorBuilder: (context, error, stackTrace) {
+          // Fallback to initials if image fails to load
+          return _buildInitialsAvatar();
+        },
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                  : null,
+            ),
+          );
+        },
+      );
+    } else {
+      // Show initials avatar
+      return _buildInitialsAvatar();
+    }
+  }
+
+  Widget _buildInitialsAvatar() {
+    return Container(
+      width: 120,
+      height: 120,
+      color: Colors.blue.shade100,
+      child: Center(
+        child: Text(
+          _getInitials(),
+          style: const TextStyle(
+            fontSize: 36,
+            fontWeight: FontWeight.bold,
+            color: AppConstants.primaryColor,
           ),
         ),
       ),

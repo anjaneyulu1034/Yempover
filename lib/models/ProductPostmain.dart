@@ -442,5 +442,7 @@ class UserItem {
     required this.imageUrl,
     required this.value,
     this.isSelected = false,
+    required description,
+    required price,
   });
 }

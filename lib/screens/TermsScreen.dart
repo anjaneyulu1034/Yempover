@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:yempover_app/services/content_service.dart';
-import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:Yempover_app/services/content_service.dart';
+import 'package:Yempover_app/utils/snackbar_utils.dart';
 
 class TermsScreen extends StatefulWidget {
   const TermsScreen({super.key});

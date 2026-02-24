@@ -1,20 +1,21 @@
+import 'package:Yempover_app/utils/notification_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:yempover_app/models/ProductPostmain.dart';
-import 'package:yempover_app/models/get_my_profile_response.dart';
-import 'package:yempover_app/services/api_service.dart';
-import 'package:yempover_app/payment/SubscriptionScreen.dart';
-import 'package:yempover_app/screens/PostDetailScreen.dart';
-import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:yempover_app/screens/TradeBoothScreen.dart';
-import 'package:yempover_app/screens/HamburgerMenuScreen.dart';
-import 'package:yempover_app/screens/TradeHistoryScreen.dart';
-import 'package:yempover_app/screens/NotificationsScreen.dart';
-import 'package:yempover_app/services/my_profile_service.dart';
-import 'package:yempover_app/services/profile_session_manager.dart';
-import 'package:yempover_app/services/token_service.dart';
-import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:provider/provider.dart';
+import 'package:Yempover_app/models/ProductPostmain.dart';
+import 'package:Yempover_app/models/get_my_profile_response.dart';
+import 'package:Yempover_app/services/api_service.dart';
+import 'package:Yempover_app/screens/PostDetailScreen.dart';
+import 'package:Yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:Yempover_app/screens/TradeBoothScreen.dart';
+import 'package:Yempover_app/screens/HamburgerMenuScreen.dart';
+import 'package:Yempover_app/screens/NotificationsScreen.dart';
+import 'package:Yempover_app/services/my_profile_service.dart';
+import 'package:Yempover_app/services/profile_session_manager.dart';
+import 'package:Yempover_app/services/token_service.dart';
+import 'package:Yempover_app/utils/snackbar_utils.dart';
+import '../services/post_action_service.dart';
 
 // Extended Post class with the required properties
 class ExtendedPost {
@@ -22,12 +23,14 @@ class ExtendedPost {
   bool isFavorite;
   bool isHidden;
   String wishListCategory;
+  String? favoriteId; // Store favorite ID for removal
 
   ExtendedPost({
     required this.post,
     this.isFavorite = false,
     this.isHidden = false,
     this.wishListCategory = '',
+    this.favoriteId,
   });
 
   // Getter for isForBarter
@@ -65,29 +68,6 @@ class ExtendedPost {
   }
 }
 
-// Rename AppNotification to avoid conflict
-class HomeNotification {
-  final String id;
-  final String type;
-  final String title;
-  final String message;
-  final DateTime date;
-  bool read;
-  final String action;
-  final Map<String, dynamic>? data;
-
-  HomeNotification({
-    required this.id,
-    required this.type,
-    required this.title,
-    required this.message,
-    required this.date,
-    required this.read,
-    required this.action,
-    this.data,
-  });
-}
-
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -98,6 +78,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final ApiService _apiService = ApiService();
   final MyProfileService _MyProfileService = MyProfileService();
+  final PostActionService _postActionService = PostActionService();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
 
@@ -109,14 +90,13 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _hasMore = true;
   int _currentPage = 1;
   final int _limit = 10;
+  Map<String, String> _favoriteIds = {}; // Map productId to favoriteId
 
   // UI state variables from original code
   bool _showPushNotificationDialog = false;
   bool _pushNotificationGranted = false;
   String _selectedLocation = 'Fetching location...';
   bool _useCurrentLocation = true;
-  int _notificationCount = 3;
-  List<HomeNotification> _notifications = [];
 
   // Location variables
   Position? _currentPosition;
@@ -139,14 +119,69 @@ class _HomeScreenState extends State<HomeScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
       _checkFirstTimeUser();
-      _loadNotifications();
       await _fetchMyProfile();
       await _getCurrentLocation();
       await _fetchPosts();
+      await _loadUserFavorites();
+      await _loadHiddenPosts();
+
+      // Load unread notification count
+      _loadUnreadNotificationCount();
     });
   }
 
+  Future<void> _loadUnreadNotificationCount() async {
+    try {
+      final provider = Provider.of<NotificationProvider>(
+        context,
+        listen: false,
+      );
+      await provider.loadUnreadCount();
+    } catch (e) {
+      debugPrint('🔴 Error loading unread count: $e');
+    }
+  }
+
   String? _errorMessage;
+
+  // Load user's favorites
+  Future<void> _loadUserFavorites() async {
+    try {
+      final favorites = await _postActionService.getFavorites();
+      setState(() {
+        _favoriteIds = {};
+        for (var favorite in favorites) {
+          if (favorite.productId.isNotEmpty) {
+            _favoriteIds[favorite.productId] = favorite.id;
+          }
+        }
+
+        // Update posts with favorite status
+        for (var post in _posts) {
+          post.isFavorite = _favoriteIds.containsKey(post.id);
+          post.favoriteId = _favoriteIds[post.id];
+        }
+        _applyFilters();
+      });
+    } catch (e) {
+      debugPrint('🔴 Error loading favorites: $e');
+    }
+  }
+
+  // Load hidden posts
+  Future<void> _loadHiddenPosts() async {
+    try {
+      final hiddenPostIds = await _postActionService.getHiddenPostIds();
+      setState(() {
+        for (var post in _posts) {
+          post.isHidden = hiddenPostIds.contains(post.id);
+        }
+        _applyFilters();
+      });
+    } catch (e) {
+      debugPrint('🔴 Error loading hidden posts: $e');
+    }
+  }
 
   // Location Methods
   Future<void> _getCurrentLocation() async {
@@ -253,8 +288,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _useCurrentLocation = false;
     });
 
-    // Here you would typically geocode the address to get coordinates
-    // For now, we'll just update the UI and refresh posts
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Location set to: $newLocation'),
@@ -271,118 +304,147 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FF),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                _buildHeader(),
-                _buildLocationRow(),
-                _buildSearchBar(),
-                Expanded(
-                  child: _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : RefreshIndicator(
-                          onRefresh: _refreshPosts,
-                          child: _filteredPosts.isEmpty
-                              ? Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(
-                                        Icons.search_off,
-                                        size: 64,
-                                        color: Colors.grey,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      const Text(
-                                        'No posts found',
-                                        style: TextStyle(
+    return WillPopScope(
+      onWillPop: _onWillPop, // Handle back button press
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F8FF),
+        body: SafeArea(
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  _buildHeader(),
+                  _buildLocationRow(),
+                  _buildSearchBar(),
+                  Expanded(
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : RefreshIndicator(
+                            onRefresh: _refreshPosts,
+                            child: _filteredPosts.isEmpty
+                                ? Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(
+                                          Icons.search_off,
+                                          size: 64,
                                           color: Colors.grey,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
                                         ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      const Text(
-                                        'Try changing your filters or search terms',
-                                        style: TextStyle(color: Colors.grey),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      ElevatedButton(
-                                        onPressed: _clearAllFilters,
-                                        child: const Text('Clear All Filters'),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : ListView.builder(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  itemCount: _filteredPosts.length + 1,
-                                  itemBuilder: (context, index) {
-                                    if (index == 0) {
-                                      return Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
+                                        const SizedBox(height: 16),
+                                        const Text(
+                                          'No posts found',
+                                          style: TextStyle(
+                                            color: Colors.grey,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            const Text(
-                                              'Near You',
-                                              style: TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            if (_selectedTradeType != null ||
-                                                _selectedPostType != null ||
-                                                _selectedCategory != null)
-                                              Chip(
-                                                label: const Text(
-                                                  'Filters Active',
+                                        const SizedBox(height: 8),
+                                        const Text(
+                                          'Try changing your filters or search terms',
+                                          style: TextStyle(color: Colors.grey),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        ElevatedButton(
+                                          onPressed: _clearAllFilters,
+                                          child: const Text(
+                                            'Clear All Filters',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    itemCount: _filteredPosts.length + 1,
+                                    itemBuilder: (context, index) {
+                                      if (index == 0) {
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 16,
+                                          ),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              const Text(
+                                                'Near You',
+                                                style: TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
                                                 ),
-                                                backgroundColor:
-                                                    Colors.blue[50],
-                                                deleteIcon: const Icon(
-                                                  Icons.close,
-                                                  size: 16,
-                                                ),
-                                                onDeleted: _clearAllFilters,
                                               ),
-                                          ],
-                                        ),
+                                              if (_selectedTradeType != null ||
+                                                  _selectedPostType != null ||
+                                                  _selectedCategory != null)
+                                                Chip(
+                                                  label: const Text(
+                                                    'Filters Active',
+                                                  ),
+                                                  backgroundColor:
+                                                      Colors.blue[50],
+                                                  deleteIcon: const Icon(
+                                                    Icons.close,
+                                                    size: 16,
+                                                  ),
+                                                  onDeleted: _clearAllFilters,
+                                                ),
+                                            ],
+                                          ),
+                                        );
+                                      }
+                                      return _buildProductCard(
+                                        _filteredPosts[index - 1],
                                       );
-                                    }
-                                    return _buildProductCard(
-                                      _filteredPosts[index - 1],
-                                    );
-                                  },
-                                ),
-                        ),
-                ),
-              ],
-            ),
-
-            // Push Notification Permission Dialog
-            if (_showPushNotificationDialog) _buildPushNotificationDialog(),
-
-            // Location Loading Indicator
-            if (_isLocationLoading)
-              Container(
-                color: Colors.black54,
-                child: const Center(child: CircularProgressIndicator()),
+                                    },
+                                  ),
+                          ),
+                  ),
+                ],
               ),
-          ],
+
+              // Push Notification Permission Dialog
+              if (_showPushNotificationDialog) _buildPushNotificationDialog(),
+
+              // Location Loading Indicator
+              if (_isLocationLoading)
+                Container(
+                  color: Colors.black54,
+                  child: const Center(child: CircularProgressIndicator()),
+                ),
+            ],
+          ),
         ),
+        bottomNavigationBar: _buildBottomNav(),
       ),
-      bottomNavigationBar: _buildBottomNav(),
     );
+  }
+
+  // Handle back button press
+  Future<bool> _onWillPop() async {
+    // Show confirmation dialog
+    return await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Exit App'),
+            content: const Text('Are you sure you want to exit the app?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false), // Don't exit
+                child: const Text('No'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true), // Exit
+                child: const Text('Yes'),
+              ),
+            ],
+          ),
+        ) ??
+        false; // If dialog is dismissed, return false
   }
 
   Future<void> _fetchMyProfile() async {
@@ -495,16 +557,15 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       // Convert API posts to ExtendedPost
-      final List<ExtendedPost> extendedPosts = (response.posts as List<Post>)
-          .map((post) {
-            return ExtendedPost(
-              post: post,
-              isFavorite: false,
-              isHidden: false,
-              wishListCategory: '',
-            );
-          })
-          .toList();
+      final List<ExtendedPost> extendedPosts = (response.posts).map((post) {
+        return ExtendedPost(
+          post: post,
+          isFavorite: _favoriteIds.containsKey(post.id),
+          favoriteId: _favoriteIds[post.id],
+          isHidden: false,
+          wishListCategory: '',
+        );
+      }).toList();
 
       if (loadMore) {
         setState(() {
@@ -525,87 +586,13 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
       });
       debugPrint('🔴 HomeScreen: Error fetching posts: $e');
-      // Don't show error for guests
     }
   }
 
   Future<void> _refreshPosts() async {
     await _fetchPosts();
-  }
-
-  void _loadNotifications() {
-    _notifications = [
-      HomeNotification(
-        id: '1',
-        type: 'message',
-        title: 'New Message',
-        message: 'Andrew Danny sent you a new message regarding Television',
-        date: DateTime.now().subtract(const Duration(minutes: 30)),
-        read: false,
-        action: 'view_chat',
-        data: {'userId': 'andrew123', 'postId': 'television456'},
-      ),
-      HomeNotification(
-        id: '2',
-        type: 'subscription',
-        title: 'Subscription Reminder',
-        message:
-            'Your subscription will expire in 3 days. Renew now to continue enjoying premium features.',
-        date: DateTime.now().subtract(const Duration(hours: 2)),
-        read: false,
-        action: 'subscribe',
-      ),
-      HomeNotification(
-        id: '3',
-        type: 'like',
-        title: 'Post Liked',
-        message: 'Sarah Johnson liked your post "iPhone 13 Pro"',
-        date: DateTime.now().subtract(const Duration(hours: 5)),
-        read: true,
-        action: 'view_post',
-        data: {'postId': 'iphone789'},
-      ),
-      HomeNotification(
-        id: '4',
-        type: 'wishlist',
-        title: 'Wishlist Match',
-        message: 'New product matching your wishlist: Gaming Laptop',
-        date: DateTime.now().subtract(const Duration(days: 1)),
-        read: true,
-        action: 'view_product',
-        data: {'productId': 'gaming_laptop123'},
-      ),
-      HomeNotification(
-        id: '5',
-        type: 'deal_completed',
-        title: 'Deal Completed',
-        message: 'Your trade for "Books" has been successfully completed',
-        date: DateTime.now().subtract(const Duration(days: 2)),
-        read: true,
-        action: 'view_trade',
-        data: {'tradeId': 'trade123'},
-      ),
-      HomeNotification(
-        id: '6',
-        type: 'offer_accepted',
-        title: 'Offer Accepted',
-        message: 'Your offer for "Sofa" has been accepted by Melia K',
-        date: DateTime.now().subtract(const Duration(days: 3)),
-        read: true,
-        action: 'view_chat',
-        data: {'userId': 'melia456', 'offerId': 'offer789'},
-      ),
-      HomeNotification(
-        id: '7',
-        type: 'subscription_expired',
-        title: 'Subscription Expired',
-        message:
-            'Your subscription has expired. Subscribe now to regain access to all features.',
-        date: DateTime.now().subtract(const Duration(days: 5)),
-        read: true,
-        action: 'subscribe',
-      ),
-    ];
+    await _loadUserFavorites();
+    await _loadHiddenPosts();
   }
 
   void _handlePushNotificationPermission(bool granted) {
@@ -691,62 +678,136 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _toggleFavorite(ExtendedPost extendedPost) {
-    setState(() {
-      final index = _posts.indexWhere((p) => p.post.id == extendedPost.post.id);
-      if (index != -1) {
-        _posts[index].isFavorite = !_posts[index].isFavorite;
-        _filteredPosts = List.from(_posts);
+  Future<void> _toggleFavorite(ExtendedPost extendedPost) async {
+    try {
+      setState(() {
+        // Optimistic update
+        final index = _posts.indexWhere(
+          (p) => p.post.id == extendedPost.post.id,
+        );
+        if (index != -1) {
+          _posts[index].isFavorite = !_posts[index].isFavorite;
+          _filteredPosts = List.from(_posts);
+        }
+      });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+      if (extendedPost.isFavorite) {
+        // Add to favorites
+        final response = await _postActionService.addToFavorites(
+          extendedPost.id,
+        );
+
+        setState(() {
+          final index = _posts.indexWhere(
+            (p) => p.post.id == extendedPost.post.id,
+          );
+          if (index != -1) {
+            _posts[index].favoriteId = response.data.favorite.id;
+            _favoriteIds[extendedPost.id] = response.data.favorite.id;
+          }
+        });
+
+        if (mounted) {
+          SnackbarUtils.showSuccess(context, response.message);
+        }
+      } else {
+        // Remove from favorites
+        if (extendedPost.favoriteId != null) {
+          final response = await _postActionService.removeFromFavorites(
+            extendedPost.favoriteId!,
+          );
+
+          setState(() {
+            final index = _posts.indexWhere(
+              (p) => p.post.id == extendedPost.post.id,
+            );
+            if (index != -1) {
+              _posts[index].favoriteId = null;
+              _favoriteIds.remove(extendedPost.id);
+            }
+          });
+
+          if (mounted) {
+            SnackbarUtils.showSuccess(context, response.message);
+          }
+        }
+      }
+    } catch (e) {
+      // Revert optimistic update on error
+      setState(() {
+        final index = _posts.indexWhere(
+          (p) => p.post.id == extendedPost.post.id,
+        );
+        if (index != -1) {
+          _posts[index].isFavorite = !_posts[index].isFavorite;
+          _filteredPosts = List.from(_posts);
+        }
+      });
+
+      if (mounted) {
+        SnackbarUtils.showError(context, e.toString());
+      }
+    }
+  }
+
+  Future<void> _hidePost(ExtendedPost extendedPost) async {
+    try {
+      final response = await _postActionService.hidePost(extendedPost.id);
+
+      setState(() {
+        final index = _posts.indexWhere(
+          (p) => p.post.id == extendedPost.post.id,
+        );
+        if (index != -1) {
+          _posts[index].isHidden = true;
+          _filteredPosts.removeWhere((p) => p.post.id == extendedPost.post.id);
+        }
+      });
+
+      if (mounted) {
+        SnackbarUtils.showSuccess(context, response.message);
+      }
+    } catch (e) {
+      if (mounted) {
+        SnackbarUtils.showError(context, e.toString());
+      }
+    }
+  }
+
+  Future<void> _reportPost(
+    ExtendedPost extendedPost,
+    String reason, [
+    String? description,
+  ]) async {
+    try {
+      final response = await _postActionService.reportPost(
+        productId: extendedPost.id,
+        reason: reason,
+        description: description,
+      );
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Report Submitted'),
             content: Text(
-              _posts[index].isFavorite
-                  ? '${extendedPost.title} added to favorites'
-                  : '${extendedPost.title} removed from favorites',
+              'You have reported "${extendedPost.title}" for: $reason\n\nOur team will review this post within 24 hours.\n\nReport ID: ${response.data.report.id}',
             ),
-            duration: const Duration(seconds: 2),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
           ),
         );
       }
-    });
-  }
-
-  void _hidePost(ExtendedPost extendedPost) {
-    setState(() {
-      final index = _posts.indexWhere((p) => p.post.id == extendedPost.post.id);
-      if (index != -1) {
-        _posts[index].isHidden = true;
-        _filteredPosts.removeWhere((p) => p.post.id == extendedPost.post.id);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${extendedPost.title} has been hidden from your feed',
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+    } catch (e) {
+      if (mounted) {
+        SnackbarUtils.showError(context, e.toString());
       }
-    });
-  }
-
-  void _reportPost(ExtendedPost extendedPost, String reason) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Report Submitted'),
-        content: Text(
-          'You have reported "${extendedPost.title}" for: $reason\n\nOur team will review this post within 24 hours.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
+    }
   }
 
   void _showLocationOptions() {
@@ -779,15 +840,6 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
             const Divider(),
-            // ListTile(
-            //   leading: const Icon(Icons.search, color: Colors.orange),
-            //   title: const Text('Search Location'),
-            //   subtitle: const Text('Search for any location'),
-            //   onTap: () {
-            //     Navigator.pop(context);
-            //     _showLocationSearch();
-            //   },
-            // ),
             if (_locationPermissionDenied)
               Column(
                 children: [
@@ -809,53 +861,51 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showLocationSearch() {
-    _locationController.clear();
+  void _showReportDialog(ExtendedPost extendedPost) {
+    String selectedReason = 'Spam';
+    TextEditingController reportController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Search Location'),
+        title: const Text('Report Post'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: _locationController,
-              decoration: const InputDecoration(
-                hintText: 'Enter city, state, or address...',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.search),
-              ),
+            const Text('Select reason for reporting this post:'),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: selectedReason,
+              items: const [
+                DropdownMenuItem(value: 'Spam', child: Text('Spam')),
+                DropdownMenuItem(
+                  value: 'Inappropriate',
+                  child: Text('Inappropriate Content'),
+                ),
+                DropdownMenuItem(
+                  value: 'Wrong Category',
+                  child: Text('Wrong Category'),
+                ),
+                DropdownMenuItem(value: 'Fake', child: Text('Fake Post')),
+                DropdownMenuItem(
+                  value: 'Duplicate',
+                  child: Text('Duplicate Post'),
+                ),
+                DropdownMenuItem(value: 'Other', child: Text('Other')),
+              ],
+              onChanged: (value) {
+                selectedReason = value ?? 'Spam';
+              },
+              decoration: const InputDecoration(border: OutlineInputBorder()),
             ),
             const SizedBox(height: 10),
-            const Text(
-              'Popular Locations:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            Wrap(
-              spacing: 8,
-              children: [
-                Chip(
-                  label: const Text('New York'),
-                  onDeleted: () {
-                    _updateLocationFromSearch('New York, NY');
-                    Navigator.pop(context);
-                  },
-                ),
-                Chip(
-                  label: const Text('Los Angeles'),
-                  onDeleted: () {
-                    _updateLocationFromSearch('Los Angeles, CA');
-                    Navigator.pop(context);
-                  },
-                ),
-                Chip(
-                  label: const Text('Chicago'),
-                  onDeleted: () {
-                    _updateLocationFromSearch('Chicago, IL');
-                    Navigator.pop(context);
-                  },
-                ),
-              ],
+            TextField(
+              controller: reportController,
+              decoration: const InputDecoration(
+                hintText: 'Additional details (optional)...',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
             ),
           ],
         ),
@@ -866,89 +916,16 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              if (_locationController.text.isNotEmpty) {
-                _updateLocationFromSearch(_locationController.text);
-                Navigator.pop(context);
-              }
+              _reportPost(
+                extendedPost,
+                selectedReason,
+                reportController.text.isNotEmpty ? reportController.text : null,
+              );
+              Navigator.pop(context);
             },
-            child: const Text('Apply'),
+            child: const Text('Submit Report'),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showNotificationScreen() {
-    setState(() {
-      _notificationCount = 0;
-      for (var notification in _notifications) {
-        notification.read = true;
-      }
-    });
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => NotificationsScreen(
-          notifications: _notifications
-              .map(
-                (n) => AppNotification(
-                  id: n.id,
-                  type: n.type,
-                  title: n.title,
-                  message: n.message,
-                  date: n.date,
-                  read: n.read,
-                  action: n.action,
-                  data: n.data,
-                ),
-              )
-              .toList(),
-          onNotificationTap: (appNotification) {
-            // Find matching HomeNotification and handle it
-            final homeNotification = _notifications.firstWhere(
-              (n) => n.id == appNotification.id,
-              orElse: () => _notifications.first,
-            );
-            _handleNotificationTap(homeNotification);
-          },
-        ),
-      ),
-    ).then((value) {
-      setState(() {
-        _notificationCount = _notifications.where((n) => !n.read).length;
-      });
-    });
-  }
-
-  void _showFilterDialog() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-      ),
-      builder: (context) => FilterScreen(
-        selectedTradeType: _selectedTradeType,
-        selectedPostType: _selectedPostType,
-        selectedCategory: _selectedCategory,
-        selectedWishListCategory: _selectedWishListCategory,
-        selectedRadius: _selectedRadius,
-        onApply: (tradeType, postType, category, wishListCategory, radius) {
-          setState(() {
-            _selectedTradeType = tradeType;
-            _selectedPostType = postType;
-            _selectedCategory = category;
-            _selectedWishListCategory = wishListCategory;
-            _selectedRadius = radius;
-          });
-          _applyFilters();
-          Navigator.pop(context);
-        },
-        onClear: () {
-          _clearAllFilters();
-          Navigator.pop(context);
-        },
       ),
     );
   }
@@ -1017,70 +994,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showReportDialog(ExtendedPost extendedPost) {
-    TextEditingController reportController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Report Post'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Please provide reason for reporting this post:'),
-            const SizedBox(height: 10),
-            TextField(
-              controller: reportController,
-              decoration: const InputDecoration(
-                hintText: 'Enter reason...',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Common reasons:',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            Wrap(
-              spacing: 8,
-              children: [
-                FilterChip(
-                  label: const Text('Spam'),
-                  onSelected: (_) => reportController.text = 'Spam',
-                ),
-                FilterChip(
-                  label: const Text('Inappropriate'),
-                  onSelected: (_) =>
-                      reportController.text = 'Inappropriate content',
-                ),
-                FilterChip(
-                  label: const Text('Wrong category'),
-                  onSelected: (_) => reportController.text = 'Wrong category',
-                ),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (reportController.text.isNotEmpty) {
-                _reportPost(extendedPost, reportController.text);
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Submit Report'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _performSearch(String query) {
     setState(() {
       _searchQuery = query;
@@ -1131,63 +1044,52 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Handle notification tap
-  void _handleNotificationTap(HomeNotification notification) {
-    setState(() {
-      notification.read = true;
-      _notificationCount = _notifications.where((n) => !n.read).length;
+  // Navigate to Notifications Screen
+  void _showNotificationScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NotificationsScreen(
+          notifications: const [],
+          onNotificationTap: (p1) {},
+        ),
+      ),
+    ).then((_) {
+      // Refresh unread count when returning from notifications screen
+      _loadUnreadNotificationCount();
     });
+  }
 
-    switch (notification.action) {
-      case 'view_chat':
-        _navigateToTradeChat();
-        break;
-
-      case 'subscribe':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const SubscriptionScreen()),
-        );
-        break;
-
-      case 'view_post':
-        // Find the post and navigate to detail
-        final post = _posts.isNotEmpty ? _posts.first : null;
-        if (post != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  PostDetailScreen(post: post.post, userItems: []),
-            ),
-          );
-        }
-        break;
-
-      case 'view_product':
-        final post = _posts.isNotEmpty ? _posts.first : null;
-        if (post != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  PostDetailScreen(post: post.post, userItems: []),
-            ),
-          );
-        }
-        break;
-
-      case 'view_trade':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const TradeHistoryScreen()),
-        );
-        break;
-
-      default:
-        _showNotificationScreen();
-        break;
-    }
+  void _showFilterDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (context) => FilterScreen(
+        selectedTradeType: _selectedTradeType,
+        selectedPostType: _selectedPostType,
+        selectedCategory: _selectedCategory,
+        selectedWishListCategory: _selectedWishListCategory,
+        selectedRadius: _selectedRadius,
+        onApply: (tradeType, postType, category, wishListCategory, radius) {
+          setState(() {
+            _selectedTradeType = tradeType;
+            _selectedPostType = postType;
+            _selectedCategory = category;
+            _selectedWishListCategory = wishListCategory;
+            _selectedRadius = radius;
+          });
+          _applyFilters();
+          Navigator.pop(context);
+        },
+        onClear: () {
+          _clearAllFilters();
+          // Navigator.pop(context);
+        },
+      ),
+    );
   }
 
   // Helper methods
@@ -1200,10 +1102,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return 'No Barter';
   }
 
-  String _getDistance(ExtendedPost extendedPost) {
-    // You would implement actual distance calculation here
-    return '1.7 Km';
-  }
+  // String _getDistance(ExtendedPost extendedPost) {
+  //   // You would implement actual distance calculation here
+  //   return '1.7 Km';
+  // }
 
   String _getReturnType(ExtendedPost extendedPost) {
     if (extendedPost.isForBarter) {
@@ -1314,9 +1216,20 @@ class _HomeScreenState extends State<HomeScreen> {
               child: profileData != null
                   ? CircleAvatar(
                       radius: 20,
-                      backgroundImage: NetworkImage(
-                        '${profileData?.profileImage}',
-                      ),
+                      backgroundImage: profileData?.profileImage != null
+                          ? NetworkImage(profileData!.profileImage!)
+                          : null,
+                      child: profileData?.profileImage == null
+                          ? Text(
+                              profileData?.firstName?.isNotEmpty == true
+                                  ? profileData!.firstName![0]
+                                  : 'U',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
                     )
                   : Container(),
             ),
@@ -1328,60 +1241,72 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "${profileData?.firstName} ${profileData?.lastName}",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  "${profileData?.firstName ?? ''} ${profileData?.lastName ?? ''}",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
                 ),
-                Text(
+                const Text(
                   'Welcome to Yempover',
                   style: TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ],
             ),
           ),
-          Stack(
-            children: [
-              IconButton(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.notifications_none_outlined,
-                    color: Colors.blue,
-                    size: 24,
-                  ),
-                ),
-                onPressed: _showNotificationScreen,
-              ),
-              if (_notificationCount > 0)
-                Positioned(
-                  right: 10,
-                  top: 10,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 18,
-                      minHeight: 18,
-                    ),
-                    child: Text(
-                      '$_notificationCount',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+
+          // Notification Icon with Badge using Provider
+          Consumer<NotificationProvider>(
+            builder: (context, provider, child) {
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        shape: BoxShape.circle,
                       ),
-                      textAlign: TextAlign.center,
+                      child: const Icon(
+                        Icons.notifications_none_outlined,
+                        color: Colors.blue,
+                        size: 24,
+                      ),
                     ),
+                    onPressed: _showNotificationScreen,
                   ),
-                ),
-            ],
+                  if (provider.unreadCount > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        child: Text(
+                          provider.unreadCount > 99
+                              ? '99+'
+                              : '${provider.unreadCount}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
+
           const SizedBox(width: 8),
           GestureDetector(
             onTap: _navigateToHamburgerMenu,
@@ -1680,7 +1605,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                // User info overlay
+                // User info overlay - FIXED: Now using dynamic profile image
                 Positioned(
                   bottom: 12,
                   left: 12,
@@ -1693,11 +1618,28 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     child: Row(
                       children: [
+                        // FIXED: Dynamic user image similar to PostDetailScreen
                         CircleAvatar(
                           radius: 18,
-                          backgroundImage: NetworkImage(
-                            'https://i.pravatar.cc/150?img=${extendedPost.postedBy.firstName.hashCode % 70}',
-                          ),
+                          backgroundColor: Colors.grey.shade200,
+                          backgroundImage:
+                              extendedPost.postedBy.profileImage != null
+                              ? NetworkImage(
+                                  extendedPost.postedBy.profileImage!,
+                                )
+                              : null,
+                          child: extendedPost.postedBy.profileImage == null
+                              ? Text(
+                                  extendedPost.postedBy.firstName.isNotEmpty
+                                      ? extendedPost.postedBy.firstName[0]
+                                      : 'U',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue,
+                                  ),
+                                )
+                              : null,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -1802,26 +1744,26 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        extendedPost.title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      if (_useCurrentLocation && _currentPosition != null)
-                        Text(
-                          _getDistance(extendedPost),
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12,
-                          ),
-                        ),
-                    ],
-                  ),
+                  // Row(
+                  //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  //   children: [
+                  //     Text(
+                  //       extendedPost.title,
+                  //       style: const TextStyle(
+                  //         fontWeight: FontWeight.bold,
+                  //         fontSize: 16,
+                  //       ),
+                  //     ),
+                  //     if (_useCurrentLocation && _currentPosition != null)
+                  //       // Text(
+                  //       //   _getDistance(extendedPost),
+                  //       //   style: const TextStyle(
+                  //       //     color: Colors.grey,
+                  //       //     fontSize: 12,
+                  //       //   ),
+                  //       // ),
+                  //   ],
+                  // ),
                   const SizedBox(height: 6),
                   Text(
                     'In Return: ${_getReturnType(extendedPost)}',
@@ -1872,15 +1814,18 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               _navItem(Icons.home_filled, 'Marketplace', true),
               const SizedBox(width: 60),
-              // Chat navigation item
-              GestureDetector(
-                onTap: _navigateToTradeChat,
-                child: _navItem(
-                  Icons.chat_bubble_outline,
-                  'Chat',
-                  false,
-                  badge: 1,
-                ),
+              // Chat navigation item with badge
+              Consumer<NotificationProvider>(
+                builder: (context, provider, child) {
+                  // Count unread messages - you'd need to implement this
+                  // For now, we'll use the same unread count or 0
+                  return _navItem(
+                    Icons.chat_bubble_outline,
+                    'Chat',
+                    false,
+                    badge: provider.unreadCount > 0 ? provider.unreadCount : 0,
+                  );
+                },
               ),
             ],
           ),
@@ -1929,49 +1874,52 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _navItem(IconData icon, String label, bool isActive, {int badge = 0}) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? Colors.black : Colors.grey.shade400,
-              size: 28,
-            ),
-            if (badge > 0)
-              Positioned(
-                right: -4,
-                top: -4,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF2E5BFF),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    '$badge',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
+    return GestureDetector(
+      onTap: label == 'Chat' ? _navigateToTradeChat : null,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(
+                icon,
+                color: isActive ? Colors.black : Colors.grey.shade400,
+                size: 28,
+              ),
+              if (badge > 0)
+                Positioned(
+                  right: -4,
+                  top: -4,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF2E5BFF),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      badge > 99 ? '99+' : '$badge',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            color: isActive ? Colors.black : Colors.grey.shade400,
-            fontSize: 11,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            ],
           ),
-        ),
-      ],
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: isActive ? Colors.black : Colors.grey.shade400,
+              fontSize: 11,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2018,12 +1966,7 @@ class _FilterScreenState extends State<FilterScreen> {
     'Barter/selling a product/service',
   ];
   final List<String> _categories = ['Furniture', 'Plumbing', 'Electronics'];
-  final List<String> _wishListCategories = [
-    'Electronics',
-    'Home Appliance',
-    'Furniture',
-    'Home Appliance, Furniture',
-  ];
+  final List<String> _wishListCategories = ['', '', '', ''];
 
   @override
   void initState() {

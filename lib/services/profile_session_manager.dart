@@ -1,5 +1,5 @@
 // lib/services/profile_session_manager.dart
-import 'package:yempover_app/models/get_my_profile_response.dart';
+import 'package:Yempover_app/models/get_my_profile_response.dart';
 
 class ProfileSessionManager {
   ProfileSessionManager._();

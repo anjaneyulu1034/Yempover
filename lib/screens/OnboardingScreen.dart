@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:yempover_app/screens/SignupScreen.dart';
+import 'package:Yempover_app/screens/SignupScreen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});

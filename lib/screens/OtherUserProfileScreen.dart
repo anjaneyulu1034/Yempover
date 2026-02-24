@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:yempover_app/models/ProductPost.dart';
-import 'package:yempover_app/screens/PostDetailScreen.dart';
+import 'package:Yempover_app/models/ProductPost.dart';
+import 'package:Yempover_app/screens/PostDetailScreen.dart';
 
 class OtherUserProfileScreen extends StatefulWidget {
   final String userId;

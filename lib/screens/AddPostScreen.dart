@@ -2,24 +2,19 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:yempover_app/models/my_post_model.dart';
+import 'package:Yempover_app/models/my_post_model.dart';
 import 'dart:io';
-import 'dart:convert';
-import 'package:yempover_app/services/category_service.dart';
-import 'package:yempover_app/services/add_post_service.dart';
-import 'package:yempover_app/models/add_post_model.dart';
-import 'package:yempover_app/services/token_service.dart';
-import 'package:yempover_app/services/location_service.dart';
+import 'package:Yempover_app/services/category_service.dart';
+import 'package:Yempover_app/services/add_post_service.dart';
+import 'package:Yempover_app/models/add_post_model.dart';
+import 'package:Yempover_app/services/token_service.dart';
+import 'package:Yempover_app/services/location_service.dart';
 
 class AddPostScreen extends StatefulWidget {
   final Function()? onPostAdded;
-  final MyPost? post; // ✅ ADD THIS
+  final MyPost? post;
 
-  const AddPostScreen({
-    super.key,
-    this.onPostAdded,
-    this.post, // ✅ ADD THIS
-  });
+  const AddPostScreen({super.key, this.onPostAdded, this.post});
 
   @override
   State<AddPostScreen> createState() => _AddPostScreenState();
@@ -44,11 +39,15 @@ class _AddPostScreenState extends State<AddPostScreen> {
   final TextEditingController _willPayAmountController =
       TextEditingController();
 
-  // Category data
-  List<Map<String, dynamic>> _childCategories = [];
-  String? _selectedCategoryId;
-  String? _selectedCategoryName;
+  // Category data - Two level selection
+  List<Map<String, dynamic>> _mainCategories = [];
+  List<Map<String, dynamic>> _subCategories = [];
+  String? _selectedMainCategoryId;
+  String? _selectedMainCategoryName;
+  String? _selectedSubCategoryId;
+  String? _selectedSubCategoryName;
   bool _isLoadingCategories = false;
+  bool _isLoadingSubCategories = false;
   String? _categoryError;
 
   // Step 2 variables
@@ -73,7 +72,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
   @override
   void initState() {
     super.initState();
-    _checkLoginAndLoadCategories();
+    _checkLoginAndLoadMainCategories();
   }
 
   @override
@@ -84,18 +83,18 @@ class _AddPostScreenState extends State<AddPostScreen> {
     _barterWishController.dispose();
     _priceController.dispose();
     _willPayAmountController.dispose();
-    _categoryService.dispose();
+    // _categoryService.dispose();
     _addPostService.dispose();
     super.dispose();
   }
 
-  Future<void> _checkLoginAndLoadCategories() async {
+  Future<void> _checkLoginAndLoadMainCategories() async {
     final isLoggedIn = await TokenService().isLoggedIn();
     if (!isLoggedIn) {
       _showLoginDialog();
       return;
     }
-    _loadCategories();
+    _loadMainCategories();
   }
 
   void _showLoginDialog() {
@@ -119,30 +118,101 @@ class _AddPostScreenState extends State<AddPostScreen> {
     );
   }
 
-  Future<void> _loadCategories() async {
+  Future<void> _loadMainCategories() async {
     if (_postType.isEmpty) return;
 
     setState(() {
       _isLoadingCategories = true;
       _categoryError = null;
+      _mainCategories = [];
+      _subCategories = [];
+      _selectedMainCategoryId = null;
+      _selectedMainCategoryName = null;
+      _selectedSubCategoryId = null;
+      _selectedSubCategoryName = null;
     });
 
     try {
       final type = _postType.toLowerCase();
       final response = await _categoryService.getCategories(type: type);
 
+      // Get only main categories (parent categories)
+      final allCategories = _categoryService.getAllChildCategories(response);
+
+      // Extract unique parent categories
+      final Map<String, Map<String, dynamic>> mainCategoryMap = {};
+
+      for (var category in allCategories) {
+        if (category['parentId'] != null && category['parentName'] != null) {
+          // This is a subcategory, add its parent
+          final parentId = category['parentId'];
+          final parentName = category['parentName'];
+
+          if (!mainCategoryMap.containsKey(parentId)) {
+            mainCategoryMap[parentId] = {
+              'id': parentId,
+              'name': parentName,
+              'type': type,
+            };
+          }
+        } else {
+          // This might be a main category itself
+          if (!mainCategoryMap.containsKey(category['id'])) {
+            mainCategoryMap[category['id']] = {
+              'id': category['id'],
+              'name': category['name'],
+              'type': type,
+            };
+          }
+        }
+      }
+
       setState(() {
-        _childCategories = _categoryService.getAllChildCategories(response);
+        _mainCategories = mainCategoryMap.values.toList();
         _isLoadingCategories = false;
       });
 
-      debugPrint('✅ Loaded ${_childCategories.length} child categories');
+      debugPrint('✅ Loaded ${_mainCategories.length} main categories');
     } catch (e) {
       setState(() {
         _isLoadingCategories = false;
         _categoryError = e.toString().replaceAll('Exception: ', '');
       });
       _showErrorSnackBar('Failed to load categories: ${e.toString()}');
+    }
+  }
+
+  Future<void> _loadSubCategories(String mainCategoryId) async {
+    setState(() {
+      _isLoadingSubCategories = true;
+      _subCategories = [];
+      _selectedSubCategoryId = null;
+      _selectedSubCategoryName = null;
+    });
+
+    try {
+      final type = _postType.toLowerCase();
+      final response = await _categoryService.getCategories(type: type);
+
+      // Get all child categories
+      final allCategories = _categoryService.getAllChildCategories(response);
+
+      // Filter subcategories that belong to the selected main category
+      final filteredSubCategories = allCategories.where((category) {
+        return category['parentId'] == mainCategoryId;
+      }).toList();
+
+      setState(() {
+        _subCategories = filteredSubCategories;
+        _isLoadingSubCategories = false;
+      });
+
+      debugPrint('✅ Loaded ${_subCategories.length} subcategories');
+    } catch (e) {
+      setState(() {
+        _isLoadingSubCategories = false;
+      });
+      _showErrorSnackBar('Failed to load subcategories: ${e.toString()}');
     }
   }
 
@@ -568,7 +638,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
     );
   }
 
-  Widget _buildCategoryDropdown() {
+  // Updated Category Selection - Two level dropdown
+  Widget _buildCategorySelection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -590,6 +661,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
         ),
         const SizedBox(height: 8),
 
+        // Main Category Dropdown
         if (_isLoadingCategories)
           const Center(
             child: Padding(
@@ -616,13 +688,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
                   ),
                 ),
                 TextButton(
-                  onPressed: _loadCategories,
+                  onPressed: _loadMainCategories,
                   child: const Text('Retry'),
                 ),
               ],
             ),
           )
-        else if (_childCategories.isEmpty)
+        else if (_mainCategories.isEmpty)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -637,72 +709,149 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 ),
                 const SizedBox(height: 8),
                 ElevatedButton(
-                  onPressed: _loadCategories,
+                  onPressed: _loadMainCategories,
                   child: const Text('Refresh'),
                 ),
               ],
             ),
           )
         else
-          DropdownButtonFormField<Map<String, dynamic>>(
-            value: _selectedCategoryId != null
-                ? _childCategories.firstWhere(
-                    (cat) => cat['id'] == _selectedCategoryId,
-                    orElse: () => _childCategories.first,
-                  )
-                : null,
-            decoration: InputDecoration(
-              hintText: 'Select a category',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-            ),
-            items: _childCategories.map((category) {
-              return DropdownMenuItem(
-                value: category,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      category['name'],
-                      style: const TextStyle(fontWeight: FontWeight.w500),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Main Category Dropdown
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButtonFormField<Map<String, dynamic>>(
+                  value: _selectedMainCategoryId != null
+                      ? _mainCategories.firstWhere(
+                          (cat) => cat['id'] == _selectedMainCategoryId,
+                          orElse: () => _mainCategories.first,
+                        )
+                      : null,
+                  decoration: InputDecoration(
+                    hintText: 'Select main category',
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
-                    Text(
-                      category['parentName'] ?? '',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
+                  ),
+                  icon: const Icon(Icons.arrow_drop_down),
+                  items: _mainCategories.map((category) {
+                    return DropdownMenuItem(
+                      value: category,
+                      child: Text(
+                        category['name'],
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedMainCategoryId = value['id'];
+                        _selectedMainCategoryName = value['name'];
+                        _selectedSubCategoryId = null;
+                        _selectedSubCategoryName = null;
+                      });
+                      _loadSubCategories(value['id']);
+                    }
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Sub Category Dropdown (shown only after main category is selected)
+              if (_selectedMainCategoryId != null) ...[
+                const Text(
+                  'Sub Category',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+
+                if (_isLoadingSubCategories)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (_subCategories.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'No subcategories available',
+                        style: TextStyle(color: Colors.grey.shade600),
                       ),
                     ),
-                  ],
-                ),
-              );
-            }).toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  _selectedCategoryId = value['id'];
-                  _selectedCategoryName = value['name'];
-                });
-              }
-            },
-            validator: (value) {
-              if (_selectedCategoryId == null) {
-                return 'Please select a category';
-              }
-              return null;
-            },
+                  )
+                else
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DropdownButtonFormField<Map<String, dynamic>>(
+                      value: _selectedSubCategoryId != null
+                          ? _subCategories.firstWhere(
+                              (cat) => cat['id'] == _selectedSubCategoryId,
+                              orElse: () => _subCategories.first,
+                            )
+                          : null,
+                      decoration: InputDecoration(
+                        hintText: 'Select sub category',
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                      icon: const Icon(Icons.arrow_drop_down),
+                      items: _subCategories.map((category) {
+                        return DropdownMenuItem(
+                          value: category,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                category['name'],
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _selectedSubCategoryId = value['id'];
+                            _selectedSubCategoryName = value['name'];
+                          });
+                        }
+                      },
+                    ),
+                  ),
+              ],
+            ],
           ),
       ],
     );
   }
 
   Widget _buildBarterCategoryDropdown() {
-    if (_childCategories.isEmpty) return const SizedBox.shrink();
+    if (_subCategories.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -714,9 +863,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
         const SizedBox(height: 8),
         DropdownButtonFormField<Map<String, dynamic>>(
           value: _barterCategoryId != null
-              ? _childCategories.firstWhere(
+              ? _subCategories.firstWhere(
                   (cat) => cat['id'] == _barterCategoryId,
-                  orElse: () => _childCategories.first,
+                  orElse: () => _subCategories.first,
                 )
               : null,
           decoration: InputDecoration(
@@ -727,7 +876,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
               vertical: 12,
             ),
           ),
-          items: _childCategories.map((category) {
+          items: _subCategories.map((category) {
             return DropdownMenuItem(
               value: category,
               child: Column(
@@ -1001,12 +1150,14 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 onSelected: (selected) {
                   setState(() {
                     _postType = 'Product';
-                    _selectedCategoryId = null;
-                    _selectedCategoryName = null;
+                    _selectedMainCategoryId = null;
+                    _selectedMainCategoryName = null;
+                    _selectedSubCategoryId = null;
+                    _selectedSubCategoryName = null;
                     _barterCategoryId = null;
                     _barterCategoryName = null;
                   });
-                  _loadCategories();
+                  _loadMainCategories();
                 },
               ),
             ),
@@ -1018,12 +1169,14 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 onSelected: (selected) {
                   setState(() {
                     _postType = 'Service';
-                    _selectedCategoryId = null;
-                    _selectedCategoryName = null;
+                    _selectedMainCategoryId = null;
+                    _selectedMainCategoryName = null;
+                    _selectedSubCategoryId = null;
+                    _selectedSubCategoryName = null;
                     _barterCategoryId = null;
                     _barterCategoryName = null;
                   });
-                  _loadCategories();
+                  _loadMainCategories();
                 },
               ),
             ),
@@ -1066,8 +1219,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
         const SizedBox(height: 24),
 
-        // Category
-        _buildCategoryDropdown(),
+        // Category - Two level selection
+        _buildCategorySelection(),
 
         const SizedBox(height: 24),
 
@@ -1144,10 +1297,12 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 onSelected: (selected) {
                   setState(() {
                     _postType = 'Product';
-                    _selectedCategoryId = null;
-                    _selectedCategoryName = null;
+                    _selectedMainCategoryId = null;
+                    _selectedMainCategoryName = null;
+                    _selectedSubCategoryId = null;
+                    _selectedSubCategoryName = null;
                   });
-                  _loadCategories();
+                  _loadMainCategories();
                 },
               ),
             ),
@@ -1159,10 +1314,12 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 onSelected: (selected) {
                   setState(() {
                     _postType = 'Service';
-                    _selectedCategoryId = null;
-                    _selectedCategoryName = null;
+                    _selectedMainCategoryId = null;
+                    _selectedMainCategoryName = null;
+                    _selectedSubCategoryId = null;
+                    _selectedSubCategoryName = null;
                   });
-                  _loadCategories();
+                  _loadMainCategories();
                 },
               ),
             ),
@@ -1203,8 +1360,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
         const SizedBox(height: 24),
 
-        // Category
-        _buildCategoryDropdown(),
+        // Category - Two level selection
+        _buildCategorySelection(),
 
         const SizedBox(height: 24),
 
@@ -1293,8 +1450,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
       return;
     }
 
-    if (_selectedCategoryId == null) {
-      _showError('Please select a category');
+    if (_selectedMainCategoryId == null) {
+      _showError('Please select a main category');
+      return;
+    }
+
+    if (_selectedSubCategoryId == null) {
+      _showError('Please select a sub category');
       return;
     }
 
@@ -1686,7 +1848,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
           final request = CreateProductRequest(
             title: _titleController.text.trim(),
             description: _descriptionController.text.trim(),
-            categoryId: _selectedCategoryId!,
+            categoryId: _selectedSubCategoryId!, // Use subcategory ID
             images: imageUrls, // Send base64 images directly
             location: _locationController.text.trim(),
             barterStatus: _barterAvailable ? 'OPEN_FOR_BARTER' : 'NO_BARTER',
@@ -1703,7 +1865,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
           final request = CreateServiceRequest(
             title: _titleController.text.trim(),
             description: _descriptionController.text.trim(),
-            categoryId: _selectedCategoryId!,
+            categoryId: _selectedSubCategoryId!, // Use subcategory ID
             images: imageUrls, // Send base64 images directly
             status: 'PROVIDE_SERVICE',
             price: double.tryParse(_priceController.text) ?? 0.0,
@@ -1721,7 +1883,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
           final request = CreateProductRequest(
             title: _titleController.text.trim(),
             description: _descriptionController.text.trim(),
-            categoryId: _selectedCategoryId!,
+            categoryId: _selectedSubCategoryId!, // Use subcategory ID
             images: imageUrls, // Send base64 images directly
             location: _locationController.text.trim(),
             barterStatus: 'LOOKING_FOR',
@@ -1737,7 +1899,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
           final request = CreateServiceRequest(
             title: _titleController.text.trim(),
             description: _descriptionController.text.trim(),
-            categoryId: _selectedCategoryId!,
+            categoryId: _selectedSubCategoryId!, // Use subcategory ID
             images: imageUrls, // Send base64 images directly
             status: 'LOOKING_FOR_SERVICE',
             price: double.tryParse(_willPayAmountController.text) ?? 0.0,

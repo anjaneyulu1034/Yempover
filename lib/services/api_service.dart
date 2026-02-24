@@ -1,10 +1,11 @@
 import 'dart:convert';
+import 'package:Yempover_app/models/update_profile_image_request.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:Yempover_app/models/ProductPostmain.dart';
 import '../constants/api_constants.dart';
 import '../models/auth_models.dart';
-import '../models/post_model.dart' hide PostsResponse;
+import 'token_service.dart'; // Add this import
 
 class ApiException implements Exception {
   final String message;
@@ -22,8 +23,10 @@ class ApiService {
   ApiService._internal();
 
   final http.Client _client = http.Client();
+  final TokenService _tokenService =
+      TokenService(); // Add token service instance
 
-  // Generic GET request method
+  // Generic GET request method with authentication
   Future<dynamic> _makeGetRequest(
     String url, {
     Map<String, String>? additionalHeaders,
@@ -45,13 +48,22 @@ class ApiService {
       debugPrint('🌐 ApiService: Full URL with params: $fullUrl');
     }
 
-    debugPrint('📋 ApiService: Headers: ${ApiConstants.headers}');
-
     try {
-      final headers = {...ApiConstants.headers};
+      // Get auth token from TokenService
+      final token = await _tokenService.getToken();
+      debugPrint('🔑 ApiService: Auth token present: ${token != null}');
+
+      // Prepare headers with authorization
+      final headers = {
+        ...ApiConstants.headers,
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
       if (additionalHeaders != null) {
         headers.addAll(additionalHeaders);
       }
+
+      debugPrint('📋 ApiService: Headers: $headers');
 
       final response = await _client
           .get(Uri.parse(fullUrl), headers: headers)
@@ -59,6 +71,17 @@ class ApiService {
 
       debugPrint('📨 ApiService: Response status code: ${response.statusCode}');
       debugPrint('📄 ApiService: Response body: ${response.body}');
+
+      // Handle 401 Unauthorized - token expired or invalid
+      if (response.statusCode == 401) {
+        debugPrint('🔴 ApiService: Unauthorized - token may be expired');
+        // Clear invalid token
+        await _tokenService.clearTokens();
+        throw ApiException(
+          'Session expired. Please login again.',
+          statusCode: 401,
+        );
+      }
 
       final Map<String, dynamic> responseData = json.decode(response.body);
 
@@ -108,7 +131,7 @@ class ApiService {
     }
   }
 
-  // Generic POST request method
+  // Generic POST request method with authentication
   Future<dynamic> _makePostRequest<T>(
     String url,
     Map<String, dynamic> body,
@@ -116,19 +139,37 @@ class ApiService {
   ) async {
     debugPrint('🌐 ApiService: Making POST request to: $url');
     debugPrint('📦 ApiService: Request body: ${json.encode(body)}');
-    debugPrint('📋 ApiService: Headers: ${ApiConstants.headers}');
 
     try {
+      // Get auth token from TokenService
+      final token = await _tokenService.getToken();
+      debugPrint('🔑 ApiService: Auth token present: ${token != null}');
+
+      // Prepare headers with authorization
+      final headers = {
+        ...ApiConstants.headers,
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      debugPrint('📋 ApiService: Headers: $headers');
+
       final response = await _client
-          .post(
-            Uri.parse(url),
-            headers: ApiConstants.headers,
-            body: json.encode(body),
-          )
+          .post(Uri.parse(url), headers: headers, body: json.encode(body))
           .timeout(const Duration(seconds: 30));
 
       debugPrint('📨 ApiService: Response status code: ${response.statusCode}');
       debugPrint('📄 ApiService: Response body: ${response.body}');
+
+      // Handle 401 Unauthorized
+      if (response.statusCode == 401) {
+        debugPrint('🔴 ApiService: Unauthorized - token may be expired');
+        // Clear invalid token
+        await _tokenService.clearTokens();
+        throw ApiException(
+          'Session expired. Please login again.',
+          statusCode: 401,
+        );
+      }
 
       final Map<String, dynamic> responseData = json.decode(response.body);
 
@@ -257,6 +298,13 @@ class ApiService {
     double? longitude,
   }) async {
     try {
+      // Check if user is logged in first
+      final isLoggedIn = await _tokenService.isLoggedIn();
+      if (!isLoggedIn) {
+        debugPrint('🔴 ApiService: User not logged in, cannot fetch posts');
+        throw ApiException('Please login to view posts');
+      }
+
       final Map<String, dynamic> queryParams = {
         'page': page.toString(),
         'limit': limit.toString(),
@@ -268,13 +316,19 @@ class ApiService {
       if (search != null && search.isNotEmpty) {
         queryParams['search'] = search;
       }
-      if (lat != null && lng != null) {
-        queryParams['lat'] = lat.toString();
-        queryParams['lng'] = lng.toString();
+
+      // Use latitude/longitude parameters if provided
+      final useLat = latitude ?? lat;
+      final useLng = longitude ?? lng;
+
+      if (useLat != null && useLng != null) {
+        queryParams['latitude'] = useLat.toString();
+        queryParams['longitude'] = useLng.toString();
         if (radius != null) {
           queryParams['radius'] = radius.toString();
         }
       }
+
       if (status != null && status.isNotEmpty) {
         queryParams['status'] = status;
       }
@@ -289,6 +343,62 @@ class ApiService {
       debugPrint('🔴 ApiService: Error fetching posts: $e');
       rethrow;
     }
+  }
+
+  // ============= PROFILE IMAGE ENDPOINT =============
+  /// Upload profile image using base64 string
+  Future<UpdateProfileImageResponse> uploadProfileImageBase64({
+    required String base64Image,
+    required String mimeType, // e.g., 'image/jpeg', 'image/png'
+  }) async {
+    debugPrint('🖼️ ApiService: Uploading profile image');
+
+    try {
+      // Create data URL with proper mime type
+      final dataUrl = 'data:$mimeType;base64,$base64Image';
+
+      final body = {'image': dataUrl};
+
+      debugPrint(
+        '📦 ApiService: Image data URL created (length: ${dataUrl.length})',
+      );
+
+      final response = await _makePostRequest<dynamic>(
+        ApiConstants
+            .uploadAvatarBase64, // Make sure this constant exists in ApiConstants
+        body,
+        null, // No fromJson needed as we'll parse directly
+      );
+
+      // Since _makePostRequest returns AuthResponse, we need to extract the data
+      if (response is AuthResponse) {
+        if (response.isSuccess && response.data != null) {
+          // The data should be a Map containing the response
+          return UpdateProfileImageResponse.fromJson(
+            response.data as Map<String, dynamic>,
+          );
+        } else {
+          throw ApiException(response.message);
+        }
+      } else {
+        // Fallback: try to parse response directly
+        return UpdateProfileImageResponse.fromJson(response);
+      }
+    } catch (e) {
+      debugPrint('🔴 ApiService: Error uploading profile image: $e');
+      rethrow;
+    }
+  }
+
+  /// Upload profile image with automatic mime type detection
+  Future<UpdateProfileImageResponse> uploadProfileImage(
+    String base64Image,
+  ) async {
+    // Default to JPEG if mime type not specified
+    return await uploadProfileImageBase64(
+      base64Image: base64Image,
+      mimeType: 'image/jpeg',
+    );
   }
 
   Future<PostDetailResponse> getPostDetail({

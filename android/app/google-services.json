@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "278879108342",
+    "project_id": "yempover-94035",
+    "storage_bucket": "yempover-94035.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:278879108342:android:66a24f2742ee5cd7cc00d7",
+        "android_client_info": {
+          "package_name": "com.example.Yempover"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEpVzaxVGyK89NmDWPnIKfb8wcyyfXZN4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

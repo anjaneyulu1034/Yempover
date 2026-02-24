@@ -2,10 +2,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:yempover_app/constants/api_constants.dart';
-import 'package:yempover_app/models/get_my_profile_response.dart';
-import 'package:yempover_app/models/profile_update_request.dart';
-import 'package:yempover_app/services/profile_session_manager.dart';
+import 'package:Yempover_app/constants/api_constants.dart';
+import 'package:Yempover_app/models/get_my_profile_response.dart';
+import 'package:Yempover_app/models/profile_update_request.dart';
+import 'package:Yempover_app/services/profile_session_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileService {

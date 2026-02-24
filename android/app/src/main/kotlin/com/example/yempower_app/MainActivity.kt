@@ -1,4 +1,4 @@
-package com.example.yempover_app
+package com.example.Yempover
 
 import io.flutter.embedding.android.FlutterActivity
 

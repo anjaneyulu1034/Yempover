@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:yempover_app/screens/TradeDetailScreen.dart';
+import 'package:Yempover_app/screens/TradeDetailScreen.dart';
 
 class TradeHistoryScreen extends StatefulWidget {
   const TradeHistoryScreen({super.key});

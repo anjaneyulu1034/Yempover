@@ -16,6 +16,8 @@ class ProfileUpdateRequest {
     this.shareEmail,
     this.sharePhone,
     this.notificationEnabled,
+    String? profileImage,
+    String? profileImageMimeType,
   });
 
   Map<String, dynamic> toJson() {

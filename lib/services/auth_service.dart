@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:yempover_app/constants/api_constants.dart';
-import 'package:yempover_app/models/auth_models.dart';
-import 'package:yempover_app/services/api_service.dart';
+import 'package:Yempover_app/constants/api_constants.dart';
+import 'package:Yempover_app/models/auth_models.dart';
+import 'package:Yempover_app/services/api_service.dart';
 
 class AuthService extends ChangeNotifier {
   final ApiService _apiService = ApiService();

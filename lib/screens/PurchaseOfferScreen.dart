@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:yempover_app/models/ProductPost.dart';
+import 'package:Yempover_app/models/ProductPostmain.dart';
 
 class PurchaseOfferScreen extends StatefulWidget {
-  final ProductPost post;
+  final Post post;
 
   const PurchaseOfferScreen({super.key, required this.post});
 
@@ -19,9 +19,16 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
   void initState() {
     super.initState();
     // Pre-fill with post price if available
-    if (widget.post.price.isNotEmpty) {
-      _priceController.text = widget.post.price.replaceAll('\$', '');
+    if (widget.post.price != null && widget.post.price! > 0) {
+      _priceController.text = widget.post.price!.toString();
     }
+  }
+
+  @override
+  void dispose() {
+    _priceController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
   }
 
   void _submitPurchaseOffer() {
@@ -29,6 +36,14 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Please enter a price')));
+      return;
+    }
+
+    final price = double.tryParse(_priceController.text);
+    if (price == null || price <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid price')),
+      );
       return;
     }
 
@@ -53,7 +68,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Your purchase offer of \$${_priceController.text} for "${widget.post.title}" has been sent to ${widget.post.userName}.',
+                'Your purchase offer of \$${_priceController.text} for "${widget.post.title}" has been sent to ${widget.post.postedBy.firstName}.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
               ),
@@ -151,15 +166,16 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
                               ),
                             ),
                             Text(
-                              'Posted by: ${widget.post.userName}',
+                              'Posted by: ${widget.post.postedBy.firstName}',
                               style: TextStyle(
                                 color: Colors.grey.shade600,
                                 fontSize: 12,
                               ),
                             ),
-                            if (widget.post.price.isNotEmpty)
+                            if (widget.post.price != null &&
+                                widget.post.price! > 0)
                               Text(
-                                'Original Price: ${widget.post.price}',
+                                'Original Price: \$${widget.post.price!.toStringAsFixed(2)}',
                                 style: const TextStyle(
                                   fontSize: 14,
                                   color: Colors.green,

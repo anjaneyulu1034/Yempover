@@ -1,7 +1,7 @@
 // main_screen.dart
 import 'package:flutter/material.dart';
-import 'package:yempover_app/models/ProductPost.dart';
-import 'package:yempover_app/screens/PostDetailScreen.dart' hide UserItem;
+import 'package:Yempover_app/models/ProductPost.dart';
+import 'package:Yempover_app/screens/PostDetailScreen.dart' hide UserItem;
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});

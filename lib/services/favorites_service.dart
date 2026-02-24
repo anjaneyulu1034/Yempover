@@ -2,16 +2,19 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:yempover_app/constants/api_constants.dart';
-import 'package:yempover_app/models/favorites_response.dart';
-import 'package:yempover_app/utils/token_manager.dart';
+import 'package:Yempover_app/constants/api_constants.dart';
+import 'package:Yempover_app/models/favorites_response.dart';
+import 'package:Yempover_app/utils/token_manager.dart';
 
 class FavoritesService {
   static final FavoritesService _instance = FavoritesService._internal();
   factory FavoritesService() => _instance;
   FavoritesService._internal();
 
-  Future<FavoritesResponse> getFavorites({int page = 1, int limit = 20}) async {
+  Future<FavoritesResponse> getFavorites({
+    int page = 1,
+    int limit = 100,
+  }) async {
     try {
       final token = await TokenManager.getToken();
       if (token == null) {

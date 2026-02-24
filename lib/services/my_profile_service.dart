@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:yempover_app/models/get_my_profile_response.dart';
-import 'package:yempover_app/services/token_service.dart';
-import 'package:yempover_app/constants/api_constants.dart';
+import 'package:Yempover_app/models/get_my_profile_response.dart';
+import 'package:Yempover_app/services/token_service.dart';
+import 'package:Yempover_app/constants/api_constants.dart';
 
 class MyProfileService {
   static final MyProfileService _instance = MyProfileService._internal();

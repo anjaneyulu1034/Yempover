@@ -256,7 +256,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     _buildContactInfo(
                       Icons.email,
                       'Email',
-                      'support@yempover.com',
+                      'support@Yempover.com',
                       Colors.blue,
                     ),
                     const SizedBox(height: 12),
@@ -277,7 +277,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     _buildContactInfo(
                       Icons.language,
                       'Website',
-                      'www.yempover.com',
+                      'www.Yempover.com',
                       Colors.purple,
                     ),
                   ],
