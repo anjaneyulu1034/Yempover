@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:Yempover_app/models/ProductPostmain.dart';
+import 'package:Yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
 
 class PurchaseOfferScreen extends StatefulWidget {
   final Post post;
@@ -13,6 +15,7 @@ class PurchaseOfferScreen extends StatefulWidget {
 class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  final TradeChatService _chatService = TradeChatService();
   bool _isLoading = false;
 
   @override
@@ -28,10 +31,11 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
   void dispose() {
     _priceController.dispose();
     _descriptionController.dispose();
+    _chatService.dispose();
     super.dispose();
   }
 
-  void _submitPurchaseOffer() {
+  Future<void> _submitPurchaseOffer() async {
     if (_priceController.text.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -49,8 +53,20 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
 
     setState(() => _isLoading = true);
 
-    // Simulate API call
-    Future.delayed(const Duration(seconds: 2), () {
+    try {
+      final chat = await _chatService.initiateChat(
+        responderId: widget.post.postedById,
+        productId: widget.post.type == PostType.product ? widget.post.id : null,
+        serviceId: widget.post.type == PostType.service ? widget.post.id : null,
+      );
+
+      await _chatService.createPriceOffer(
+        chatId: chat.id,
+        price: price,
+        currency: 'USD',
+      );
+
+      if (!mounted) return;
       setState(() => _isLoading = false);
 
       showDialog(
@@ -85,21 +101,30 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  Navigator.popUntil(context, (route) => route.isFirst);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Purchase offer placed and chat initiated'),
-                      duration: Duration(seconds: 2),
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const TradeChatScreen(),
                     ),
+                    (route) => false,
                   );
                 },
-                child: const Text('Done'),
+                child: const Text('Go to Trade Chat'),
               ),
             ),
           ],
         ),
       );
-    });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to submit purchase offer: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override

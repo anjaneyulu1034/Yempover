@@ -10,6 +10,7 @@ enum PostStatus {
   LOOKING_FOR_SERVICE,
   DELETED,
   ARCHIVED,
+  SOLD,
 }
 
 enum BarterStatus { NO_BARTER, OPEN_FOR_BARTER }
@@ -157,6 +158,7 @@ class Post {
   final BarterDetails? barterDetails;
   final PostType type;
   final double? distance;
+  final bool canClubItems;
   bool isFavorite;
   bool isHidden;
 
@@ -183,6 +185,7 @@ class Post {
     this.barterDetails,
     required this.type,
     this.distance,
+    this.canClubItems = true,
     this.isFavorite = false,
     this.isHidden = false,
   });
@@ -230,6 +233,9 @@ class Post {
       distance: json['distance'] != null
           ? double.tryParse(json['distance'].toString())
           : null,
+      canClubItems: json['canClubItems'] == null
+          ? (json['isClubbable'] ?? true)
+          : json['canClubItems'],
     );
   }
 
@@ -433,6 +439,7 @@ class UserItem {
   final String category;
   final String imageUrl;
   final double value;
+  final bool isClubbable;
   final bool isSelected;
 
   UserItem({
@@ -441,6 +448,7 @@ class UserItem {
     required this.category,
     required this.imageUrl,
     required this.value,
+    this.isClubbable = true,
     this.isSelected = false,
     required description,
     required price,

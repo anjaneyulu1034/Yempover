@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:Yempover_app/models/content_response.dart';
-import 'package:Yempover_app/constants/api_constants.dart';
+import '../constants/api_constants.dart';
+import '../models/content_response.dart';
 
 class ContentService {
   static final ContentService _instance = ContentService._internal();

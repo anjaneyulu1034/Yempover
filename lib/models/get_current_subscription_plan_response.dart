@@ -8,7 +8,12 @@ class GetCurrentSubscriptionPlanResponse {
   GetCurrentSubscriptionPlanResponse.fromJson(Map<String, dynamic> json) {
     status = json['status'];
     message = json['message'];
-    data = json['data'] != null ? CurrentPlan.fromJson(json['data']) : null;
+
+    if (json['data'] != null && json['data'] is Map<String, dynamic>) {
+      data = CurrentPlan.fromJson(json['data']);
+    } else {
+      data = null;
+    }
   }
 
   Map<String, dynamic> toJson() {
@@ -23,38 +28,81 @@ class GetCurrentSubscriptionPlanResponse {
 }
 
 class CurrentPlan {
-  String? id;
-  String? userId;
-  String? planId;
-  String? planName; // Added this field
-  String? status; // Added this field
+  PlanDetails? plan;
   String? startDate;
   String? endDate;
+  bool? isValid;
+  bool? isFirstTimeFree;
+
+  CurrentPlan({
+    this.plan,
+    this.startDate,
+    this.endDate,
+    this.isValid,
+    this.isFirstTimeFree,
+  });
+
+  CurrentPlan.fromJson(Map<String, dynamic> json) {
+    plan = json['plan'] != null ? PlanDetails.fromJson(json['plan']) : null;
+    startDate = json['startDate'];
+    endDate = json['endDate'];
+    isValid = json['isValid'];
+    isFirstTimeFree = json['isFirstTimeFree'];
+  }
+
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> data = <String, dynamic>{};
+    if (plan != null) {
+      data['plan'] = plan!.toJson();
+    }
+    data['startDate'] = startDate;
+    data['endDate'] = endDate;
+    data['isValid'] = isValid;
+    data['isFirstTimeFree'] = isFirstTimeFree;
+    return data;
+  }
+
+  // Helper getters for easier access
+  String? get planName => plan?.name ?? 'Free Trial';
+  String? get planId => plan?.id;
+  double? get planAmount => plan?.amount ?? 0;
+  String? get planDescription => plan?.description;
+  List<String>? get planFeatures => plan?.features;
+  String get status => isValid == true ? 'active' : 'inactive';
+}
+
+class PlanDetails {
+  String? id;
+  String? name;
+  String? description;
+  double? amount;
+  int? durationDays;
+  List<String>? features;
   bool? isActive;
   String? createdAt;
   String? updatedAt;
 
-  CurrentPlan({
+  PlanDetails({
     this.id,
-    this.userId,
-    this.planId,
-    this.planName, // Added
-    this.status, // Added
-    this.startDate,
-    this.endDate,
+    this.name,
+    this.description,
+    this.amount,
+    this.durationDays,
+    this.features,
     this.isActive,
     this.createdAt,
     this.updatedAt,
   });
 
-  CurrentPlan.fromJson(Map<String, dynamic> json) {
+  PlanDetails.fromJson(Map<String, dynamic> json) {
     id = json['id'];
-    userId = json['userId'];
-    planId = json['planId'];
-    planName = json['planName']; // Added
-    status = json['status']; // Added
-    startDate = json['startDate'];
-    endDate = json['endDate'];
+    name = json['name'];
+    description = json['description'];
+    amount = json['amount']?.toDouble();
+    durationDays = json['durationDays'];
+    features = json['features'] != null
+        ? List<String>.from(json['features'])
+        : [];
     isActive = json['isActive'];
     createdAt = json['createdAt'];
     updatedAt = json['updatedAt'];
@@ -63,15 +111,19 @@ class CurrentPlan {
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = <String, dynamic>{};
     data['id'] = id;
-    data['userId'] = userId;
-    data['planId'] = planId;
-    data['planName'] = planName; // Added
-    data['status'] = status; // Added
-    data['startDate'] = startDate;
-    data['endDate'] = endDate;
+    data['name'] = name;
+    data['description'] = description;
+    data['amount'] = amount;
+    data['durationDays'] = durationDays;
+    data['features'] = features;
     data['isActive'] = isActive;
     data['createdAt'] = createdAt;
     data['updatedAt'] = updatedAt;
     return data;
+  }
+
+  String get formattedAmount {
+    if (amount == null) return '\$0';
+    return '\$${amount!.toStringAsFixed(2)}';
   }
 }

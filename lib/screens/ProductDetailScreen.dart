@@ -1,3 +1,4 @@
+import 'package:Yempover_app/screens/EditProductScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:Yempover_app/services/my_posts2_service.dart';
@@ -57,31 +58,15 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
   }
 
   Future<void> _editPost() async {
-    if (_post.openOffersCount > 0) {
-      _showAlertDialog(
-        'Cannot Edit',
-        'This post has received offers and cannot be edited.',
-      );
-      return;
-    }
-
-    if (_post.hasAcceptedOffer) {
-      _showAlertDialog(
-        'Cannot Edit',
-        'This post has an accepted offer and cannot be edited.',
-      );
-      return;
-    }
-
-    final result = await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => AddPostScreen(
-        post: _post,
-        onPostAdded: () {
-          _refreshPost();
-        },
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditProductScreen(
+          post: _post,
+          onProductUpdated: () {
+            _refreshPost();
+          },
+        ),
       ),
     );
 
@@ -586,9 +571,10 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
                           if (!_post.isSold)
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Row(
+                              child: Column(
                                 children: [
-                                  Expanded(
+                                  SizedBox(
+                                    width: double.infinity,
                                     child: ElevatedButton.icon(
                                       onPressed: _editPost,
                                       icon: const Icon(Icons.edit),
@@ -597,13 +583,14 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
                                         backgroundColor: Colors.blue,
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(
-                                          vertical: 12,
+                                          vertical: 14,
                                         ),
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    width: double.infinity,
                                     child: ElevatedButton.icon(
                                       onPressed: _markAsSold,
                                       icon: const Icon(Icons.check_circle),
@@ -612,7 +599,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
                                         backgroundColor: Colors.green,
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(
-                                          vertical: 12,
+                                          vertical: 14,
                                         ),
                                       ),
                                     ),

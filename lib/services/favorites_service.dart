@@ -1,130 +1,87 @@
-// lib/services/favorites_service.dart
 import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:Yempover_app/constants/api_constants.dart';
 import 'package:Yempover_app/models/favorites_response.dart';
-import 'package:Yempover_app/utils/token_manager.dart';
+import 'package:Yempover_app/services/api_service.dart';
+import 'package:Yempover_app/constants/api_constants.dart';
+import 'package:Yempover_app/services/token_service.dart';
 
 class FavoritesService {
-  static final FavoritesService _instance = FavoritesService._internal();
-  factory FavoritesService() => _instance;
-  FavoritesService._internal();
+  final ApiService _apiService = ApiService();
+  final TokenService _tokenService = TokenService();
 
-  Future<FavoritesResponse> getFavorites({
-    int page = 1,
-    int limit = 100,
-  }) async {
+  // Get all favorites with pagination
+  Future<FavoritesResponse> getFavorites({int page = 1, int limit = 20}) async {
     try {
-      final token = await TokenManager.getToken();
-      if (token == null) {
-        throw Exception('Authentication token not found. Please login again.');
+      final isLoggedIn = await _tokenService.isLoggedIn();
+      if (!isLoggedIn) {
+        throw Exception('Please login to view favorites');
       }
 
-      debugPrint('Fetching favorites - Page: $page, Limit: $limit');
-
-      final response = await http.get(
-        Uri.parse(ApiConstants.favoritesWithPagination(page, limit)),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+      final response = await _apiService.get(
+        '${ApiConstants.favorites}?page=$page&limit=$limit',
       );
 
-      debugPrint('Favorites response status: ${response.statusCode}');
-      debugPrint('Favorites response body: ${response.body}');
-
       if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        return FavoritesResponse.fromJson(jsonResponse);
-      } else if (response.statusCode == 401) {
-        throw Exception('Session expired. Please login again.');
+        return FavoritesResponse.fromJson(json.decode(response.body));
       } else {
         throw Exception('Failed to load favorites: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('Error fetching favorites: $e');
-      throw Exception('Failed to load favorites: ${e.toString()}');
+      throw Exception('Error fetching favorites: $e');
     }
   }
 
-  Future<bool> addToFavorites(String postId) async {
+  // Add product to favorites
+  Future<AddFavoriteResponse> addProductToFavorites(String productId) async {
     try {
-      final token = await TokenManager.getToken();
-      if (token == null) {
-        throw Exception('Authentication token not found');
-      }
-
-      final response = await http.post(
-        Uri.parse('${ApiConstants.favorites}/$postId'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+      final response = await _apiService.post(
+        ApiConstants.favorites,
+        body: {'productId': productId},
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return true;
+        return AddFavoriteResponse.fromJson(json.decode(response.body));
       } else {
-        throw Exception('Failed to add to favorites');
+        throw Exception('Failed to add to favorites: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('Error adding to favorites: $e');
-      return false;
+      throw Exception('Error adding to favorites: $e');
     }
   }
 
-  Future<bool> removeFromFavorites(String postId) async {
+  // Add service to favorites
+  Future<AddFavoriteResponse> addServiceToFavorites(String serviceId) async {
     try {
-      final token = await TokenManager.getToken();
-      if (token == null) {
-        throw Exception('Authentication token not found');
-      }
-
-      final response = await http.delete(
-        Uri.parse('${ApiConstants.favorites}/$postId'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+      final response = await _apiService.post(
+        ApiConstants.favorites,
+        body: {'serviceId': serviceId},
       );
 
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        return true;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return AddFavoriteResponse.fromJson(json.decode(response.body));
       } else {
-        throw Exception('Failed to remove from favorites');
+        throw Exception('Failed to add to favorites: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('Error removing from favorites: $e');
-      return false;
+      throw Exception('Error adding to favorites: $e');
     }
   }
 
-  Future<bool> checkIfFavorite(String postId) async {
+  // Remove from favorites
+  Future<RemoveFavoriteResponse> removeFromFavorites(String favoriteId) async {
     try {
-      final token = await TokenManager.getToken();
-      if (token == null) return false;
-
-      final response = await http.get(
-        Uri.parse('${ApiConstants.favorites}/check/$postId'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+      final response = await _apiService.delete(
+        '${ApiConstants.favorites}/$favoriteId',
       );
 
       if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        return jsonResponse['isFavorite'] ?? false;
+        return RemoveFavoriteResponse.fromJson(json.decode(response.body));
+      } else {
+        throw Exception(
+          'Failed to remove from favorites: ${response.statusCode}',
+        );
       }
-      return false;
     } catch (e) {
-      debugPrint('Error checking favorite status: $e');
-      return false;
+      throw Exception('Error removing from favorites: $e');
     }
   }
 }

@@ -345,7 +345,13 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   }
 
   void _navigateToDescriptionScreen() {
-    // Remove the check for selected items - allow empty selection
+    // Determine if the post is a service
+    final bool isService = widget.post.type == PostType.service;
+
+    print('📱 Navigating to OfferDescriptionScreen - isService: $isService');
+    print('📱 Post ID: ${widget.post.id}');
+    print('📱 Post Type: ${widget.post.type}');
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -353,6 +359,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
           post: widget.post,
           selectedItems: _selectedItems,
           currentUserId: widget.currentUserId,
+          isService: isService, // Pass the correct type
         ),
       ),
     );
@@ -387,10 +394,10 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
+        // leading: IconButton(
+        //   icon: const Icon(Icons.arrow_back, color: Colors.black),
+        //  // onPressed: () => Navigator.pop(context),
+        // ),
         title: const Text(
           "Offer Deck",
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
@@ -685,7 +692,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                   ),
                 )
               : SizedBox(
-                  height: 150, // 👈 FIXED HEIGHT (adjust 130–160 if needed)
+                  height: 150,
                   child: RefreshIndicator(
                     onRefresh: _refreshPosts,
                     child: ListView.builder(
@@ -710,7 +717,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                         return GestureDetector(
                           onTap: () => _toggleItemSelection(item),
                           child: Container(
-                            width: 110, // slightly reduced width
+                            width: 110,
                             margin: const EdgeInsets.only(right: 12),
                             child: Stack(
                               children: [
@@ -815,51 +822,69 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       ),
 
       // -------- BOTTOM BUTTONS ----------
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.2),
-              blurRadius: 10,
-              offset: const Offset(0, -3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => Navigator.pop(context),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 10,
+            bottom: 5 + MediaQuery.of(context).viewPadding.bottom,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.15),
+                blurRadius: 12,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                    side: const BorderSide(color: Colors.grey),
+                  ),
+                  child: const Text(
+                    "Back",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
                   ),
                 ),
-                child: const Text("Back"),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton(
-                // Always enabled - no selection required
-                onPressed: _navigateToDescriptionScreen,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _navigateToDescriptionScreen,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                  ),
+                  child: const Text(
+                    "Continue",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                child: const Text(
-                  "Continue",
-                  style: TextStyle(color: Colors.white),
-                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

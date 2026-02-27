@@ -1,4 +1,3 @@
-// lib/screens/AddPostScreen.dart
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -34,7 +33,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _barterWishController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _willPayAmountController =
       TextEditingController();
@@ -43,31 +41,18 @@ class _AddPostScreenState extends State<AddPostScreen> {
   List<Map<String, dynamic>> _mainCategories = [];
   List<Map<String, dynamic>> _subCategories = [];
   String? _selectedMainCategoryId;
-  String? _selectedMainCategoryName;
   String? _selectedSubCategoryId;
-  String? _selectedSubCategoryName;
   bool _isLoadingCategories = false;
   bool _isLoadingSubCategories = false;
   String? _categoryError;
 
-  // Step 2 variables
-  bool _barterAvailable = false;
-  String? _barterCategoryId;
-  String? _barterCategoryName;
-  bool _canClubItems = true;
-  bool _soldForMoney = false;
-  String _transportationOption = 'transport_desired';
-
   // Image upload variables
   List<File> _selectedImages = [];
-  bool _isUploadingImages = false;
   final ImagePicker _picker = ImagePicker();
   bool _isSubmitting = false;
 
   // Location variables
   bool _isGettingLocation = false;
-  double? _currentLatitude;
-  double? _currentLongitude;
 
   @override
   void initState() {
@@ -80,10 +65,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
-    _barterWishController.dispose();
     _priceController.dispose();
     _willPayAmountController.dispose();
-    // _categoryService.dispose();
     _addPostService.dispose();
     super.dispose();
   }
@@ -127,9 +110,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
       _mainCategories = [];
       _subCategories = [];
       _selectedMainCategoryId = null;
-      _selectedMainCategoryName = null;
       _selectedSubCategoryId = null;
-      _selectedSubCategoryName = null;
     });
 
     try {
@@ -187,7 +168,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
       _isLoadingSubCategories = true;
       _subCategories = [];
       _selectedSubCategoryId = null;
-      _selectedSubCategoryName = null;
     });
 
     try {
@@ -235,9 +215,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
         _showError('Unable to get your current location');
         return;
       }
-
-      _currentLatitude = position.latitude;
-      _currentLongitude = position.longitude;
 
       String? address = await _locationService.getAddressFromLatLng(
         position.latitude,
@@ -290,14 +267,14 @@ class _AddPostScreenState extends State<AddPostScreen> {
     );
   }
 
-  // Updated image picker with compression
+  // Image picker with compression
   Future<void> _pickImage(ImageSource source) async {
     try {
       final XFile? image = await _picker.pickImage(
         source: source,
         maxWidth: 1024,
         maxHeight: 1024,
-        imageQuality: 70, // Reduced quality for smaller payload
+        imageQuality: 70,
       );
 
       if (image != null) {
@@ -373,7 +350,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
     });
   }
 
-  // Updated image upload section with better UI feedback
+  // Image upload section
   Widget _buildImageUploadSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -458,7 +435,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
         // Upload Button
         GestureDetector(
-          onTap: _isUploadingImages ? null : _showImageSourceDialog,
+          onTap: _showImageSourceDialog,
           child: Container(
             height: 120,
             width: double.infinity,
@@ -479,56 +456,40 @@ class _AddPostScreenState extends State<AddPostScreen> {
               ),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: _isUploadingImages
-                ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 8),
-                        Text('Uploading images...'),
-                      ],
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.cloud_upload, size: 40, color: Colors.grey),
+                const SizedBox(height: 8),
+                const Text(
+                  'Upload your Images',
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Tap to upload',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                if (_postType == 'Product' && _selectedOption == 1)
+                  Text(
+                    _selectedImages.isEmpty
+                        ? '*At least 1 image required'
+                        : 'Add more images (optional)',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _selectedImages.isEmpty ? Colors.red : Colors.grey,
                     ),
-                  )
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.cloud_upload,
-                        size: 40,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Upload your Images',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Tap to upload',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 8),
-                      if (_postType == 'Product' && _selectedOption == 1)
-                        Text(
-                          _selectedImages.isEmpty
-                              ? '*At least 1 image required'
-                              : 'Add more images (optional)',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: _selectedImages.isEmpty
-                                ? Colors.red
-                                : Colors.grey,
-                          ),
-                        ),
-                    ],
                   ),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
+  // Looking For image upload section
   Widget _buildLookingForImageUploadSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -591,7 +552,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
         // Upload Button
         GestureDetector(
-          onTap: _isUploadingImages ? null : _showImageSourceDialog,
+          onTap: _showImageSourceDialog,
           child: Container(
             height: 120,
             width: double.infinity,
@@ -599,46 +560,31 @@ class _AddPostScreenState extends State<AddPostScreen> {
               border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: _isUploadingImages
-                ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 8),
-                        Text('Uploading images...'),
-                      ],
-                    ),
-                  )
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.cloud_upload,
-                        size: 40,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Add reference images (optional)',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                      if (_selectedImages.isEmpty) ...[
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Tap to upload',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                      ],
-                    ],
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.cloud_upload, size: 40, color: Colors.grey),
+                const SizedBox(height: 8),
+                const Text(
+                  'Add reference images (optional)',
+                  style: TextStyle(color: Colors.grey),
+                ),
+                if (_selectedImages.isEmpty) ...[
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Tap to upload',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
+                ],
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  // Updated Category Selection - Two level dropdown
+  // Category Selection - Two level dropdown
   Widget _buildCategorySelection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -754,9 +700,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                     if (value != null) {
                       setState(() {
                         _selectedMainCategoryId = value['id'];
-                        _selectedMainCategoryName = value['name'];
                         _selectedSubCategoryId = null;
-                        _selectedSubCategoryName = null;
                       });
                       _loadSubCategories(value['id']);
                     }
@@ -837,7 +781,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
                         if (value != null) {
                           setState(() {
                             _selectedSubCategoryId = value['id'];
-                            _selectedSubCategoryName = value['name'];
                           });
                         }
                       },
@@ -850,63 +793,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
     );
   }
 
-  Widget _buildBarterCategoryDropdown() {
-    if (_subCategories.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Select Barter Category',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<Map<String, dynamic>>(
-          value: _barterCategoryId != null
-              ? _subCategories.firstWhere(
-                  (cat) => cat['id'] == _barterCategoryId,
-                  orElse: () => _subCategories.first,
-                )
-              : null,
-          decoration: InputDecoration(
-            hintText: 'What do you want in return?',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-          ),
-          items: _subCategories.map((category) {
-            return DropdownMenuItem(
-              value: category,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    category['name'],
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  Text(
-                    category['parentName'] ?? '',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-          onChanged: (value) {
-            if (value != null) {
-              setState(() {
-                _barterCategoryId = value['id'];
-                _barterCategoryName = value['name'];
-              });
-            }
-          },
-        ),
-      ],
-    );
-  }
-
+  // Location field
   Widget _buildLocationField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -964,113 +851,193 @@ class _AddPostScreenState extends State<AddPostScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.95,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Add Post',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
+  // Price field
+  Widget _buildPriceField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              _selectedOption == 1 ? 'Price' : 'Will Pay Amount',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
-          ),
-
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Select Your Post Type',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildOptionCard(
-                    1,
-                    'You want to add your product/service to barter/sell in Marketplace.',
-                  ),
-                  const SizedBox(height: 12),
-                  _buildOptionCard(
-                    2,
-                    'You need (or are you looking for) a specific product or service in the Marketplace.',
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Step 1: Basic Details
-                  if (_selectedOption == 1) _buildStep1(),
-                  if (_selectedOption == 2) _buildLookingForStep1(),
-
-                  const SizedBox(height: 40),
-                ],
+            const Text(
+              ' *',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.red,
               ),
             ),
-          ),
-
-          // Navigation Buttons
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _isSubmitting ? null : _validateAndProceed,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E5BFF),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: _isSubmitting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            'Next',
-                            style: TextStyle(color: Colors.white),
-                          ),
-                  ),
-                ),
-              ],
+          ],
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _selectedOption == 1
+              ? _priceController
+              : _willPayAmountController,
+          decoration: InputDecoration(
+            hintText: _selectedOption == 1
+                ? _postType == 'Product'
+                      ? 'Enter product price'
+                      : 'Enter service price'
+                : 'Enter amount you are willing to pay',
+            prefixText: '\$ ',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
             ),
           ),
-        ],
+          keyboardType: TextInputType.number,
+        ),
+      ],
+    );
+  }
+
+  @override
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        resizeToAvoidBottomInset: true,
+        body: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Add Post',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Scrollable Content
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Select Your Post Type',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      _buildOptionCard(
+                        1,
+                        'You want to add your product/service to barter/sell in Marketplace.',
+                      ),
+                      const SizedBox(height: 12),
+                      _buildOptionCard(
+                        2,
+                        'You need (or are you looking for) a specific product or service in the Marketplace.',
+                      ),
+                      const SizedBox(height: 24),
+
+                      if (_selectedOption == 1) _buildStep1(),
+                      if (_selectedOption == 2) _buildLookingForStep1(),
+
+                      const SizedBox(height: 100), // space for bottom buttons
+                    ],
+                  ),
+                ),
+              ),
+
+              // Bottom Buttons (SAFE FIX)
+              SafeArea(
+                top: false,
+                child: Container(
+                  padding: EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    top: 16,
+                    bottom: 16 + MediaQuery.of(context).viewPadding.bottom,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, -3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _isSubmitting ? null : _validateAndSubmit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2E5BFF),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: _isSubmitting
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Post',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1151,11 +1118,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                   setState(() {
                     _postType = 'Product';
                     _selectedMainCategoryId = null;
-                    _selectedMainCategoryName = null;
                     _selectedSubCategoryId = null;
-                    _selectedSubCategoryName = null;
-                    _barterCategoryId = null;
-                    _barterCategoryName = null;
                   });
                   _loadMainCategories();
                 },
@@ -1170,11 +1133,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                   setState(() {
                     _postType = 'Service';
                     _selectedMainCategoryId = null;
-                    _selectedMainCategoryName = null;
                     _selectedSubCategoryId = null;
-                    _selectedSubCategoryName = null;
-                    _barterCategoryId = null;
-                    _barterCategoryName = null;
                   });
                   _loadMainCategories();
                 },
@@ -1268,6 +1227,11 @@ class _AddPostScreenState extends State<AddPostScreen> {
           // Location with current location feature
           _buildLocationField(),
         ],
+
+        const SizedBox(height: 24),
+
+        // Price
+        _buildPriceField(),
       ],
     );
   }
@@ -1298,9 +1262,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                   setState(() {
                     _postType = 'Product';
                     _selectedMainCategoryId = null;
-                    _selectedMainCategoryName = null;
                     _selectedSubCategoryId = null;
-                    _selectedSubCategoryName = null;
                   });
                   _loadMainCategories();
                 },
@@ -1315,9 +1277,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                   setState(() {
                     _postType = 'Service';
                     _selectedMainCategoryId = null;
-                    _selectedMainCategoryName = null;
                     _selectedSubCategoryId = null;
-                    _selectedSubCategoryName = null;
                   });
                   _loadMainCategories();
                 },
@@ -1409,41 +1369,12 @@ class _AddPostScreenState extends State<AddPostScreen> {
         const SizedBox(height: 24),
 
         // Will Pay Amount
-        Row(
-          children: [
-            const Text(
-              'Will Pay Amount',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _willPayAmountController,
-          decoration: InputDecoration(
-            hintText: 'Enter amount you are willing to pay',
-            prefixText: '\$ ',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-          ),
-          keyboardType: TextInputType.number,
-        ),
+        _buildPriceField(),
       ],
     );
   }
 
-  void _validateAndProceed() {
+  void _validateAndSubmit() {
     // Validate required fields
     if (_titleController.text.isEmpty) {
       _showError('Please enter a title');
@@ -1471,31 +1402,37 @@ class _AddPostScreenState extends State<AddPostScreen> {
         _showError('Please upload at least one image for products');
         return;
       }
-      if (_locationController.text.isEmpty) {
-        _showError('Please enter a location');
-        return;
-      }
     }
 
-    // For "Looking For" posts, require location
-    if (_selectedOption == 2) {
-      if (_locationController.text.isEmpty) {
-        _showError('Please enter a location');
+    // For all posts, require location
+    if (_locationController.text.isEmpty && _postType == 'Product') {
+      _showError('Please enter a location');
+      return;
+    }
+
+    // Price validation
+    if (_selectedOption == 1) {
+      if (_priceController.text.isEmpty) {
+        _showError('Please enter a price');
         return;
       }
+      if (double.tryParse(_priceController.text) == null) {
+        _showError('Please enter a valid price');
+        return;
+      }
+    } else {
       if (_willPayAmountController.text.isEmpty) {
         _showError('Please enter the amount you are willing to pay');
         return;
       }
+      if (double.tryParse(_willPayAmountController.text) == null) {
+        _showError('Please enter a valid amount');
+        return;
+      }
     }
 
-    // For service posts (selling), no image required
-    if (_postType == 'Service' && _selectedOption == 1) {
-      // Location is optional for services
-    }
-
-    // Show step 2 dialog
-    _showStep2Dialog();
+    // Submit directly without step 2 dialog
+    _submitPost();
   }
 
   void _showError(String message) {
@@ -1529,271 +1466,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
     );
   }
 
-  void _showStep2Dialog() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _buildStep2Dialog(),
-    );
-  }
-
-  Widget _buildStep2Dialog() {
-    return StatefulBuilder(
-      builder: (context, setState) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.9,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Additional Details',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Barter Available - Only show for selling posts
-                      if (_selectedOption == 1) ...[
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: _barterAvailable,
-                              onChanged: (value) =>
-                                  setState(() => _barterAvailable = value!),
-                            ),
-                            const Text('Barter Available'),
-                          ],
-                        ),
-
-                        if (_barterAvailable) ...[
-                          const SizedBox(height: 16),
-                          _buildBarterCategoryDropdown(),
-
-                          const SizedBox(height: 16),
-
-                          const Text(
-                            'Describe Barter Wish',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _barterWishController,
-                            decoration: InputDecoration(
-                              hintText: 'Describe what you want in return',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                            ),
-                          ),
-                        ],
-
-                        const SizedBox(height: 24),
-                      ],
-
-                      // Club Items Option - Only for selling posts
-                      if (_selectedOption == 1) ...[
-                        const Text(
-                          'Item Clubbing Option',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Column(
-                          children: [
-                            RadioListTile<bool>(
-                              title: const Text(
-                                'This item can be clubbed with other items in your list while users make an offer',
-                              ),
-                              value: true,
-                              groupValue: _canClubItems,
-                              onChanged: (value) =>
-                                  setState(() => _canClubItems = value!),
-                            ),
-                            RadioListTile<bool>(
-                              title: const Text(
-                                'No, this item cannot be clubbed and traded as a single product',
-                              ),
-                              value: false,
-                              groupValue: _canClubItems,
-                              onChanged: (value) =>
-                                  setState(() => _canClubItems = value!),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 24),
-                      ],
-
-                      // Sold for Money
-                      Row(
-                        children: [
-                          Checkbox(
-                            value: _soldForMoney,
-                            onChanged: (value) =>
-                                setState(() => _soldForMoney = value!),
-                          ),
-                          const Text('This item is sold for money'),
-                        ],
-                      ),
-
-                      if (_soldForMoney) ...[
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _priceController,
-                          decoration: InputDecoration(
-                            hintText: 'Enter price',
-                            prefixText: '\$ ',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                          ),
-                          keyboardType: TextInputType.number,
-                        ),
-                      ],
-
-                      const SizedBox(height: 24),
-
-                      // Transportation Flexibility - Only for product posts
-                      if (_postType == 'Product' && _selectedOption == 1) ...[
-                        const Text(
-                          'Transportation Flexibility',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Column(
-                          children: [
-                            RadioListTile<String>(
-                              title: const Text(
-                                'This item can be transported to desired location',
-                              ),
-                              value: 'transport_desired',
-                              groupValue: _transportationOption,
-                              onChanged: (value) => setState(
-                                () => _transportationOption = value!,
-                              ),
-                            ),
-                            RadioListTile<String>(
-                              title: const Text(
-                                'This item has to be picked from location',
-                              ),
-                              value: 'pickup_only',
-                              groupValue: _transportationOption,
-                              onChanged: (value) => setState(
-                                () => _transportationOption = value!,
-                              ),
-                            ),
-                            RadioListTile<String>(
-                              title: const Text(
-                                'This item can be transported with a delivery charge',
-                              ),
-                              value: 'transport_with_charge',
-                              groupValue: _transportationOption,
-                              onChanged: (value) => setState(
-                                () => _transportationOption = value!,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-
-                      const SizedBox(height: 40),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Action Buttons
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text('Back'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _isSubmitting ? null : _submitPost,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2E5BFF),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: _isSubmitting
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'Post',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   Future<void> _submitPost() async {
     if (_isSubmitting) return;
 
@@ -1809,38 +1481,23 @@ class _AddPostScreenState extends State<AddPostScreen> {
         return;
       }
 
-      // Show processing status
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Converting images...'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-
-      // Convert images to base64 data URLs - NO SEPARATE UPLOAD
+      // Convert images to base64 data URLs
       List<String> imageUrls = [];
       if (_selectedImages.isNotEmpty) {
-        setState(() {
-          _isUploadingImages = true;
-        });
-
         debugPrint(
           '📤 Converting ${_selectedImages.length} images to base64...',
         );
 
-        // Direct conversion to base64 - bypass the broken upload endpoint
         imageUrls = await _addPostService.getImageUrlsFromBase64(
           _selectedImages,
         );
 
         debugPrint('✅ Converted ${imageUrls.length} images to base64');
-
-        setState(() {
-          _isUploadingImages = false;
-        });
       }
+
+      double price = _selectedOption == 1
+          ? double.parse(_priceController.text)
+          : double.parse(_willPayAmountController.text);
 
       if (_selectedOption == 1) {
         // Create product/service post
@@ -1848,11 +1505,11 @@ class _AddPostScreenState extends State<AddPostScreen> {
           final request = CreateProductRequest(
             title: _titleController.text.trim(),
             description: _descriptionController.text.trim(),
-            categoryId: _selectedSubCategoryId!, // Use subcategory ID
-            images: imageUrls, // Send base64 images directly
+            categoryId: _selectedSubCategoryId!,
+            images: imageUrls,
             location: _locationController.text.trim(),
-            barterStatus: _barterAvailable ? 'OPEN_FOR_BARTER' : 'NO_BARTER',
-            price: double.tryParse(_priceController.text) ?? 0.0,
+            barterStatus: 'NO_BARTER', // Default value
+            price: price,
           );
 
           debugPrint(
@@ -1865,10 +1522,10 @@ class _AddPostScreenState extends State<AddPostScreen> {
           final request = CreateServiceRequest(
             title: _titleController.text.trim(),
             description: _descriptionController.text.trim(),
-            categoryId: _selectedSubCategoryId!, // Use subcategory ID
-            images: imageUrls, // Send base64 images directly
+            categoryId: _selectedSubCategoryId!,
+            images: imageUrls,
             status: 'PROVIDE_SERVICE',
-            price: double.tryParse(_priceController.text) ?? 0.0,
+            price: price,
           );
 
           debugPrint(
@@ -1883,11 +1540,11 @@ class _AddPostScreenState extends State<AddPostScreen> {
           final request = CreateProductRequest(
             title: _titleController.text.trim(),
             description: _descriptionController.text.trim(),
-            categoryId: _selectedSubCategoryId!, // Use subcategory ID
-            images: imageUrls, // Send base64 images directly
+            categoryId: _selectedSubCategoryId!,
+            images: imageUrls,
             location: _locationController.text.trim(),
             barterStatus: 'LOOKING_FOR',
-            price: double.tryParse(_willPayAmountController.text) ?? 0.0,
+            price: price,
           );
 
           debugPrint(
@@ -1899,10 +1556,10 @@ class _AddPostScreenState extends State<AddPostScreen> {
           final request = CreateServiceRequest(
             title: _titleController.text.trim(),
             description: _descriptionController.text.trim(),
-            categoryId: _selectedSubCategoryId!, // Use subcategory ID
-            images: imageUrls, // Send base64 images directly
+            categoryId: _selectedSubCategoryId!,
+            images: imageUrls,
             status: 'LOOKING_FOR_SERVICE',
-            price: double.tryParse(_willPayAmountController.text) ?? 0.0,
+            price: price,
           );
 
           debugPrint(
@@ -1913,9 +1570,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
         }
       }
 
-      // Close all dialogs
-      Navigator.pop(context); // Close step 2 dialog
-      Navigator.pop(context); // Close add post screen
+      // Close add post screen
+      Navigator.pop(context);
 
       // Show success message
       if (mounted) {
@@ -1957,7 +1613,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
       if (mounted) {
         setState(() {
           _isSubmitting = false;
-          _isUploadingImages = false;
         });
       }
     }

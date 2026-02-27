@@ -1,9 +1,10 @@
-// // lib/screens/FavoritesScreen.dart
-// import 'package:flutter/material.dart';
 // import 'package:Yempover_app/models/favorites_response.dart';
-// import 'package:Yempover_app/services/favorites_service.dart';
-// import 'package:Yempover_app/utils/CustomErrorWidget.dart';
-// import 'package:Yempover_app/utils/loading_overlay.dart';
+// import 'package:flutter/material.dart';
+// import 'package:Yempover_app/models/ProductPostmain.dart';
+// import 'package:Yempover_app/services/post_action_service.dart';
+// import 'package:Yempover_app/screens/PostDetailScreen.dart';
+// import 'package:Yempover_app/utils/snackbar_utils.dart';
+// import 'package:Yempover_app/utils/loading_widget.dart';
 
 // class FavoritesScreen extends StatefulWidget {
 //   const FavoritesScreen({super.key});
@@ -13,23 +14,23 @@
 // }
 
 // class _FavoritesScreenState extends State<FavoritesScreen> {
-//   final FavoritesService _favoritesService = FavoritesService();
+//   final PostActionService _postActionService = PostActionService();
 
 //   List<FavoriteItem> _favorites = [];
-//   PaginationInfo? _pagination;
-
 //   bool _isLoading = true;
 //   bool _isLoadingMore = false;
-//   bool _hasError = false;
-//   String _errorMessage = '';
+//   bool _hasMore = true;
+//   int _currentPage = 1;
+//   final int _limit = 20;
+//   String? _errorMessage;
 
 //   final ScrollController _scrollController = ScrollController();
 
 //   @override
 //   void initState() {
 //     super.initState();
-//     _loadFavorites();
 //     _scrollController.addListener(_onScroll);
+//     _loadFavorites();
 //   }
 
 //   @override
@@ -41,104 +42,158 @@
 //   void _onScroll() {
 //     if (_scrollController.position.pixels >=
 //         _scrollController.position.maxScrollExtent - 200) {
-//       if (_pagination != null && _pagination!.hasNextPage && !_isLoadingMore) {
+//       if (!_isLoadingMore && _hasMore && !_isLoading) {
 //         _loadMoreFavorites();
 //       }
 //     }
 //   }
 
-//   Future<void> _loadFavorites({int page = 1}) async {
-//     if (page == 1) {
-//       setState(() {
-//         _isLoading = true;
-//         _hasError = false;
-//       });
-//     }
+//   Future<void> _loadFavorites() async {
+//     setState(() {
+//       _isLoading = true;
+//       _errorMessage = null;
+//       _currentPage = 1;
+//     });
 
 //     try {
-//       final response = await _favoritesService.getFavorites(
-//         page: page,
-//         limit: 20,
+//       final response = await _postActionService.getFavorites(
+//         page: _currentPage,
+//         limit: _limit,
 //       );
 
 //       setState(() {
-//         if (page == 1) {
-//           _favorites = response.data.favorites;
-//         } else {
-//           _favorites.addAll(response.data.favorites);
-//         }
-//         _pagination = response.data.pagination;
+//         _favorites = response.data.favorites;
+//         _hasMore =
+//             response.data.pagination.page < response.data.pagination.pages;
 //         _isLoading = false;
-//         _isLoadingMore = false;
 //       });
 //     } catch (e) {
 //       setState(() {
 //         _isLoading = false;
-//         _isLoadingMore = false;
-//         _hasError = true;
 //         _errorMessage = e.toString().replaceAll('Exception: ', '');
 //       });
+
+//       if (mounted) {
+//         SnackbarUtils.showError(context, _errorMessage!);
+//       }
 //     }
 //   }
 
 //   Future<void> _loadMoreFavorites() async {
-//     if (_pagination == null || _isLoadingMore) return;
+//     if (_isLoadingMore || !_hasMore) return;
 
 //     setState(() {
 //       _isLoadingMore = true;
+//       _currentPage++;
 //     });
 
-//     await _loadFavorites(page: _pagination!.page + 1);
-//   }
-
-//   Future<void> _refreshFavorites() async {
-//     await _loadFavorites(page: 1);
-//   }
-
-//   Future<void> _removeFromFavorites(String favoriteId) async {
 //     try {
-//       final success = await _favoritesService.removeFromFavorites(favoriteId);
+//       final response = await _postActionService.getFavorites(
+//         page: _currentPage,
+//         limit: _limit,
+//       );
 
-//       if (success && mounted) {
-//         setState(() {
-//           _favorites.removeWhere((item) => item.id == favoriteId);
-//         });
-
-//         ScaffoldMessenger.of(context).showSnackBar(
-//           const SnackBar(
-//             content: Text('Removed from favorites'),
-//             backgroundColor: Colors.green,
-//             duration: Duration(seconds: 2),
-//           ),
-//         );
-//       }
+//       setState(() {
+//         _favorites.addAll(response.data.favorites);
+//         _hasMore =
+//             response.data.pagination.page < response.data.pagination.pages;
+//         _isLoadingMore = false;
+//       });
 //     } catch (e) {
+//       setState(() {
+//         _isLoadingMore = false;
+//         _currentPage--;
+//       });
+
 //       if (mounted) {
-//         ScaffoldMessenger.of(context).showSnackBar(
-//           SnackBar(
-//             content: Text('Failed to remove: ${e.toString()}'),
-//             backgroundColor: Colors.red,
-//           ),
-//         );
+//         SnackbarUtils.showError(context, 'Failed to load more favorites');
 //       }
 //     }
 //   }
 
-//   void _navigateToItemDetail(FavoriteItem item) {
-//     // Navigate to detail screen based on item type
-//     if (item.type == 'product') {
-//       // Navigate to product detail
-//       Navigator.pushNamed(context, '/product-detail', arguments: item.id);
-//     } else if (item.type == 'service') {
-//       // Navigate to service detail
-//       Navigator.pushNamed(context, '/service-detail', arguments: item.id);
+//   Future<void> _refreshFavorites() async {
+//     await _loadFavorites();
+//   }
+
+//   void _confirmRemove(FavoriteItem favorite) {
+//     showDialog(
+//       context: context,
+//       builder: (context) => AlertDialog(
+//         title: const Text('Remove from Favorites'),
+//         content: Text(
+//           'Are you sure you want to remove "${favorite.title}" from your favorites?',
+//         ),
+//         actions: [
+//           TextButton(
+//             onPressed: () => Navigator.pop(context),
+//             child: const Text('Cancel'),
+//           ),
+//           TextButton(
+//             onPressed: () {
+//               Navigator.pop(context);
+//               // _removeFromFavorites(favorite);
+//             },
+//             style: TextButton.styleFrom(foregroundColor: Colors.red),
+//             child: const Text('Remove'),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   String _formatDate(DateTime date) {
+//     final now = DateTime.now();
+//     final difference = now.difference(date);
+
+//     if (difference.inDays > 0) {
+//       return '${difference.inDays}d ago';
+//     } else if (difference.inHours > 0) {
+//       return '${difference.inHours}h ago';
+//     } else if (difference.inMinutes > 0) {
+//       return '${difference.inMinutes}m ago';
+//     } else {
+//       return 'Just now';
+//     }
+//   }
+
+//   String _getStatusText(String status) {
+//     switch (status) {
+//       case 'FOR_SALE':
+//         return 'For Sale';
+//       case 'SOLD':
+//         return 'Sold';
+//       case 'LOOKING_FOR_SERVICE':
+//         return 'Looking for Service';
+//       case 'PROVIDE_SERVICE':
+//         return 'Providing Service';
+//       case 'FOR_BARTER':
+//         return 'For Barter';
+//       default:
+//         return status;
+//     }
+//   }
+
+//   Color _getStatusColor(String status) {
+//     switch (status) {
+//       case 'FOR_SALE':
+//         return Colors.green;
+//       case 'SOLD':
+//         return Colors.grey;
+//       case 'LOOKING_FOR_SERVICE':
+//         return Colors.orange;
+//       case 'PROVIDE_SERVICE':
+//         return Colors.blue;
+//       case 'FOR_BARTER':
+//         return Colors.purple;
+//       default:
+//         return Colors.grey;
 //     }
 //   }
 
 //   @override
 //   Widget build(BuildContext context) {
 //     return Scaffold(
-//       backgroundColor: Colors.white,
+//       backgroundColor: const Color(0xFFF7F8FF),
 //       appBar: AppBar(
 //         backgroundColor: Colors.white,
 //         elevation: 0,
@@ -147,332 +202,509 @@
 //           onPressed: () => Navigator.pop(context),
 //         ),
 //         title: const Text(
-//           'My Favorites',
+//           "My Favorites",
 //           style: TextStyle(
 //             color: Colors.black,
-//             fontSize: 20,
 //             fontWeight: FontWeight.bold,
+//             fontSize: 20,
 //           ),
 //         ),
 //         actions: [
 //           if (_favorites.isNotEmpty)
 //             IconButton(
-//               icon: const Icon(Icons.search, color: Colors.black),
-//               onPressed: () {
-//                 // Implement search
-//               },
+//               icon: const Icon(Icons.refresh, color: Colors.black),
+//               onPressed: _refreshFavorites,
 //             ),
 //         ],
 //       ),
-//       body: LoadingOverlay(
-//         isLoading: _isLoading,
-//         child: RefreshIndicator(
-//           onRefresh: _refreshFavorites,
-//           color: Colors.blue,
-//           child: _buildBody(),
-//         ),
+//       body: _isLoading
+//           ? const LoadingWidget()
+//           : _errorMessage != null
+//           ? _buildErrorWidget()
+//           : _favorites.isEmpty
+//           ? _buildEmptyWidget()
+//           : RefreshIndicator(
+//               onRefresh: _refreshFavorites,
+//               child: ListView.builder(
+//                 controller: _scrollController,
+//                 padding: const EdgeInsets.all(16),
+//                 itemCount: _favorites.length + 1,
+//                 itemBuilder: (context, index) {
+//                   if (index == _favorites.length) {
+//                     return _buildLoadingMoreIndicator();
+//                   }
+
+//                   final favorite = _favorites[index];
+//                   return _buildFavoriteCard(favorite);
+//                 },
+//               ),
+//             ),
+//     );
+//   }
+
+//   Widget _buildErrorWidget() {
+//     return Center(
+//       child: Column(
+//         mainAxisAlignment: MainAxisAlignment.center,
+//         children: [
+//           const Icon(Icons.error_outline, size: 64, color: Colors.red),
+//           const SizedBox(height: 16),
+//           Text(
+//             _errorMessage ?? 'Something went wrong',
+//             style: const TextStyle(fontSize: 16, color: Colors.grey),
+//             textAlign: TextAlign.center,
+//           ),
+//           const SizedBox(height: 24),
+//           ElevatedButton(
+//             onPressed: _loadFavorites,
+//             style: ElevatedButton.styleFrom(
+//               backgroundColor: const Color(0xFF2E5BFF),
+//               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+//               shape: RoundedRectangleBorder(
+//                 borderRadius: BorderRadius.circular(8),
+//               ),
+//             ),
+//             child: const Text('Try Again', style: TextStyle(fontSize: 16)),
+//           ),
+//         ],
 //       ),
 //     );
 //   }
 
-//   Widget _buildBody() {
-//     if (_hasError) {
-//       return CustomErrorWidget(
-//         message: _errorMessage,
-//         onRetry: _refreshFavorites,
-//       );
-//     }
-
-//     if (_favorites.isEmpty && !_isLoading) {
-//       return EmptyStateWidget(
-//         icon: Icons.favorite_border,
-//         title: 'No Favorites Yet',
-//         message: 'Items you mark as favorite will appear here',
-//         buttonText: 'Browse Items',
-//         onButtonPressed: () {
-//           Navigator.pop(context);
-//           // Navigate to browse screen
-//         },
-//       );
-//     }
-
-//     return Column(
-//       children: [
-//         // Favorites count
-//         if (_favorites.isNotEmpty)
+//   Widget _buildEmptyWidget() {
+//     return Center(
+//       child: Column(
+//         mainAxisAlignment: MainAxisAlignment.center,
+//         children: [
 //           Container(
-//             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-//             alignment: Alignment.centerLeft,
-//             child: Text(
-//               '${_favorites.length} ${_favorites.length == 1 ? 'item' : 'items'}',
-//               style: TextStyle(
-//                 fontSize: 14,
-//                 color: Colors.grey.shade600,
-//                 fontWeight: FontWeight.w500,
-//               ),
+//             width: 120,
+//             height: 120,
+//             decoration: BoxDecoration(
+//               color: Colors.blue.shade50,
+//               shape: BoxShape.circle,
+//             ),
+//             child: const Icon(
+//               Icons.favorite_border,
+//               size: 60,
+//               color: Color(0xFF2E5BFF),
 //             ),
 //           ),
-
-//         // Favorites list
-//         Expanded(
-//           child: ListView.builder(
-//             controller: _scrollController,
-//             padding: const EdgeInsets.symmetric(horizontal: 16),
-//             itemCount: _favorites.length + (_isLoadingMore ? 1 : 0),
-//             itemBuilder: (context, index) {
-//               if (index == _favorites.length) {
-//                 return const Center(
-//                   child: Padding(
-//                     padding: EdgeInsets.all(16),
-//                     child: CircularProgressIndicator(),
-//                   ),
-//                 );
-//               }
-//               return _buildFavoriteItemCard(_favorites[index]);
-//             },
+//           const SizedBox(height: 24),
+//           const Text(
+//             'No Favorites Yet',
+//             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
 //           ),
-//         ),
-//       ],
+//           const SizedBox(height: 8),
+//           const Text(
+//             'Items you mark as favorite will appear here',
+//             style: TextStyle(fontSize: 14, color: Colors.grey),
+//             textAlign: TextAlign.center,
+//           ),
+//           const SizedBox(height: 24),
+//           ElevatedButton(
+//             onPressed: () {
+//               Navigator.pop(context);
+//             },
+//             style: ElevatedButton.styleFrom(
+//               backgroundColor: const Color(0xFF2E5BFF),
+//               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+//               shape: RoundedRectangleBorder(
+//                 borderRadius: BorderRadius.circular(8),
+//               ),
+//             ),
+//             child: const Text(
+//               'Browse Marketplace',
+//               style: TextStyle(fontSize: 16),
+//             ),
+//           ),
+//         ],
+//       ),
 //     );
 //   }
 
-//   Widget _buildFavoriteItemCard(FavoriteItem item) {
-//     return Card(
-//       margin: const EdgeInsets.only(bottom: 12),
-//       elevation: 2,
-//       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-//       child: InkWell(
-//         onTap: () => _navigateToItemDetail(item),
-//         borderRadius: BorderRadius.circular(12),
-//         child: Padding(
-//           padding: const EdgeInsets.all(12),
-//           child: Row(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               // Item Image
-//               ClipRRect(
-//                 borderRadius: BorderRadius.circular(8),
-//                 child: Container(
-//                   width: 80,
-//                   height: 80,
-//                   color: Colors.grey.shade200,
-//                   child: item.images != null && item.images!.isNotEmpty
-//                       ? Image.network(
-//                           item.images!.first,
-//                           fit: BoxFit.cover,
-//                           errorBuilder: (context, error, stackTrace) {
-//                             return Icon(
-//                               item.type == 'product'
-//                                   ? Icons.shopping_bag
-//                                   : Icons.build,
-//                               size: 40,
-//                               color: Colors.grey.shade400,
-//                             );
-//                           },
-//                         )
-//                       : Icon(
-//                           item.type == 'product'
-//                               ? Icons.shopping_bag
-//                               : Icons.build,
-//                           size: 40,
-//                           color: Colors.grey.shade400,
+//   Widget _buildLoadingMoreIndicator() {
+//     if (!_isLoadingMore) {
+//       if (!_hasMore && _favorites.isNotEmpty) {
+//         return Padding(
+//           padding: const EdgeInsets.symmetric(vertical: 20),
+//           child: Center(
+//             child: Text(
+//               'No more favorites',
+//               style: TextStyle(color: Colors.grey.shade600),
+//             ),
+//           ),
+//         );
+//       }
+//       return const SizedBox();
+//     }
+
+//     return const Padding(
+//       padding: EdgeInsets.symmetric(vertical: 20),
+//       child: Center(child: CircularProgressIndicator()),
+//     );
+//   }
+
+//   Widget _buildFavoriteCard(FavoriteItem favorite) {
+//     final statusText = _getStatusText(favorite.status);
+//     final statusColor = _getStatusColor(favorite.status);
+//     final dateText = _formatDate(favorite.createdAt);
+
+//     // Create a Post object for navigation
+//     final post = Post(
+//       id: favorite.actualPostId ?? favorite.id,
+//       title: favorite.title,
+//       description: '',
+//       images: favorite.images,
+//       status: _mapStatus(favorite.status),
+//       barterStatus: BarterStatus.NO_BARTER,
+//       price: favorite.price,
+//       categoryId: favorite.category.id,
+//       latitude: null,
+//       longitude: null,
+//       location: favorite.location,
+//       postedById: favorite.postedBy.id,
+//       postedDate: favorite.createdAt,
+//       viewCount: 0,
+//       isListed: true,
+//       createdAt: favorite.createdAt,
+//       updatedAt: favorite.createdAt,
+//       category: favorite.category,
+//       postedBy: User(
+//         id: favorite.postedBy.id,
+//         firstName: favorite.postedBy.firstName,
+//         lastName: favorite.postedBy.lastName,
+//         profileImage: favorite.postedBy.profileImage,
+//       ),
+//       type: favorite.type == 'service' ? PostType.service : PostType.product,
+//     );
+
+//     return GestureDetector(
+//       onTap: () {
+//         Navigator.push(
+//           context,
+//           MaterialPageRoute(
+//             builder: (context) =>
+//                 PostDetailScreen(post: post, userItems: const []),
+//           ),
+//         );
+//       },
+//       child: Container(
+//         margin: const EdgeInsets.only(bottom: 16),
+//         decoration: BoxDecoration(
+//           color: Colors.white,
+//           borderRadius: BorderRadius.circular(16),
+//           boxShadow: [
+//             BoxShadow(
+//               color: Colors.black.withOpacity(0.05),
+//               blurRadius: 10,
+//               offset: const Offset(0, 4),
+//             ),
+//           ],
+//         ),
+//         child: Column(
+//           crossAxisAlignment: CrossAxisAlignment.start,
+//           children: [
+//             // Image Section
+//             Stack(
+//               children: [
+//                 ClipRRect(
+//                   borderRadius: const BorderRadius.vertical(
+//                     top: Radius.circular(16),
+//                   ),
+//                   child: Image.network(
+//                     favorite.images.isNotEmpty
+//                         ? favorite.images.first
+//                         : 'https://via.placeholder.com/400x200',
+//                     height: 180,
+//                     width: double.infinity,
+//                     fit: BoxFit.cover,
+//                     loadingBuilder: (context, child, loadingProgress) {
+//                       if (loadingProgress == null) return child;
+//                       return Container(
+//                         height: 180,
+//                         width: double.infinity,
+//                         color: Colors.grey[200],
+//                         child: const Center(child: CircularProgressIndicator()),
+//                       );
+//                     },
+//                     errorBuilder: (context, error, stackTrace) {
+//                       return Container(
+//                         height: 180,
+//                         width: double.infinity,
+//                         color: Colors.grey[200],
+//                         child: const Center(
+//                           child: Icon(
+//                             Icons.image_not_supported,
+//                             size: 48,
+//                             color: Colors.grey,
+//                           ),
 //                         ),
+//                       );
+//                     },
+//                   ),
 //                 ),
-//               ),
 
-//               const SizedBox(width: 12),
-
-//               // Item Details
-//               Expanded(
-//                 child: Column(
-//                   crossAxisAlignment: CrossAxisAlignment.start,
-//                   children: [
-//                     // Title and Favorite button
-//                     Row(
-//                       crossAxisAlignment: CrossAxisAlignment.start,
-//                       children: [
-//                         Expanded(
-//                           child: Text(
-//                             item.title ?? 'Untitled',
-//                             style: const TextStyle(
-//                               fontSize: 16,
-//                               fontWeight: FontWeight.w600,
-//                             ),
-//                             maxLines: 2,
-//                             overflow: TextOverflow.ellipsis,
-//                           ),
-//                         ),
-//                         IconButton(
-//                           icon: const Icon(
-//                             Icons.favorite,
-//                             color: Colors.red,
-//                             size: 20,
-//                           ),
-//                           padding: EdgeInsets.zero,
-//                           constraints: const BoxConstraints(),
-//                           onPressed: () => _removeFromFavorites(item.id!),
-//                         ),
-//                       ],
-//                     ),
-
-//                     const SizedBox(height: 4),
-
-//                     // Price
-//                     if (item.price != null)
-//                       Text(
-//                         '${item.currency ?? '\$'}${item.price!.toStringAsFixed(2)}',
+//                 // Type Badge
+//                 if (favorite.type == 'service')
+//                   Positioned(
+//                     top: 12,
+//                     left: 12,
+//                     child: Container(
+//                       padding: const EdgeInsets.symmetric(
+//                         horizontal: 12,
+//                         vertical: 6,
+//                       ),
+//                       decoration: BoxDecoration(
+//                         color: Colors.blue,
+//                         borderRadius: BorderRadius.circular(20),
+//                       ),
+//                       child: const Text(
+//                         'Service',
 //                         style: TextStyle(
-//                           fontSize: 16,
+//                           color: Colors.white,
+//                           fontSize: 12,
 //                           fontWeight: FontWeight.bold,
-//                           color: Colors.blue.shade700,
 //                         ),
 //                       ),
+//                     ),
+//                   ),
 
-//                     const SizedBox(height: 4),
+//                 // Remove Button
+//                 Positioned(
+//                   top: 12,
+//                   right: 12,
+//                   child: InkWell(
+//                     onTap: () => _confirmRemove(favorite),
+//                     borderRadius: BorderRadius.circular(20),
+//                     child: Container(
+//                       width: 36,
+//                       height: 36,
+//                       decoration: BoxDecoration(
+//                         color: Colors.white,
+//                         shape: BoxShape.circle,
+//                         boxShadow: [
+//                           BoxShadow(
+//                             color: Colors.black.withOpacity(0.1),
+//                             blurRadius: 8,
+//                           ),
+//                         ],
+//                       ),
+//                       child: const Icon(
+//                         Icons.favorite,
+//                         color: Colors.red,
+//                         size: 20,
+//                       ),
+//                     ),
+//                   ),
+//                 ),
+//               ],
+//             ),
 
-//                     // Category and Condition
-//                     Row(
-//                       children: [
-//                         if (item.category != null)
-//                           Container(
-//                             padding: const EdgeInsets.symmetric(
-//                               horizontal: 8,
-//                               vertical: 2,
+//             // Content Section
+//             Padding(
+//               padding: const EdgeInsets.all(16),
+//               child: Column(
+//                 crossAxisAlignment: CrossAxisAlignment.start,
+//                 children: [
+//                   // Title and Price
+//                   Row(
+//                     crossAxisAlignment: CrossAxisAlignment.start,
+//                     children: [
+//                       Expanded(
+//                         child: Column(
+//                           crossAxisAlignment: CrossAxisAlignment.start,
+//                           children: [
+//                             Text(
+//                               favorite.title,
+//                               style: const TextStyle(
+//                                 fontSize: 16,
+//                                 fontWeight: FontWeight.bold,
+//                               ),
+//                               maxLines: 2,
+//                               overflow: TextOverflow.ellipsis,
 //                             ),
-//                             decoration: BoxDecoration(
-//                               color: Colors.blue.shade50,
-//                               borderRadius: BorderRadius.circular(4),
-//                             ),
-//                             child: Text(
-//                               item.category!,
+//                             const SizedBox(height: 4),
+//                             Text(
+//                               favorite.price > 0
+//                                   ? '\$${favorite.price.toStringAsFixed(2)}'
+//                                   : 'Free',
 //                               style: TextStyle(
-//                                 fontSize: 10,
+//                                 fontSize: 18,
+//                                 fontWeight: FontWeight.bold,
 //                                 color: Colors.blue.shade700,
-//                                 fontWeight: FontWeight.w500,
 //                               ),
 //                             ),
-//                           ),
-//                         if (item.condition != null) ...[
-//                           const SizedBox(width: 6),
-//                           Container(
-//                             padding: const EdgeInsets.symmetric(
-//                               horizontal: 8,
-//                               vertical: 2,
-//                             ),
-//                             decoration: BoxDecoration(
-//                               color: Colors.green.shade50,
-//                               borderRadius: BorderRadius.circular(4),
-//                             ),
-//                             child: Text(
-//                               item.condition!,
-//                               style: TextStyle(
-//                                 fontSize: 10,
-//                                 color: Colors.green.shade700,
-//                                 fontWeight: FontWeight.w500,
-//                               ),
-//                             ),
-//                           ),
-//                         ],
-//                       ],
-//                     ),
-
-//                     const SizedBox(height: 8),
-
-//                     // Seller info
-//                     Row(
-//                       children: [
-//                         CircleAvatar(
-//                           radius: 12,
-//                           backgroundColor: Colors.grey.shade300,
-//                           backgroundImage: item.sellerImage != null
-//                               ? NetworkImage(item.sellerImage!)
-//                               : null,
-//                           child: item.sellerImage == null
-//                               ? Text(
-//                                   item.sellerName?[0] ?? '?',
-//                                   style: const TextStyle(
-//                                     fontSize: 10,
-//                                     fontWeight: FontWeight.bold,
-//                                   ),
-//                                 )
-//                               : null,
+//                           ],
 //                         ),
-//                         const SizedBox(width: 6),
-//                         Expanded(
-//                           child: Text(
-//                             item.sellerName ?? 'Unknown Seller',
-//                             style: TextStyle(
-//                               fontSize: 12,
-//                               color: Colors.grey.shade600,
-//                             ),
-//                             maxLines: 1,
-//                             overflow: TextOverflow.ellipsis,
+//                       ),
+//                     ],
+//                   ),
+
+//                   const SizedBox(height: 8),
+
+//                   // Category and Status
+//                   Row(
+//                     children: [
+//                       Container(
+//                         padding: const EdgeInsets.symmetric(
+//                           horizontal: 10,
+//                           vertical: 4,
+//                         ),
+//                         decoration: BoxDecoration(
+//                           color: Colors.blue.shade50,
+//                           borderRadius: BorderRadius.circular(6),
+//                         ),
+//                         child: Text(
+//                           favorite.category.name,
+//                           style: TextStyle(
+//                             fontSize: 11,
+//                             color: Colors.blue.shade700,
+//                             fontWeight: FontWeight.w600,
 //                           ),
 //                         ),
-//                         if (item.sellerRating != null) ...[
-//                           const SizedBox(width: 4),
-//                           Icon(
-//                             Icons.star,
-//                             size: 14,
-//                             color: Colors.amber.shade600,
+//                       ),
+//                       const SizedBox(width: 8),
+//                       Container(
+//                         padding: const EdgeInsets.symmetric(
+//                           horizontal: 10,
+//                           vertical: 4,
+//                         ),
+//                         decoration: BoxDecoration(
+//                           color: statusColor.withOpacity(0.1),
+//                           borderRadius: BorderRadius.circular(6),
+//                         ),
+//                         child: Text(
+//                           statusText,
+//                           style: TextStyle(
+//                             fontSize: 11,
+//                             color: statusColor,
+//                             fontWeight: FontWeight.w600,
 //                           ),
-//                           const SizedBox(width: 2),
-//                           Text(
-//                             item.sellerRating!.toStringAsFixed(1),
-//                             style: const TextStyle(
-//                               fontSize: 12,
-//                               fontWeight: FontWeight.w500,
-//                             ),
-//                           ),
-//                         ],
-//                       ],
-//                     ),
+//                         ),
+//                       ),
+//                     ],
+//                   ),
 
-//                     const SizedBox(height: 4),
+//                   const SizedBox(height: 12),
 
-//                     // Location
-//                     if (item.location != null)
-//                       Row(
-//                         children: [
-//                           Icon(
-//                             Icons.location_on,
-//                             size: 12,
-//                             color: Colors.grey.shade500,
-//                           ),
-//                           const SizedBox(width: 2),
-//                           Expanded(
-//                             child: Text(
-//                               item.location!,
-//                               style: TextStyle(
-//                                 fontSize: 11,
-//                                 color: Colors.grey.shade500,
+//                   // Seller and Location
+//                   Row(
+//                     children: [
+//                       CircleAvatar(
+//                         radius: 16,
+//                         backgroundColor: Colors.grey.shade200,
+//                         backgroundImage: favorite.postedBy.profileImage != null
+//                             ? NetworkImage(favorite.postedBy.profileImage!)
+//                             : null,
+//                         child: favorite.postedBy.profileImage == null
+//                             ? Text(
+//                                 favorite.postedBy.firstName.isNotEmpty
+//                                     ? favorite.postedBy.firstName[0]
+//                                     : 'U',
+//                                 style: const TextStyle(
+//                                   fontSize: 14,
+//                                   fontWeight: FontWeight.bold,
+//                                   color: Colors.blue,
+//                                 ),
+//                               )
+//                             : null,
+//                       ),
+//                       const SizedBox(width: 8),
+//                       Expanded(
+//                         child: Column(
+//                           crossAxisAlignment: CrossAxisAlignment.start,
+//                           children: [
+//                             Text(
+//                               favorite.postedBy.firstName,
+//                               style: const TextStyle(
+//                                 fontSize: 13,
+//                                 fontWeight: FontWeight.w600,
 //                               ),
 //                               maxLines: 1,
 //                               overflow: TextOverflow.ellipsis,
 //                             ),
-//                           ),
-//                         ],
+//                             Row(
+//                               children: [
+//                                 Icon(
+//                                   Icons.location_on,
+//                                   size: 12,
+//                                   color: Colors.grey.shade500,
+//                                 ),
+//                                 const SizedBox(width: 2),
+//                                 Expanded(
+//                                   child: Text(
+//                                     favorite.location,
+//                                     style: TextStyle(
+//                                       fontSize: 11,
+//                                       color: Colors.grey.shade600,
+//                                     ),
+//                                     maxLines: 1,
+//                                     overflow: TextOverflow.ellipsis,
+//                                   ),
+//                                 ),
+//                               ],
+//                             ),
+//                           ],
+//                         ),
 //                       ),
-//                   ],
-//                 ),
+//                     ],
+//                   ),
+
+//                   const SizedBox(height: 12),
+
+//                   // Added Date
+//                   Row(
+//                     mainAxisAlignment: MainAxisAlignment.end,
+//                     children: [
+//                       Icon(
+//                         Icons.favorite,
+//                         size: 14,
+//                         color: Colors.red.shade300,
+//                       ),
+//                       const SizedBox(width: 4),
+//                       Text(
+//                         'Added $dateText',
+//                         style: TextStyle(
+//                           fontSize: 11,
+//                           color: Colors.grey.shade600,
+//                         ),
+//                       ),
+//                     ],
+//                   ),
+//                 ],
 //               ),
-//             ],
-//           ),
+//             ),
+//           ],
 //         ),
 //       ),
 //     );
 //   }
+
+//   PostStatus _mapStatus(String status) {
+//     switch (status) {
+//       case 'FOR_SALE':
+//         return PostStatus.FOR_SALE;
+//       case 'SOLD':
+//         return PostStatus.SOLD;
+//       case 'LOOKING_FOR_SERVICE':
+//         return PostStatus.LOOKING_FOR_SERVICE;
+//       case 'PROVIDE_SERVICE':
+//         return PostStatus.PROVIDE_SERVICE;
+//       case 'FOR_BARTER':
+//         return PostStatus.FOR_BARTER;
+//       default:
+//         return PostStatus.FOR_SALE;
+//     }
+//   }
 // }
 
-// lib/screens/FavoritesScreen.dart
-import 'package:flutter/material.dart';
 import 'package:Yempover_app/models/favorites_response.dart';
-import 'package:Yempover_app/services/favorites_service.dart';
+import 'package:flutter/material.dart';
+import 'package:Yempover_app/models/ProductPostmain.dart';
 import 'package:Yempover_app/services/post_action_service.dart';
 import 'package:Yempover_app/screens/PostDetailScreen.dart';
-import 'package:Yempover_app/utils/CustomErrorWidget.dart';
-import 'package:Yempover_app/utils/loading_overlay.dart';
 import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:Yempover_app/utils/loading_widget.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -482,24 +714,23 @@ class FavoritesScreen extends StatefulWidget {
 }
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
-  final FavoritesService _favoritesService = FavoritesService();
   final PostActionService _postActionService = PostActionService();
 
   List<FavoriteItem> _favorites = [];
-  PaginationInfo? _pagination;
-
   bool _isLoading = true;
   bool _isLoadingMore = false;
-  bool _hasError = false;
-  String _errorMessage = '';
+  bool _hasMore = true;
+  int _currentPage = 1;
+  final int _limit = 20;
+  String? _errorMessage;
 
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _loadFavorites();
     _scrollController.addListener(_onScroll);
+    _loadFavorites();
   }
 
   @override
@@ -511,150 +742,190 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   void _onScroll() {
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200) {
-      if (_pagination != null && _pagination!.hasNextPage && !_isLoadingMore) {
+      if (!_isLoadingMore && _hasMore && !_isLoading) {
         _loadMoreFavorites();
       }
     }
   }
 
-  Future<void> _loadFavorites({int page = 1}) async {
-    if (page == 1) {
-      setState(() {
-        _isLoading = true;
-        _hasError = false;
-      });
-    }
+  Future<void> _loadFavorites() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+      _currentPage = 1;
+    });
 
     try {
-      print('Fetching favorites - Page: $page, Limit: 20');
-      final response = await _favoritesService.getFavorites(
-        page: page,
-        limit: 20,
+      final response = await _postActionService.getFavorites(
+        page: _currentPage,
+        limit: _limit,
       );
 
-      print('Favorites response status: 200');
-
       setState(() {
-        if (page == 1) {
-          _favorites = response.data.favorites;
-        } else {
-          _favorites.addAll(response.data.favorites);
-        }
-        _pagination = response.data.pagination;
+        _favorites = response.data.favorites;
+        _hasMore =
+            response.data.pagination.page < response.data.pagination.pages;
         _isLoading = false;
-        _isLoadingMore = false;
       });
-
-      print('Loaded ${_favorites.length} favorites');
     } catch (e) {
-      print('Error loading favorites: $e');
       setState(() {
         _isLoading = false;
-        _isLoadingMore = false;
-        _hasError = true;
         _errorMessage = e.toString().replaceAll('Exception: ', '');
       });
+
+      if (mounted) {
+        SnackbarUtils.showError(context, _errorMessage!);
+      }
     }
   }
 
   Future<void> _loadMoreFavorites() async {
-    if (_pagination == null || _isLoadingMore) return;
+    if (_isLoadingMore || !_hasMore) return;
 
     setState(() {
       _isLoadingMore = true;
+      _currentPage++;
     });
 
-    await _loadFavorites(page: _pagination!.page + 1);
+    try {
+      final response = await _postActionService.getFavorites(
+        page: _currentPage,
+        limit: _limit,
+      );
+
+      setState(() {
+        _favorites.addAll(response.data.favorites);
+        _hasMore =
+            response.data.pagination.page < response.data.pagination.pages;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingMore = false;
+        _currentPage--;
+      });
+
+      if (mounted) {
+        SnackbarUtils.showError(context, 'Failed to load more favorites');
+      }
+    }
   }
 
   Future<void> _refreshFavorites() async {
-    await _loadFavorites(page: 1);
+    await _loadFavorites();
   }
 
-  Future<void> _removeFromFavorites(String favoriteId) async {
+  Future<void> _removeFromFavorites(FavoriteItem favorite) async {
     try {
-      final success = await _favoritesService.removeFromFavorites(favoriteId);
+      // Optimistic update - remove immediately
+      setState(() {
+        _favorites.removeWhere((item) => item.id == favorite.id);
+      });
 
-      if (success && mounted) {
-        setState(() {
-          _favorites.removeWhere((item) => item.id == favoriteId);
-        });
+      final isService = favorite.type == 'service';
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Removed from favorites'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
+      final response = await _postActionService.removeFromFavorites(
+        postId: favorite.actualPostId ?? favorite.id,
+        isService: isService,
+      );
+
+      if (mounted) {
+        SnackbarUtils.showSuccess(context, response.message);
       }
     } catch (e) {
+      // Revert on error - add back the item
+      setState(() {
+        _favorites.insert(0, favorite);
+      });
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to remove: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        SnackbarUtils.showError(
+          context,
+          e.toString().replaceAll('Exception: ', ''),
         );
       }
     }
   }
 
-  Future<void> _navigateToItemDetail(FavoriteItem item) async {
-    if (!mounted) return;
-
-    // Show loading indicator
+  void _confirmRemove(FavoriteItem favorite) {
     showDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return const Center(child: CircularProgressIndicator());
-      },
-    );
-
-    try {
-      // Get the actual product ID from the post object
-      final productId = item.id;
-
-      if (productId == null) {
-        throw Exception('Product ID not found');
-      }
-
-      print('Fetching post with ID: $productId');
-
-      // Fetch the full post details
-      final post = await _postActionService.getPostById(productId);
-
-      if (!mounted) return;
-
-      // Pop the loading dialog
-      Navigator.pop(context);
-
-      // Navigate to post detail screen
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => PostDetailScreen(post: post, userItems: []),
+      builder: (context) => AlertDialog(
+        title: const Text('Remove from Favorites'),
+        content: Text(
+          'Are you sure you want to remove "${favorite.title}" from your favorites?',
         ),
-      );
-    } catch (e) {
-      if (!mounted) return;
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _removeFromFavorites(favorite);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+  }
 
-      // Pop the loading dialog
-      Navigator.pop(context);
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
 
-      // Show error message
-      SnackbarUtils.showError(
-        context,
-        'Failed to load post: ${e.toString().replaceAll('Exception: ', '')}',
-      );
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
+  String _getStatusText(String status) {
+    switch (status) {
+      case 'FOR_SALE':
+        return 'For Sale';
+      case 'SOLD':
+        return 'Sold';
+      case 'LOOKING_FOR_SERVICE':
+        return 'Looking for Service';
+      case 'PROVIDE_SERVICE':
+        return 'Providing Service';
+      case 'FOR_BARTER':
+        return 'For Barter';
+      default:
+        return status;
+    }
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'FOR_SALE':
+        return Colors.green;
+      case 'SOLD':
+        return Colors.grey;
+      case 'LOOKING_FOR_SERVICE':
+        return Colors.orange;
+      case 'PROVIDE_SERVICE':
+        return Colors.blue;
+      case 'FOR_BARTER':
+        return Colors.purple;
+      default:
+        return Colors.grey;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF7F8FF),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -663,387 +934,498 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'My Favorites',
+          "My Favorites",
           style: TextStyle(
             color: Colors.black,
-            fontSize: 20,
             fontWeight: FontWeight.bold,
+            fontSize: 20,
           ),
         ),
         actions: [
           if (_favorites.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.search, color: Colors.black),
-              onPressed: () {
-                // Implement search
-              },
+              icon: const Icon(Icons.refresh, color: Colors.black),
+              onPressed: _refreshFavorites,
             ),
         ],
       ),
-      body: LoadingOverlay(
-        isLoading: _isLoading,
-        child: RefreshIndicator(
-          onRefresh: _refreshFavorites,
-          color: Colors.blue,
-          child: _buildBody(),
-        ),
+      body: _isLoading
+          ? const LoadingWidget()
+          : _errorMessage != null
+          ? _buildErrorWidget()
+          : _favorites.isEmpty
+          ? _buildEmptyWidget()
+          : RefreshIndicator(
+              onRefresh: _refreshFavorites,
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(16),
+                itemCount: _favorites.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == _favorites.length) {
+                    return _buildLoadingMoreIndicator();
+                  }
+
+                  final favorite = _favorites[index];
+                  return _buildFavoriteCard(favorite);
+                },
+              ),
+            ),
+    );
+  }
+
+  Widget _buildErrorWidget() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, size: 64, color: Colors.red),
+          const SizedBox(height: 16),
+          Text(
+            _errorMessage ?? 'Something went wrong',
+            style: const TextStyle(fontSize: 16, color: Colors.grey),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: _loadFavorites,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2E5BFF),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('Try Again', style: TextStyle(fontSize: 16)),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildBody() {
-    if (_hasError) {
-      return CustomErrorWidget(
-        message: _errorMessage,
-        onRetry: _refreshFavorites,
-      );
-    }
-
-    if (_favorites.isEmpty && !_isLoading) {
-      return EmptyStateWidget(
-        icon: Icons.favorite_border,
-        title: 'No Favorites Yet',
-        message: 'Items you mark as favorite will appear here',
-        buttonText: 'Browse Items',
-        onButtonPressed: () {
-          Navigator.pop(context);
-          // Navigate to browse screen
-        },
-      );
-    }
-
-    return Column(
-      children: [
-        // Favorites count
-        if (_favorites.isNotEmpty)
+  Widget _buildEmptyWidget() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            alignment: Alignment.centerLeft,
-            child: Text(
-              '${_favorites.length} ${_favorites.length == 1 ? 'item' : 'items'}',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.favorite_border,
+              size: 60,
+              color: Color(0xFF2E5BFF),
             ),
           ),
-
-        // Favorites list
-        Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _favorites.length + (_isLoadingMore ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index == _favorites.length) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: CircularProgressIndicator(),
-                  ),
-                );
-              }
-              return _buildFavoriteItemCard(_favorites[index]);
-            },
+          const SizedBox(height: 24),
+          const Text(
+            'No Favorites Yet',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          const Text(
+            'Items you mark as favorite will appear here',
+            style: TextStyle(fontSize: 14, color: Colors.grey),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2E5BFF),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Browse Marketplace',
+              style: TextStyle(fontSize: 16),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildFavoriteItemCard(FavoriteItem item) {
-    // Format price
-    String priceText = '';
-    if (item.price != null) {
-      if (item.price is int) {
-        priceText = '${item.currency ?? '\$'}${item.price}';
-      } else {
-        priceText = '${item.currency ?? '\$'}${item.price!.toStringAsFixed(2)}';
+  Widget _buildLoadingMoreIndicator() {
+    if (!_isLoadingMore) {
+      if (!_hasMore && _favorites.isNotEmpty) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Center(
+            child: Text(
+              'No more favorites',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          ),
+        );
       }
+      return const SizedBox();
     }
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: () => _navigateToItemDetail(item),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Item Image
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  color: Colors.grey.shade200,
-                  child: item.images != null && item.images!.isNotEmpty
-                      ? Image.network(
-                          item.images!.first,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Icon(
-                              item.type == 'product'
-                                  ? Icons.shopping_bag
-                                  : Icons.build,
-                              size: 40,
-                              color: Colors.grey.shade400,
-                            );
-                          },
-                        )
-                      : Icon(
-                          item.type == 'product'
-                              ? Icons.shopping_bag
-                              : Icons.build,
-                          size: 40,
-                          color: Colors.grey.shade400,
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 20),
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+
+  Widget _buildFavoriteCard(FavoriteItem favorite) {
+    final statusText = _getStatusText(favorite.status);
+    final statusColor = _getStatusColor(favorite.status);
+    final dateText = _formatDate(favorite.createdAt);
+
+    // Create a Post object for navigation
+    final post = Post(
+      id: favorite.actualPostId ?? favorite.id,
+      title: favorite.title,
+      description: '',
+      images: favorite.images,
+      status: _mapStatus(favorite.status),
+      barterStatus: BarterStatus.NO_BARTER,
+      price: favorite.price,
+      categoryId: favorite.category.id,
+      latitude: null,
+      longitude: null,
+      location: favorite.location,
+      postedById: favorite.postedBy.id,
+      postedDate: favorite.createdAt,
+      viewCount: 0,
+      isListed: true,
+      createdAt: favorite.createdAt,
+      updatedAt: favorite.createdAt,
+      category: favorite.category,
+      postedBy: User(
+        id: favorite.postedBy.id,
+        firstName: favorite.postedBy.firstName,
+        lastName: favorite.postedBy.lastName,
+        profileImage: favorite.postedBy.profileImage,
+      ),
+      type: favorite.type == 'service' ? PostType.service : PostType.product,
+    );
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                PostDetailScreen(post: post, userItems: const []),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image Section
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                  child: Image.network(
+                    favorite.images.isNotEmpty
+                        ? favorite.images.first
+                        : 'https://via.placeholder.com/400x200',
+                    height: 180,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 180,
+                        width: double.infinity,
+                        color: Colors.grey[200],
+                        child: const Center(child: CircularProgressIndicator()),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 180,
+                        width: double.infinity,
+                        color: Colors.grey[200],
+                        child: const Center(
+                          child: Icon(
+                            Icons.image_not_supported,
+                            size: 48,
+                            color: Colors.grey,
+                          ),
                         ),
+                      );
+                    },
+                  ),
                 ),
-              ),
 
-              const SizedBox(width: 12),
-
-              // Item Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title and Favorite button
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.title ?? 'Untitled',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.favorite,
-                            color: Colors.red,
-                            size: 20,
-                          ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onPressed: () => _removeFromFavorites(item.id!),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 4),
-
-                    // Price
-                    if (item.price != null)
-                      Text(
-                        priceText,
+                // Type Badge
+                if (favorite.type == 'service')
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'Service',
                         style: TextStyle(
-                          fontSize: 16,
+                          color: Colors.white,
+                          fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade700,
                         ),
                       ),
+                    ),
+                  ),
 
-                    const SizedBox(height: 4),
+                // Remove Button
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: InkWell(
+                    onTap: () => _confirmRemove(favorite),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.favorite,
+                        color: Colors.red,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
 
-                    // Category and Condition
-                    Row(
-                      children: [
-                        if (item.category != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
+            // Content Section
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title and Price
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              favorite.title,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              item.category!,
+                            const SizedBox(height: 4),
+                            Text(
+                              favorite.price > 0
+                                  ? '\$${favorite.price.toStringAsFixed(2)}'
+                                  : 'Free',
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
                                 color: Colors.blue.shade700,
-                                fontWeight: FontWeight.w500,
                               ),
                             ),
-                          ),
-                        if (item.condition != null) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade50,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              item.condition!,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.green.shade700,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // Seller info
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 12,
-                          backgroundColor: Colors.grey.shade300,
-                          backgroundImage: item.sellerImage != null
-                              ? NetworkImage(item.sellerImage!)
-                              : null,
-                          child: item.sellerImage == null
-                              ? Text(
-                                  item.sellerName?[0] ?? '?',
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                )
-                              : null,
+                          ],
                         ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            item.sellerName ?? 'Unknown Seller',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Category and Status
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          favorite.category.name,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.blue.shade700,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (item.sellerRating != null) ...[
-                          const SizedBox(width: 4),
-                          Icon(
-                            Icons.star,
-                            size: 14,
-                            color: Colors.amber.shade600,
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          statusText,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: statusColor,
+                            fontWeight: FontWeight.w600,
                           ),
-                          const SizedBox(width: 2),
-                          Text(
-                            item.sellerRating!.toStringAsFixed(1),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+                        ),
+                      ),
+                    ],
+                  ),
 
-                    const SizedBox(height: 4),
+                  const SizedBox(height: 12),
 
-                    // Location
-                    if (item.location != null)
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.location_on,
-                            size: 12,
-                            color: Colors.grey.shade500,
-                          ),
-                          const SizedBox(width: 2),
-                          Expanded(
-                            child: Text(
-                              item.location!,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade500,
+                  // Seller and Location
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: Colors.grey.shade200,
+                        backgroundImage: favorite.postedBy.profileImage != null
+                            ? NetworkImage(favorite.postedBy.profileImage!)
+                            : null,
+                        child: favorite.postedBy.profileImage == null
+                            ? Text(
+                                favorite.postedBy.firstName.isNotEmpty
+                                    ? favorite.postedBy.firstName[0]
+                                    : 'U',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              favorite.postedBy.firstName,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        ],
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.location_on,
+                                  size: 12,
+                                  color: Colors.grey.shade500,
+                                ),
+                                const SizedBox(width: 2),
+                                Expanded(
+                                  child: Text(
+                                    favorite.location,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                  ],
-                ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Added Date
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Icon(
+                        Icons.favorite,
+                        size: 14,
+                        color: Colors.red.shade300,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Added $dateText',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Empty State Widget
-class EmptyStateWidget extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String message;
-  final String buttonText;
-  final VoidCallback onButtonPressed;
-
-  const EmptyStateWidget({
-    Key? key,
-    required this.icon,
-    required this.title,
-    required this.message,
-    required this.buttonText,
-    required this.onButtonPressed,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 80, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: onButtonPressed,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: Text(buttonText),
             ),
           ],
         ),
       ),
     );
+  }
+
+  PostStatus _mapStatus(String status) {
+    switch (status) {
+      case 'FOR_SALE':
+        return PostStatus.FOR_SALE;
+      case 'SOLD':
+        return PostStatus.SOLD;
+      case 'LOOKING_FOR_SERVICE':
+        return PostStatus.LOOKING_FOR_SERVICE;
+      case 'PROVIDE_SERVICE':
+        return PostStatus.PROVIDE_SERVICE;
+      case 'FOR_BARTER':
+        return PostStatus.FOR_BARTER;
+      default:
+        return PostStatus.FOR_SALE;
+    }
   }
 }

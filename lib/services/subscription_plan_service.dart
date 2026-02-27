@@ -72,57 +72,107 @@ class SubscriptionPlanService {
         throw Exception('No authentication token found. Please login again.');
       }
 
-      // Try different possible endpoints
-      final endpoints = [
-        ApiConstants.currentSubscription, // /subscription/current
-        '${ApiConstants.baseUrl}/subscription', // /subscription
-        '${ApiConstants.baseUrl}/me/subscription', // /me/subscription
-      ];
+      final url =
+          ApiConstants.currentSubscription; // Now points to /me/subscription
 
-      for (final url in endpoints) {
-        try {
-          debugPrint('📡 Trying current subscription endpoint: $url');
+      debugPrint('📡 Fetching current subscription from: $url');
 
-          final response = await _client
-              .get(
-                Uri.parse(url),
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json',
-                  'Authorization': 'Bearer $token',
-                },
-              )
-              .timeout(const Duration(seconds: 10));
+      final response = await _client
+          .get(
+            Uri.parse(url),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 10));
 
-          debugPrint('📡 Endpoint $url - Status: ${response.statusCode}');
+      debugPrint('📡 Response status: ${response.statusCode}');
+      debugPrint('📡 Response body: ${response.body}');
 
-          if (response.statusCode == 200) {
-            final Map<String, dynamic> jsonResponse = json.decode(
-              response.body,
-            );
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> jsonResponse = json.decode(response.body);
+
+        // Handle the response format from your API
+        if (jsonResponse['status'] == 'success') {
+          // Check if data exists and has plan information
+          if (jsonResponse['data'] != null &&
+              jsonResponse['data']['plan'] != null) {
             return GetCurrentSubscriptionPlanResponse.fromJson(jsonResponse);
-          } else if (response.statusCode == 404) {
-            // Try next endpoint
-            continue;
-          } else if (response.statusCode == 401) {
-            await TokenService().clearTokens();
-            throw Exception('Session expired. Please login again.');
+          } else {
+            // No active subscription
+            return GetCurrentSubscriptionPlanResponse(
+              status: 'success',
+              message: 'No active subscription',
+              data: null,
+            );
           }
-        } catch (e) {
-          debugPrint('❌ Error with endpoint $url: $e');
-          // Continue to next endpoint
-          continue;
+        } else {
+          throw Exception(
+            jsonResponse['message'] ?? 'Failed to fetch subscription',
+          );
         }
+      } else if (response.statusCode == 401) {
+        await TokenService().clearTokens();
+        throw Exception('Session expired. Please login again.');
+      } else if (response.statusCode == 404) {
+        // No subscription found
+        return GetCurrentSubscriptionPlanResponse(
+          status: 'success',
+          message: 'No active subscription',
+          data: null,
+        );
+      } else {
+        throw Exception('Failed to load subscription (${response.statusCode})');
       }
-
-      // If all endpoints fail, return empty response (no active subscription)
-      return GetCurrentSubscriptionPlanResponse(
-        status: 'success',
-        message: 'No active subscription',
-        data: null,
-      );
     } catch (e) {
       debugPrint('❌ Error fetching current subscription: $e');
+      // Return empty response instead of throwing
+      return GetCurrentSubscriptionPlanResponse(
+        status: 'error',
+        message: e.toString(),
+        data: null,
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> subscribe(String planId) async {
+    try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token found. Please login again.');
+      }
+
+      final url = ApiConstants.subscribe;
+
+      debugPrint('📡 Subscribing to plan: $planId at $url');
+
+      final response = await _client
+          .post(
+            Uri.parse(url),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: json.encode({'planId': planId}),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint('📡 Response status: ${response.statusCode}');
+      debugPrint('📡 Response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body);
+      } else if (response.statusCode == 401) {
+        await TokenService().clearTokens();
+        throw Exception('Session expired. Please login again.');
+      } else {
+        throw Exception('Failed to subscribe (${response.statusCode})');
+      }
+    } catch (e) {
+      debugPrint('❌ Error subscribing: $e');
       rethrow;
     }
   }
@@ -131,5 +181,3 @@ class SubscriptionPlanService {
     _client.close();
   }
 }
-
-int min(int a, int b) => a < b ? a : b;

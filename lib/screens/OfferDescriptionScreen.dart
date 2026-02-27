@@ -1,18 +1,21 @@
+import 'package:Yempover_app/models/chats/trade_chat.dart';
 import 'package:flutter/material.dart';
 import 'package:Yempover_app/models/ProductPostmain.dart';
 import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:Yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:Yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
 
 class OfferDescriptionScreen extends StatefulWidget {
   final Post post;
   final List<UserItem> selectedItems;
   final String currentUserId;
+  final bool isService;
 
   const OfferDescriptionScreen({
     super.key,
     required this.post,
     required this.selectedItems,
     required this.currentUserId,
+    this.isService = false,
   });
 
   @override
@@ -47,20 +50,32 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
 
       print('🚀 Initiating chat with offer:');
       print('   Responder ID: ${widget.post.postedById}');
-      print('   Product ID: ${widget.post.id}');
+      print('   Type: ${widget.isService ? "Service" : "Product"}');
+      print('   ID: ${widget.post.id}');
       print('   Selected Items: ${widget.selectedItems.length}');
       print('   Description: ${_descriptionController.text.trim()}');
 
-      // Call the initiate chat API
-      final chat = await _chatService.initiateChat(
-        responderId: widget.post.postedById,
-        productId: widget.post.id,
-      );
+      // Call the initiate chat API with appropriate parameters
+      late final TradeChat chat;
+
+      if (widget.isService) {
+        chat = await _chatService.initiateChat(
+          responderId: widget.post.postedById,
+          serviceId: widget.post.id,
+        );
+      } else {
+        chat = await _chatService.initiateChat(
+          responderId: widget.post.postedById,
+          productId: widget.post.id,
+        );
+      }
 
       print('✅ Chat initiated successfully!');
       print('   Chat ID: ${chat.id}');
 
       // Show success message
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Your offer has been sent!'),
@@ -68,40 +83,27 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
         ),
       );
 
-      // Navigate to chat detail screen and refresh messages
+      // FIXED NAVIGATION: Clear the entire stack and navigate to TradeChatScreen
+      if (!mounted) return;
+
+      // Navigate to TradeChatScreen and remove all previous routes
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const TradeChatScreen()),
+        (route) => false, // This removes all previous routes
+      );
+    } catch (e) {
       if (mounted) {
-        // First pop back to offer deck and then to post detail
-        Navigator.popUntil(context, (route) {
-          return route.settings.name == null; // Adjust this condition as needed
-        });
+        setState(() => _isSubmitting = false);
+        print('❌ Failed to initiate chat: $e');
 
-        // Fetch the latest chat details to get all messages
-        final updatedChat = await _chatService.getChatById(chat.id);
-
-        // Then navigate to chat detail with the updated chat
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatDetailScreen(
-              chat: updatedChat, // Use updated chat with messages
-              currentUserId: widget.currentUserId,
-              onChatUpdated: (updatedChat) {
-                print('🔄 Chat updated: ${updatedChat.id}');
-              },
-            ),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to send offer: ${e.toString()}'),
+            backgroundColor: Colors.red,
           ),
         );
       }
-    } catch (e) {
-      setState(() => _isSubmitting = false);
-      print('❌ Failed to initiate chat: $e');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to send offer: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
   }
 

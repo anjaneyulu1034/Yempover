@@ -27,9 +27,21 @@
 
 //   bool _isLoading = true;
 //   String? _errorMessage;
-//   int _currentPage = 1;
-//   int _totalPages = 1;
-//   bool _isLoadingMore = false;
+
+//   // Pagination for All Chats
+//   int _allChatsCurrentPage = 1;
+//   int _allChatsTotalPages = 1;
+//   bool _isLoadingMoreAllChats = false;
+
+//   // Pagination for Inbox
+//   int _inboxCurrentPage = 1;
+//   int _inboxTotalPages = 1;
+//   bool _isLoadingMoreInbox = false;
+
+//   // Pagination for Outbox
+//   int _outboxCurrentPage = 1;
+//   int _outboxTotalPages = 1;
+//   bool _isLoadingMoreOutbox = false;
 
 //   String? _currentUserId;
 //   String? _selectedProductFilter;
@@ -63,17 +75,35 @@
 //   }
 
 //   void _handleTabChange() {
-//     // Refresh when switching tabs
+//     // Load data for the selected tab if needed
 //     if (_tabController.indexIsChanging) {
-//       _refreshChats();
+//       final index = _tabController.index;
+//       if (index == 0 && _allChats.isEmpty) {
+//         _loadAllChats();
+//       } else if (index == 1 && _inboxChats.isEmpty) {
+//         _loadInboxChats();
+//       } else if (index == 2 && _outboxChats.isEmpty) {
+//         _loadOutboxChats();
+//       }
 //     }
 //   }
 
-//   Future<void> _refreshChats() {
+//   Future<void> _refreshChats() async {
 //     setState(() {
-//       _currentPage = 1;
+//       _allChatsCurrentPage = 1;
+//       _inboxCurrentPage = 1;
+//       _outboxCurrentPage = 1;
 //     });
-//     return _loadChats(refresh: true);
+
+//     // Refresh all tabs based on current tab
+//     final currentIndex = _tabController.index;
+//     if (currentIndex == 0) {
+//       await _loadAllChats(refresh: true);
+//     } else if (currentIndex == 1) {
+//       await _loadInboxChats(refresh: true);
+//     } else if (currentIndex == 2) {
+//       await _loadOutboxChats(refresh: true);
+//     }
 //   }
 
 //   Future<void> _loadCurrentUser() async {
@@ -92,8 +122,12 @@
 
 //       if (_currentUserId != null && _currentUserId!.isNotEmpty) {
 //         debugPrint('✅ TradeChatScreen: User ID found, loading chats...');
-//         await _loadChats();
-//         _loadUserProducts();
+//         // Load initial data for all tabs
+//         await Future.wait([
+//           _loadAllChats(refresh: true),
+//           _loadInboxChats(refresh: true),
+//           _loadOutboxChats(refresh: true),
+//         ]);
 //       } else {
 //         debugPrint('❌ TradeChatScreen: User ID is null or empty');
 //         setState(() {
@@ -110,31 +144,32 @@
 //     }
 //   }
 
-//   Future<void> _loadChats({bool refresh = true}) async {
+//   // Load All Chats
+//   Future<void> _loadAllChats({bool refresh = true}) async {
 //     debugPrint(
-//       '📥 TradeChatScreen: Loading chats - refresh: $refresh, page: $_currentPage',
+//       '📥 TradeChatScreen: Loading all chats - refresh: $refresh, page: $_allChatsCurrentPage',
 //     );
 
 //     if (refresh) {
 //       setState(() {
 //         _isLoading = true;
 //         _errorMessage = null;
-//         _currentPage = 1;
+//         _allChatsCurrentPage = 1;
 //       });
 //     } else {
 //       setState(() {
-//         _isLoadingMore = true;
+//         _isLoadingMoreAllChats = true;
 //       });
 //     }
 
 //     try {
-//       debugPrint('🌐 TradeChatScreen: Calling chat service...');
+//       debugPrint('🌐 TradeChatScreen: Calling getAllChats service...');
 //       final response = await _chatService.getAllChats(
-//         page: _currentPage,
+//         page: _allChatsCurrentPage,
 //         limit: 20,
 //       );
 
-//       debugPrint('✅ TradeChatScreen: Received response from service');
+//       debugPrint('✅ TradeChatScreen: Received all chats response');
 //       debugPrint(
 //         '📊 TradeChatScreen: Total chats received: ${response.data.chats.length}',
 //       );
@@ -151,63 +186,158 @@
 //             '➕ TradeChatScreen: Added more chats, new total: ${_allChats.length}',
 //           );
 //         }
-//         _totalPages = response.data.pagination.pages;
-//         _updateFilteredChats();
+//         _allChatsTotalPages = response.data.pagination.pages;
 //         _isLoading = false;
-//         _isLoadingMore = false;
+//         _isLoadingMoreAllChats = false;
 //       });
 //     } catch (e) {
-//       debugPrint('❌ TradeChatScreen: Error loading chats: $e');
+//       debugPrint('❌ TradeChatScreen: Error loading all chats: $e');
 //       setState(() {
 //         _errorMessage = e.toString().replaceAll('Exception: ', '');
 //         _isLoading = false;
-//         _isLoadingMore = false;
+//         _isLoadingMoreAllChats = false;
+//       });
+//     }
+//   }
+
+//   // Load Inbox Chats
+//   Future<void> _loadInboxChats({bool refresh = true}) async {
+//     debugPrint(
+//       '📥 TradeChatScreen: Loading inbox chats - refresh: $refresh, page: $_inboxCurrentPage, filter: $_selectedProductFilter',
+//     );
+
+//     if (refresh) {
+//       setState(() {
+//         _inboxCurrentPage = 1;
+//       });
+//     }
+
+//     try {
+//       final response = await _chatService.getInboxChats(
+//         page: _inboxCurrentPage,
+//         limit: 20,
+//         productId: _selectedProductFilter != 'All Products'
+//             ? _selectedProductFilter
+//             : null,
+//       );
+
+//       debugPrint('✅ TradeChatScreen: Received inbox chats response');
+//       debugPrint(
+//         '📊 TradeChatScreen: Total inbox chats received: ${response.data.chats.length}',
+//       );
+
+//       setState(() {
+//         if (refresh) {
+//           _inboxChats = response.data.chats.cast<TradeChat>();
+//           debugPrint(
+//             '🔄 TradeChatScreen: Refreshed inbox chats, new count: ${_inboxChats.length}',
+//           );
+//         } else {
+//           _inboxChats.addAll(response.data.chats as Iterable<TradeChat>);
+//           debugPrint(
+//             '➕ TradeChatScreen: Added more inbox chats, new total: ${_inboxChats.length}',
+//           );
+//         }
+//         _inboxTotalPages = response.data.pagination.pages;
+//         _isLoadingMoreInbox = false;
+
+//         // Load user products from inbox chats
+//         _loadUserProducts();
+//       });
+//     } catch (e) {
+//       debugPrint('❌ TradeChatScreen: Error loading inbox chats: $e');
+//       setState(() {
+//         _isLoadingMoreInbox = false;
+//       });
+//     }
+//   }
+
+//   // Load Outbox Chats
+//   Future<void> _loadOutboxChats({bool refresh = true}) async {
+//     debugPrint(
+//       '📥 TradeChatScreen: Loading outbox chats - refresh: $refresh, page: $_outboxCurrentPage',
+//     );
+
+//     if (refresh) {
+//       setState(() {
+//         _outboxCurrentPage = 1;
+//       });
+//     }
+
+//     try {
+//       final response = await _chatService.getOutboxChats(
+//         page: _outboxCurrentPage,
+//         limit: 20,
+//       );
+
+//       debugPrint('✅ TradeChatScreen: Received outbox chats response');
+//       debugPrint(
+//         '📊 TradeChatScreen: Total outbox chats received: ${response.data.chats.length}',
+//       );
+
+//       setState(() {
+//         if (refresh) {
+//           _outboxChats = response.data.chats.cast<TradeChat>();
+//           debugPrint(
+//             '🔄 TradeChatScreen: Refreshed outbox chats, new count: ${_outboxChats.length}',
+//           );
+//         } else {
+//           _outboxChats.addAll(response.data.chats as Iterable<TradeChat>);
+//           debugPrint(
+//             '➕ TradeChatScreen: Added more outbox chats, new total: ${_outboxChats.length}',
+//           );
+//         }
+//         _outboxTotalPages = response.data.pagination.pages;
+//         _isLoadingMoreOutbox = false;
+//       });
+//     } catch (e) {
+//       debugPrint('❌ TradeChatScreen: Error loading outbox chats: $e');
+//       setState(() {
+//         _isLoadingMoreOutbox = false;
 //       });
 //     }
 //   }
 
 //   void _loadMoreChats() {
-//     debugPrint(
-//       '📥 TradeChatScreen: Loading more chats... Current page: $_currentPage, Total pages: $_totalPages',
-//     );
-//     if (_currentPage < _totalPages && !_isLoadingMore) {
-//       setState(() {
-//         _currentPage++;
-//         debugPrint('📄 TradeChatScreen: Incremented page to $_currentPage');
-//       });
-//       _loadChats(refresh: false);
-//     }
-//   }
-
-//   void _updateFilteredChats() {
-//     if (_currentUserId == null) {
-//       debugPrint(
-//         '⚠️ TradeChatScreen: Cannot update filtered chats - currentUserId is null',
-//       );
+//     if (_isLoadingMoreAllChats || _isLoadingMoreInbox || _isLoadingMoreOutbox)
 //       return;
+
+//     final currentIndex = _tabController.index;
+
+//     if (currentIndex == 0) {
+//       // Load more all chats
+//       if (_allChatsCurrentPage < _allChatsTotalPages) {
+//         setState(() {
+//           _allChatsCurrentPage++;
+//           _isLoadingMoreAllChats = true;
+//         });
+//         _loadAllChats(refresh: false);
+//       }
+//     } else if (currentIndex == 1) {
+//       // Load more inbox chats
+//       if (_inboxCurrentPage < _inboxTotalPages) {
+//         setState(() {
+//           _inboxCurrentPage++;
+//           _isLoadingMoreInbox = true;
+//         });
+//         _loadInboxChats(refresh: false);
+//       }
+//     } else if (currentIndex == 2) {
+//       // Load more outbox chats
+//       if (_outboxCurrentPage < _outboxTotalPages) {
+//         setState(() {
+//           _outboxCurrentPage++;
+//           _isLoadingMoreOutbox = true;
+//         });
+//         _loadOutboxChats(refresh: false);
+//       }
 //     }
-
-//     setState(() {
-//       _inboxChats = _allChats
-//           .where((chat) => chat.isOfferIncoming(_currentUserId!))
-//           .toList();
-
-//       _outboxChats = _allChats
-//           .where((chat) => !chat.isOfferIncoming(_currentUserId!))
-//           .toList();
-
-//       debugPrint(
-//         '📊 After filtering - Inbox: ${_inboxChats.length}, Outbox: ${_outboxChats.length}',
-//       );
-//     });
 //   }
 
 //   void _loadUserProducts() {
-//     debugPrint(
-//       '📦 TradeChatScreen: Loading user products from outbox chats...',
-//     );
+//     debugPrint('📦 TradeChatScreen: Loading user products from inbox chats...');
 
-//     final products = _outboxChats
+//     final products = _inboxChats
 //         .map((chat) => chat.postTitle)
 //         .where((title) => title.isNotEmpty)
 //         .toSet()
@@ -220,17 +350,6 @@
 //     debugPrint(
 //       '📦 TradeChatScreen: Found ${_userProducts.length - 1} unique products',
 //     );
-//   }
-
-//   List<TradeChat> _getFilteredInboxChats() {
-//     if (_selectedProductFilter == null ||
-//         _selectedProductFilter == 'All Products') {
-//       return _inboxChats;
-//     }
-
-//     return _inboxChats
-//         .where((chat) => chat.postTitle == _selectedProductFilter)
-//         .toList();
 //   }
 
 //   void _showProductFilterDialog() {
@@ -264,6 +383,8 @@
 //                     _selectedProductFilter = product;
 //                   });
 //                   Navigator.pop(context);
+//                   // Reload inbox chats with new filter
+//                   _loadInboxChats(refresh: true);
 //                 },
 //               );
 //             }).toList(),
@@ -275,6 +396,8 @@
 //                   _selectedProductFilter = null;
 //                 });
 //                 Navigator.pop(context);
+//                 // Reload inbox chats without filter
+//                 _loadInboxChats(refresh: true);
 //               },
 //               child: const Text('Clear Filter'),
 //             ),
@@ -311,18 +434,24 @@
 //   void _updateChat(TradeChat updatedChat) {
 //     debugPrint('🔄 TradeChatScreen: Updating chat: ${updatedChat.id}');
 //     setState(() {
-//       final index = _allChats.indexWhere((c) => c.id == updatedChat.id);
-//       if (index != -1) {
-//         debugPrint(
-//           '✅ TradeChatScreen: Found chat at index $index, updating...',
-//         );
-//         _allChats[index] = updatedChat;
-//         _updateFilteredChats();
-//         _loadUserProducts();
-//       } else {
-//         debugPrint(
-//           '⚠️ TradeChatScreen: Chat not found in list: ${updatedChat.id}',
-//         );
+//       // Update in all chats list
+//       final allIndex = _allChats.indexWhere((c) => c.id == updatedChat.id);
+//       if (allIndex != -1) {
+//         _allChats[allIndex] = updatedChat;
+//       }
+
+//       // Update in inbox chats list
+//       final inboxIndex = _inboxChats.indexWhere((c) => c.id == updatedChat.id);
+//       if (inboxIndex != -1) {
+//         _inboxChats[inboxIndex] = updatedChat;
+//       }
+
+//       // Update in outbox chats list
+//       final outboxIndex = _outboxChats.indexWhere(
+//         (c) => c.id == updatedChat.id,
+//       );
+//       if (outboxIndex != -1) {
+//         _outboxChats[outboxIndex] = updatedChat;
 //       }
 //     });
 //   }
@@ -351,7 +480,6 @@
 //     }
 
 //     final otherUser = chat.getOtherUserInfo(_currentUserId!);
-//     final isIncoming = chat.isOfferIncoming(_currentUserId!);
 //     final unreadCount = chat.messages
 //         .where((msg) => !msg.isRead && msg.sentById != _currentUserId)
 //         .length;
@@ -632,16 +760,16 @@
 //         child: TabBarView(
 //           controller: _tabController,
 //           children: [
-//             _buildChatList(_allChats),
+//             _buildChatList(_allChats, isLoadingMore: _isLoadingMoreAllChats),
 //             _buildInboxList(),
-//             _buildChatList(_outboxChats),
+//             _buildChatList(_outboxChats, isLoadingMore: _isLoadingMoreOutbox),
 //           ],
 //         ),
 //       ),
 //     );
 //   }
 
-//   Widget _buildChatList(List<TradeChat> chats) {
+//   Widget _buildChatList(List<TradeChat> chats, {required bool isLoadingMore}) {
 //     debugPrint('📋 Building chat list with ${chats.length} chats');
 
 //     if (chats.isEmpty) {
@@ -672,7 +800,7 @@
 
 //     return NotificationListener<ScrollNotification>(
 //       onNotification: (scrollInfo) {
-//         if (!_isLoadingMore &&
+//         if (!isLoadingMore &&
 //             scrollInfo.metrics.pixels >=
 //                 scrollInfo.metrics.maxScrollExtent - 100) {
 //           debugPrint('📜 Scroll threshold reached, loading more chats...');
@@ -682,7 +810,7 @@
 //       },
 //       child: ListView.builder(
 //         padding: const EdgeInsets.only(top: 8, bottom: 8),
-//         itemCount: chats.length + (_isLoadingMore ? 1 : 0),
+//         itemCount: chats.length + (isLoadingMore ? 1 : 0),
 //         itemBuilder: (context, index) {
 //           if (index == chats.length) {
 //             return const Center(
@@ -699,8 +827,6 @@
 //   }
 
 //   Widget _buildInboxList() {
-//     final filteredChats = _getFilteredInboxChats();
-
 //     if (_inboxChats.isEmpty) {
 //       return Center(
 //         child: Column(
@@ -746,13 +872,23 @@
 //                     ),
 //                   ),
 //                 ),
+//                 if (_selectedProductFilter != null)
+//                   IconButton(
+//                     icon: const Icon(Icons.clear),
+//                     onPressed: () {
+//                       setState(() {
+//                         _selectedProductFilter = null;
+//                       });
+//                       _loadInboxChats(refresh: true);
+//                     },
+//                   ),
 //               ],
 //             ),
 //           ),
 //         Expanded(
 //           child: NotificationListener<ScrollNotification>(
 //             onNotification: (scrollInfo) {
-//               if (!_isLoadingMore &&
+//               if (!_isLoadingMoreInbox &&
 //                   scrollInfo.metrics.pixels >=
 //                       scrollInfo.metrics.maxScrollExtent - 100) {
 //                 _loadMoreChats();
@@ -761,9 +897,9 @@
 //             },
 //             child: ListView.builder(
 //               padding: const EdgeInsets.only(bottom: 8),
-//               itemCount: filteredChats.length + (_isLoadingMore ? 1 : 0),
+//               itemCount: _inboxChats.length + (_isLoadingMoreInbox ? 1 : 0),
 //               itemBuilder: (context, index) {
-//                 if (index == filteredChats.length) {
+//                 if (index == _inboxChats.length) {
 //                   return const Center(
 //                     child: Padding(
 //                       padding: EdgeInsets.all(16),
@@ -771,7 +907,7 @@
 //                     ),
 //                   );
 //                 }
-//                 return _buildChatItem(filteredChats[index]);
+//                 return _buildChatItem(_inboxChats[index]);
 //               },
 //             ),
 //           ),
@@ -781,6 +917,8 @@
 //   }
 // }
 
+// lib/screens/tradechatscreen/TradeChatScreen.dart
+import 'package:Yempover_app/services/socket_io/socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:Yempover_app/models/chats/trade_chat.dart';
@@ -802,6 +940,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
   late TabController _tabController;
   final TradeChatService _chatService = TradeChatService();
   final TokenService _tokenService = TokenService();
+  final SocketService _socketService = SocketService();
 
   List<TradeChat> _allChats = [];
   List<TradeChat> _inboxChats = [];
@@ -811,17 +950,15 @@ class _TradeChatScreenState extends State<TradeChatScreen>
   bool _isLoading = true;
   String? _errorMessage;
 
-  // Pagination for All Chats
+  // Pagination variables
   int _allChatsCurrentPage = 1;
   int _allChatsTotalPages = 1;
   bool _isLoadingMoreAllChats = false;
 
-  // Pagination for Inbox
   int _inboxCurrentPage = 1;
   int _inboxTotalPages = 1;
   bool _isLoadingMoreInbox = false;
 
-  // Pagination for Outbox
   int _outboxCurrentPage = 1;
   int _outboxTotalPages = 1;
   bool _isLoadingMoreOutbox = false;
@@ -837,6 +974,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     _tabController.addListener(_handleTabChange);
     WidgetsBinding.instance.addObserver(this);
     _loadCurrentUser();
+    _initializeSocketListeners();
   }
 
   @override
@@ -852,13 +990,106 @@ class _TradeChatScreenState extends State<TradeChatScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Refresh chats when app resumes
       _refreshChats();
     }
   }
 
+  void _initializeSocketListeners() {
+    // Listen for chat updates
+    _socketService.on('chat_updated', _handleChatUpdated);
+    _socketService.on('offer_accepted', _handleOfferUpdated);
+    _socketService.on('offer_rejected', _handleOfferUpdated);
+    _socketService.on('offer_created', _handleOfferCreated);
+    _socketService.on('deal_completed', _handleChatStatusChanged);
+    _socketService.on('deal_cancelled', _handleChatStatusChanged);
+  }
+
+  void _handleChatUpdated(dynamic data) {
+    if (!mounted) return;
+
+    try {
+      final chatId = data['chatId'];
+      final chatData = data['chat'];
+
+      if (chatData != null) {
+        final updatedChat = TradeChat.fromJson(chatData);
+        _updateChatInLists(updatedChat);
+      } else {
+        // Refresh specific chat
+        _refreshSingleChat(chatId);
+      }
+    } catch (e) {
+      print('Error handling chat updated: $e');
+    }
+  }
+
+  void _handleOfferUpdated(dynamic data) {
+    if (!mounted) return;
+
+    try {
+      final chatId = data['chatId'];
+      _refreshSingleChat(chatId);
+    } catch (e) {
+      print('Error handling offer update: $e');
+    }
+  }
+
+  void _handleOfferCreated(dynamic data) {
+    if (!mounted) return;
+
+    try {
+      final chatId = data['chatId'];
+      _refreshSingleChat(chatId);
+    } catch (e) {
+      print('Error handling offer created: $e');
+    }
+  }
+
+  void _handleChatStatusChanged(dynamic data) {
+    if (!mounted) return;
+
+    try {
+      final chatId = data['chatId'];
+      _refreshSingleChat(chatId);
+    } catch (e) {
+      print('Error handling chat status change: $e');
+    }
+  }
+
+  Future<void> _refreshSingleChat(String chatId) async {
+    try {
+      final updatedChat = await _chatService.getChatById(chatId);
+      _updateChatInLists(updatedChat);
+    } catch (e) {
+      print('Error refreshing single chat: $e');
+    }
+  }
+
+  void _updateChatInLists(TradeChat updatedChat) {
+    setState(() {
+      // Update in all chats list
+      final allIndex = _allChats.indexWhere((c) => c.id == updatedChat.id);
+      if (allIndex != -1) {
+        _allChats[allIndex] = updatedChat;
+      }
+
+      // Update in inbox chats list
+      final inboxIndex = _inboxChats.indexWhere((c) => c.id == updatedChat.id);
+      if (inboxIndex != -1) {
+        _inboxChats[inboxIndex] = updatedChat;
+      }
+
+      // Update in outbox chats list
+      final outboxIndex = _outboxChats.indexWhere(
+        (c) => c.id == updatedChat.id,
+      );
+      if (outboxIndex != -1) {
+        _outboxChats[outboxIndex] = updatedChat;
+      }
+    });
+  }
+
   void _handleTabChange() {
-    // Load data for the selected tab if needed
     if (_tabController.indexIsChanging) {
       final index = _tabController.index;
       if (index == 0 && _allChats.isEmpty) {
@@ -878,7 +1109,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       _outboxCurrentPage = 1;
     });
 
-    // Refresh all tabs based on current tab
     final currentIndex = _tabController.index;
     if (currentIndex == 0) {
       await _loadAllChats(refresh: true);
@@ -904,8 +1134,12 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       );
 
       if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+        // Initialize socket service with token
+        if (token != null) {
+          _socketService.init(token: token);
+        }
+
         debugPrint('✅ TradeChatScreen: User ID found, loading chats...');
-        // Load initial data for all tabs
         await Future.wait([
           _loadAllChats(refresh: true),
           _loadInboxChats(refresh: true),
@@ -1088,7 +1322,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     final currentIndex = _tabController.index;
 
     if (currentIndex == 0) {
-      // Load more all chats
       if (_allChatsCurrentPage < _allChatsTotalPages) {
         setState(() {
           _allChatsCurrentPage++;
@@ -1097,7 +1330,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
         _loadAllChats(refresh: false);
       }
     } else if (currentIndex == 1) {
-      // Load more inbox chats
       if (_inboxCurrentPage < _inboxTotalPages) {
         setState(() {
           _inboxCurrentPage++;
@@ -1106,7 +1338,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
         _loadInboxChats(refresh: false);
       }
     } else if (currentIndex == 2) {
-      // Load more outbox chats
       if (_outboxCurrentPage < _outboxTotalPages) {
         setState(() {
           _outboxCurrentPage++;
@@ -1166,7 +1397,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
                     _selectedProductFilter = product;
                   });
                   Navigator.pop(context);
-                  // Reload inbox chats with new filter
                   _loadInboxChats(refresh: true);
                 },
               );
@@ -1179,7 +1409,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
                   _selectedProductFilter = null;
                 });
                 Navigator.pop(context);
-                // Reload inbox chats without filter
                 _loadInboxChats(refresh: true);
               },
               child: const Text('Clear Filter'),
@@ -1216,27 +1445,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
 
   void _updateChat(TradeChat updatedChat) {
     debugPrint('🔄 TradeChatScreen: Updating chat: ${updatedChat.id}');
-    setState(() {
-      // Update in all chats list
-      final allIndex = _allChats.indexWhere((c) => c.id == updatedChat.id);
-      if (allIndex != -1) {
-        _allChats[allIndex] = updatedChat;
-      }
-
-      // Update in inbox chats list
-      final inboxIndex = _inboxChats.indexWhere((c) => c.id == updatedChat.id);
-      if (inboxIndex != -1) {
-        _inboxChats[inboxIndex] = updatedChat;
-      }
-
-      // Update in outbox chats list
-      final outboxIndex = _outboxChats.indexWhere(
-        (c) => c.id == updatedChat.id,
-      );
-      if (outboxIndex != -1) {
-        _outboxChats[outboxIndex] = updatedChat;
-      }
-    });
+    _updateChatInLists(updatedChat);
   }
 
   String _getLastMessagePreview(TradeChat chat) {
@@ -1247,7 +1456,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     final lastMessage = chat.messages.last;
     final content = lastMessage.messageText.trim();
 
-    // Check for special message types based on content patterns
     if (content.isEmpty) {
       return 'No messages yet';
     } else if (content.toLowerCase().contains('image')) {

@@ -1,4 +1,5 @@
 import 'package:Yempover_app/screens/notification_preferences_screen.dart';
+import 'package:Yempover_app/utils/CustomErrorWidget.dart';
 import 'package:Yempover_app/utils/loading_widget.dart';
 import 'package:Yempover_app/utils/notification_provider.dart';
 import 'package:Yempover_app/utils/notification_tile.dart';
@@ -103,16 +104,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ],
                     ),
                   ),
-                  const PopupMenuItem(
-                    value: 'clear_all',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_sweep, size: 20, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Clear all', style: TextStyle(color: Colors.red)),
-                      ],
-                    ),
-                  ),
+                  // const PopupMenuItem(
+                  //   value: 'clear_all',
+                  //   child: Row(
+                  //     children: [
+                  //       Icon(Icons.delete_sweep, size: 20, color: Colors.red),
+                  //       SizedBox(width: 8),
+                  //       Text('Clear all', style: TextStyle(color: Colors.red)),
+                  //     ],
+                  //   ),
+                  // ),
                   const PopupMenuItem(
                     value: 'preferences',
                     child: Row(

@@ -60,6 +60,7 @@ class MyPost {
   final Count count;
   final String type;
   final int openOffersCount;
+  final bool isClubbable;
 
   MyPost({
     required this.id,
@@ -84,6 +85,7 @@ class MyPost {
     required this.count,
     required this.type,
     required this.openOffersCount,
+    this.isClubbable = true,
   });
 
   factory MyPost.fromJson(Map<String, dynamic> json) {
@@ -120,6 +122,9 @@ class MyPost {
       count: Count.fromJson(json['_count'] ?? {}),
       type: json['type'] ?? 'product',
       openOffersCount: json['openOffersCount'] ?? 0,
+      isClubbable: json['isClubbable'] == null
+          ? (json['canClubItems'] ?? true)
+          : json['isClubbable'],
     );
   }
 

@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:Yempover_app/utils/notification_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
@@ -23,7 +24,8 @@ class ExtendedPost {
   bool isFavorite;
   bool isHidden;
   String wishListCategory;
-  String? favoriteId; // Store favorite ID for removal
+  String? favoriteId;
+  double? distance;
 
   ExtendedPost({
     required this.post,
@@ -31,15 +33,12 @@ class ExtendedPost {
     this.isHidden = false,
     this.wishListCategory = '',
     this.favoriteId,
+    this.distance,
   });
 
-  // Getter for isForBarter
-  bool get isForBarter => post.status == PostStatus.FOR_BARTER;
-
-  // Getter for isForSale
+  bool get isForBarter => post.barterStatus == BarterStatus.OPEN_FOR_BARTER;
   bool get isForSale => post.status == PostStatus.FOR_SALE;
 
-  // Delegate other properties to the original post
   String get title => post.title;
   String get description => post.description;
   dynamic get category => post.category;
@@ -50,8 +49,9 @@ class ExtendedPost {
   dynamic get postedBy => post.postedBy;
   int get viewCount => post.viewCount;
   String get id => post.id;
+  double? get latitude => post.latitude;
+  double? get longitude => post.longitude;
 
-  // Post type based on status
   String get postTypeText {
     switch (post.status) {
       case PostStatus.LOOKING_FOR_SERVICE:
@@ -66,6 +66,14 @@ class ExtendedPost {
         return 'Post';
     }
   }
+
+  String get formattedDistance {
+    if (distance == null) return '';
+    if (distance! < 1) {
+      return '${(distance! * 1000).toStringAsFixed(0)}m away';
+    }
+    return '${distance!.toStringAsFixed(1)}km away';
+  }
 }
 
 class HomeScreen extends StatefulWidget {
@@ -77,34 +85,32 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final ApiService _apiService = ApiService();
-  final MyProfileService _MyProfileService = MyProfileService();
+  final MyProfileService _myProfileService = MyProfileService();
   final PostActionService _postActionService = PostActionService();
   final TextEditingController _searchController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
 
-  // API state variables - using ExtendedPost
+  final ScrollController _scrollController = ScrollController();
+
+  // Data states
   List<ExtendedPost> _posts = [];
   ProfileData? profileData;
   List<ExtendedPost> _filteredPosts = [];
-  bool _isLoading = true;
+
+  // Loading states - separate for different sections
+  bool _isLoadingPosts = true;
+  bool _isLoadingProfile = true;
+  bool _isLoadingMore = false;
   bool _hasMore = true;
   int _currentPage = 1;
-  final int _limit = 10;
-  Map<String, String> _favoriteIds = {}; // Map productId to favoriteId
+  final int _limit = 20;
 
-  // UI state variables from original code
-  bool _showPushNotificationDialog = false;
-  bool _pushNotificationGranted = false;
-  String _selectedLocation = 'Fetching location...';
-  bool _useCurrentLocation = true;
-
-  // Location variables
+  // Location states
   Position? _currentPosition;
-  String _currentAddress = '';
+  String _selectedLocation = 'Fetching location...';
   bool _isLocationLoading = false;
   bool _locationPermissionDenied = false;
 
-  // Filter states from original code
+  // Filter states
   String? _selectedTradeType;
   String? _selectedPostType;
   String? _selectedCategory;
@@ -115,19 +121,87 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    debugPrint("111");
 
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
-      _checkFirstTimeUser();
-      await _fetchMyProfile();
-      await _getCurrentLocation();
-      await _fetchPosts();
-      await _loadUserFavorites();
-      await _loadHiddenPosts();
+    _scrollController.addListener(_onScroll);
 
-      // Load unread notification count
-      _loadUnreadNotificationCount();
+    // Load data in parallel for better performance
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeData();
     });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initializeData() async {
+    // Run all initial data fetching in parallel
+    await Future.wait([
+      _fetchMyProfile(),
+      _getCurrentLocation(),
+      _fetchPosts(),
+      _loadUnreadNotificationCount(),
+    ]);
+  }
+
+  double _calculateDistance(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
+    const double earthRadius = 6371;
+    double dLat = _degreesToRadians(lat2 - lat1);
+    double dLon = _degreesToRadians(lon2 - lon1);
+    double a =
+        sin(dLat / 2) * sin(dLat / 2) +
+        cos(_degreesToRadians(lat1)) *
+            cos(_degreesToRadians(lat2)) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return earthRadius * c;
+  }
+
+  double _degreesToRadians(double degrees) {
+    return degrees * pi / 180;
+  }
+
+  void _updatePostDistances() {
+    if (_currentPosition == null) return;
+
+    for (var post in _posts) {
+      if (post.latitude != null && post.longitude != null) {
+        post.distance = _calculateDistance(
+          _currentPosition!.latitude,
+          _currentPosition!.longitude,
+          post.latitude!,
+          post.longitude!,
+        );
+      }
+    }
+    _sortPostsByDistance();
+  }
+
+  void _sortPostsByDistance() {
+    _posts.sort((a, b) {
+      if (a.distance == null && b.distance == null) return 0;
+      if (a.distance == null) return 1;
+      if (b.distance == null) return -1;
+      return a.distance!.compareTo(b.distance!);
+    });
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      if (!_isLoadingMore && _hasMore && !_isLoadingPosts) {
+        _fetchPosts(loadMore: true);
+      }
+    }
   }
 
   Future<void> _loadUnreadNotificationCount() async {
@@ -142,48 +216,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String? _errorMessage;
-
-  // Load user's favorites
-  Future<void> _loadUserFavorites() async {
-    try {
-      final favorites = await _postActionService.getFavorites();
-      setState(() {
-        _favoriteIds = {};
-        for (var favorite in favorites) {
-          if (favorite.productId.isNotEmpty) {
-            _favoriteIds[favorite.productId] = favorite.id;
-          }
-        }
-
-        // Update posts with favorite status
-        for (var post in _posts) {
-          post.isFavorite = _favoriteIds.containsKey(post.id);
-          post.favoriteId = _favoriteIds[post.id];
-        }
-        _applyFilters();
-      });
-    } catch (e) {
-      debugPrint('🔴 Error loading favorites: $e');
-    }
-  }
-
-  // Load hidden posts
-  Future<void> _loadHiddenPosts() async {
-    try {
-      final hiddenPostIds = await _postActionService.getHiddenPostIds();
-      setState(() {
-        for (var post in _posts) {
-          post.isHidden = hiddenPostIds.contains(post.id);
-        }
-        _applyFilters();
-      });
-    } catch (e) {
-      debugPrint('🔴 Error loading hidden posts: $e');
-    }
-  }
-
-  // Location Methods
   Future<void> _getCurrentLocation() async {
     setState(() {
       _isLocationLoading = true;
@@ -191,7 +223,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         setState(() {
@@ -202,7 +233,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Check and request permission
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -225,7 +255,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Get current position
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
@@ -234,13 +263,11 @@ class _HomeScreenState extends State<HomeScreen> {
         _currentPosition = position;
       });
 
-      // Get address from coordinates
       await _getAddressFromLatLng(position);
     } catch (e) {
       setState(() {
-        _selectedLocation = 'Failed to get location: ${e.toString()}';
+        _selectedLocation = 'Failed to get location';
         _isLocationLoading = false;
-        _locationPermissionDenied = true;
       });
       debugPrint('🔴 Error getting location: $e');
     }
@@ -255,279 +282,72 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
-
         String address =
-            "${place.street}, ${place.locality}, ${place.administrativeArea}, ${place.country} ${place.postalCode}"
-                .replaceAll("null", "")
-                .replaceAll(RegExp(r"\s+"), " ")
-                .replaceAll(RegExp(r",\s*,"), ",")
-                .trim();
+            [
+                  place.street,
+                  place.locality,
+                  place.administrativeArea,
+                  place.country,
+                ]
+                .where((element) => element != null && element.isNotEmpty)
+                .join(', ')
+                .replaceAll(RegExp(r',\s*,'), ',');
 
         setState(() {
-          _currentAddress = address;
           _selectedLocation = address.isNotEmpty ? address : "Current Location";
           _isLocationLoading = false;
-          _useCurrentLocation = true;
         });
-
-        await _fetchPosts();
       }
     } catch (e) {
       setState(() {
-        _selectedLocation =
-            "Current Location (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})";
+        _selectedLocation = "Current Location";
         _isLocationLoading = false;
       });
       debugPrint("🔴 Error getting address: $e");
     }
   }
 
-  Future<void> _updateLocationFromSearch(String newLocation) async {
-    setState(() {
-      _selectedLocation = newLocation;
-      _useCurrentLocation = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Location set to: $newLocation'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-
-    await _fetchPosts();
-  }
-
-  Future<void> _refreshLocation() async {
-    await _getCurrentLocation();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _onWillPop, // Handle back button press
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF7F8FF),
-        body: SafeArea(
-          child: Stack(
-            children: [
-              Column(
-                children: [
-                  _buildHeader(),
-                  _buildLocationRow(),
-                  _buildSearchBar(),
-                  Expanded(
-                    child: _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : RefreshIndicator(
-                            onRefresh: _refreshPosts,
-                            child: _filteredPosts.isEmpty
-                                ? Center(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(
-                                          Icons.search_off,
-                                          size: 64,
-                                          color: Colors.grey,
-                                        ),
-                                        const SizedBox(height: 16),
-                                        const Text(
-                                          'No posts found',
-                                          style: TextStyle(
-                                            color: Colors.grey,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        const Text(
-                                          'Try changing your filters or search terms',
-                                          style: TextStyle(color: Colors.grey),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        ElevatedButton(
-                                          onPressed: _clearAllFilters,
-                                          child: const Text(
-                                            'Clear All Filters',
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                    ),
-                                    itemCount: _filteredPosts.length + 1,
-                                    itemBuilder: (context, index) {
-                                      if (index == 0) {
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 16,
-                                          ),
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              const Text(
-                                                'Near You',
-                                                style: TextStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              if (_selectedTradeType != null ||
-                                                  _selectedPostType != null ||
-                                                  _selectedCategory != null)
-                                                Chip(
-                                                  label: const Text(
-                                                    'Filters Active',
-                                                  ),
-                                                  backgroundColor:
-                                                      Colors.blue[50],
-                                                  deleteIcon: const Icon(
-                                                    Icons.close,
-                                                    size: 16,
-                                                  ),
-                                                  onDeleted: _clearAllFilters,
-                                                ),
-                                            ],
-                                          ),
-                                        );
-                                      }
-                                      return _buildProductCard(
-                                        _filteredPosts[index - 1],
-                                      );
-                                    },
-                                  ),
-                          ),
-                  ),
-                ],
-              ),
-
-              // Push Notification Permission Dialog
-              if (_showPushNotificationDialog) _buildPushNotificationDialog(),
-
-              // Location Loading Indicator
-              if (_isLocationLoading)
-                Container(
-                  color: Colors.black54,
-                  child: const Center(child: CircularProgressIndicator()),
-                ),
-            ],
-          ),
-        ),
-        bottomNavigationBar: _buildBottomNav(),
-      ),
-    );
-  }
-
-  // Handle back button press
-  Future<bool> _onWillPop() async {
-    // Show confirmation dialog
-    return await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Exit App'),
-            content: const Text('Are you sure you want to exit the app?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false), // Don't exit
-                child: const Text('No'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(true), // Exit
-                child: const Text('Yes'),
-              ),
-            ],
-          ),
-        ) ??
-        false; // If dialog is dismissed, return false
-  }
-
   Future<void> _fetchMyProfile() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
     try {
       final isLoggedIn = await TokenService().isLoggedIn();
       if (!isLoggedIn) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'Please login to view your posts';
-        });
-        if (mounted) {
-          SnackbarUtils.showLoginDialog(context);
-        }
+        setState(() => _isLoadingProfile = false);
+        if (mounted) SnackbarUtils.showLoginDialog(context);
         return;
       }
 
-      final response = await _MyProfileService.getMyProfile();
+      final response = await _myProfileService.getMyProfile();
       setState(() {
         profileData = response.data;
         ProfileSessionManager.instance.setProfile(profileData);
+        _isLoadingProfile = false;
       });
-
-      if (!mounted) return;
     } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-      });
-
-      if (_errorMessage!.contains('Session expired') ||
-          _errorMessage!.contains('Unauthorized') ||
-          _errorMessage!.contains('No authentication token')) {
-        if (mounted) {
-          SnackbarUtils.showLoginDialog(context);
-        }
-      } else {
-        SnackbarUtils.showError(context, _errorMessage!);
-      }
+      setState(() => _isLoadingProfile = false);
+      debugPrint('🔴 Error fetching profile: $e');
     }
-  }
-
-  void _checkFirstTimeUser() {
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          _showPushNotificationDialog = true;
-        });
-      }
-    });
   }
 
   Future<void> _fetchPosts({bool loadMore = false}) async {
     try {
-      // Check if user is logged in
       final isLoggedIn = await TokenService().isLoggedIn();
       if (!isLoggedIn) {
         setState(() {
-          _isLoading = false;
+          _isLoadingPosts = false;
         });
-        return; // Don't fetch posts if not logged in
+        return;
       }
 
       if (!loadMore) {
         setState(() {
-          _isLoading = true;
+          _isLoadingPosts = true;
           _currentPage = 1;
           _hasMore = true;
         });
       } else {
-        if (!_hasMore) return;
-        setState(() {
-          _currentPage++;
-        });
+        setState(() => _isLoadingMore = true);
       }
 
-      // Prepare query parameters
       String? status;
       if (_selectedTradeType == 'Barter') {
         status = 'FOR_BARTER';
@@ -535,16 +355,13 @@ class _HomeScreenState extends State<HomeScreen> {
         status = 'FOR_SALE';
       }
 
-      // Add location parameters if we have current position
       double? latitude;
       double? longitude;
-
-      if (_useCurrentLocation && _currentPosition != null) {
+      if (_currentPosition != null) {
         latitude = _currentPosition!.latitude;
         longitude = _currentPosition!.longitude;
       }
 
-      // Fetch posts from API with location
       final response = await _apiService.getPosts(
         page: _currentPage,
         limit: _limit,
@@ -556,112 +373,103 @@ class _HomeScreenState extends State<HomeScreen> {
         radius: _selectedRadius,
       );
 
-      // Convert API posts to ExtendedPost
-      final List<ExtendedPost> extendedPosts = (response.posts).map((post) {
-        return ExtendedPost(
-          post: post,
-          isFavorite: _favoriteIds.containsKey(post.id),
-          favoriteId: _favoriteIds[post.id],
-          isHidden: false,
-          wishListCategory: '',
-        );
+      final List<ExtendedPost> extendedPosts = response.posts.map((post) {
+        double? distance;
+        if (_currentPosition != null &&
+            post.latitude != null &&
+            post.longitude != null) {
+          distance = _calculateDistance(
+            _currentPosition!.latitude,
+            _currentPosition!.longitude,
+            post.latitude!,
+            post.longitude!,
+          );
+        }
+
+        return ExtendedPost(post: post, isFavorite: false, distance: distance);
       }).toList();
+
+      extendedPosts.sort((a, b) {
+        if (a.distance == null && b.distance == null) return 0;
+        if (a.distance == null) return 1;
+        if (b.distance == null) return -1;
+        return a.distance!.compareTo(b.distance!);
+      });
 
       if (loadMore) {
         setState(() {
           _posts.addAll(extendedPosts);
           _applyFilters();
           _hasMore = extendedPosts.length >= _limit;
+          _isLoadingMore = false;
         });
       } else {
         setState(() {
           _posts = extendedPosts;
           _applyFilters();
           _hasMore = extendedPosts.length >= _limit;
-          _isLoading = false;
+          _isLoadingPosts = false;
+          _isLoadingMore = false;
         });
       }
     } catch (e) {
       setState(() {
-        _isLoading = false;
+        _isLoadingPosts = false;
+        _isLoadingMore = false;
       });
-      debugPrint('🔴 HomeScreen: Error fetching posts: $e');
+      debugPrint('🔴 Error fetching posts: $e');
     }
   }
 
   Future<void> _refreshPosts() async {
     await _fetchPosts();
-    await _loadUserFavorites();
-    await _loadHiddenPosts();
-  }
-
-  void _handlePushNotificationPermission(bool granted) {
-    setState(() {
-      _pushNotificationGranted = granted;
-      _showPushNotificationDialog = false;
-    });
-
-    if (granted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Notifications enabled! You will now receive alerts for all activities.',
-          ),
-          duration: Duration(seconds: 3),
-        ),
-      );
-    }
   }
 
   void _applyFilters() {
     setState(() {
-      _filteredPosts = _posts.where((extendedPost) {
-        // Filter by trade type
+      _filteredPosts = _posts.where((post) {
         if (_selectedTradeType != null) {
-          if (_selectedTradeType == 'Barter' && !extendedPost.isForBarter) {
-            return false;
-          }
-          if (_selectedTradeType == 'Sales' && !extendedPost.isForSale) {
-            return false;
-          }
+          if (_selectedTradeType == 'Barter' && !post.isForBarter) return false;
+          if (_selectedTradeType == 'Sales' && !post.isForSale) return false;
         }
 
-        // Filter by post type (map API status to post types)
         if (_selectedPostType != null) {
           if (_selectedPostType == 'Looking for a product/service' &&
-              extendedPost.post.status != PostStatus.LOOKING_FOR_SERVICE) {
+              post.post.status != PostStatus.LOOKING_FOR_SERVICE)
             return false;
-          }
           if (_selectedPostType == 'Barter/selling a product/service' &&
-              !extendedPost.isForBarter &&
-              !extendedPost.isForSale) {
+              !post.isForBarter &&
+              !post.isForSale)
             return false;
-          }
         }
 
-        // Filter by category
         if (_selectedCategory != null &&
-            extendedPost.category.name != _selectedCategory) {
+            post.category.name != _selectedCategory)
           return false;
-        }
 
-        // Filter by search query
         if (_searchQuery.isNotEmpty) {
           final query = _searchQuery.toLowerCase();
-          if (!extendedPost.title.toLowerCase().contains(query) &&
-              !extendedPost.description.toLowerCase().contains(query) &&
-              !extendedPost.category.name.toLowerCase().contains(query)) {
+          if (!post.title.toLowerCase().contains(query) &&
+              !post.description.toLowerCase().contains(query) &&
+              !post.category.name.toLowerCase().contains(query)) {
             return false;
           }
         }
 
-        // Filter out hidden posts
-        if (extendedPost.isHidden) {
+        if (_currentPosition != null &&
+            post.distance != null &&
+            post.distance! > _selectedRadius)
           return false;
-        }
 
         return true;
       }).toList();
+
+      _filteredPosts.sort((a, b) {
+        if (a.distance == null && b.distance == null) return 0;
+        if (a.distance == null) return 1;
+        if (b.distance == null) return -1;
+        return a.distance!.compareTo(b.distance!);
+      });
     });
   }
 
@@ -674,140 +482,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _selectedRadius = 10.0;
       _searchQuery = '';
       _searchController.clear();
-      _filteredPosts = List.from(_posts);
+      _applyFilters();
     });
-  }
-
-  Future<void> _toggleFavorite(ExtendedPost extendedPost) async {
-    try {
-      setState(() {
-        // Optimistic update
-        final index = _posts.indexWhere(
-          (p) => p.post.id == extendedPost.post.id,
-        );
-        if (index != -1) {
-          _posts[index].isFavorite = !_posts[index].isFavorite;
-          _filteredPosts = List.from(_posts);
-        }
-      });
-
-      if (extendedPost.isFavorite) {
-        // Add to favorites
-        final response = await _postActionService.addToFavorites(
-          extendedPost.id,
-        );
-
-        setState(() {
-          final index = _posts.indexWhere(
-            (p) => p.post.id == extendedPost.post.id,
-          );
-          if (index != -1) {
-            _posts[index].favoriteId = response.data.favorite.id;
-            _favoriteIds[extendedPost.id] = response.data.favorite.id;
-          }
-        });
-
-        if (mounted) {
-          SnackbarUtils.showSuccess(context, response.message);
-        }
-      } else {
-        // Remove from favorites
-        if (extendedPost.favoriteId != null) {
-          final response = await _postActionService.removeFromFavorites(
-            extendedPost.favoriteId!,
-          );
-
-          setState(() {
-            final index = _posts.indexWhere(
-              (p) => p.post.id == extendedPost.post.id,
-            );
-            if (index != -1) {
-              _posts[index].favoriteId = null;
-              _favoriteIds.remove(extendedPost.id);
-            }
-          });
-
-          if (mounted) {
-            SnackbarUtils.showSuccess(context, response.message);
-          }
-        }
-      }
-    } catch (e) {
-      // Revert optimistic update on error
-      setState(() {
-        final index = _posts.indexWhere(
-          (p) => p.post.id == extendedPost.post.id,
-        );
-        if (index != -1) {
-          _posts[index].isFavorite = !_posts[index].isFavorite;
-          _filteredPosts = List.from(_posts);
-        }
-      });
-
-      if (mounted) {
-        SnackbarUtils.showError(context, e.toString());
-      }
-    }
-  }
-
-  Future<void> _hidePost(ExtendedPost extendedPost) async {
-    try {
-      final response = await _postActionService.hidePost(extendedPost.id);
-
-      setState(() {
-        final index = _posts.indexWhere(
-          (p) => p.post.id == extendedPost.post.id,
-        );
-        if (index != -1) {
-          _posts[index].isHidden = true;
-          _filteredPosts.removeWhere((p) => p.post.id == extendedPost.post.id);
-        }
-      });
-
-      if (mounted) {
-        SnackbarUtils.showSuccess(context, response.message);
-      }
-    } catch (e) {
-      if (mounted) {
-        SnackbarUtils.showError(context, e.toString());
-      }
-    }
-  }
-
-  Future<void> _reportPost(
-    ExtendedPost extendedPost,
-    String reason, [
-    String? description,
-  ]) async {
-    try {
-      final response = await _postActionService.reportPost(
-        productId: extendedPost.id,
-        reason: reason,
-        description: description,
-      );
-
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Report Submitted'),
-            content: Text(
-              'You have reported "${extendedPost.title}" for: $reason\n\nOur team will review this post within 24 hours.\n\nReport ID: ${response.data.report.id}',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        SnackbarUtils.showError(context, e.toString());
-      }
-    }
   }
 
   void _showLocationOptions() {
@@ -821,243 +497,35 @@ class _HomeScreenState extends State<HomeScreen> {
             ListTile(
               leading: const Icon(Icons.my_location, color: Colors.blue),
               title: const Text('Use My Current Location'),
-              subtitle: const Text(
-                'Browse posts based on your current location',
-              ),
               onTap: () async {
                 Navigator.pop(context);
-                await _refreshLocation();
+                await _getCurrentLocation();
               },
             ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.refresh, color: Colors.green),
               title: const Text('Refresh Location'),
-              subtitle: const Text('Update your current location'),
               onTap: () async {
                 Navigator.pop(context);
-                await _refreshLocation();
+                await _getCurrentLocation();
               },
             ),
-            const Divider(),
-            if (_locationPermissionDenied)
-              Column(
-                children: [
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(Icons.settings, color: Colors.grey),
-                    title: const Text('Open Location Settings'),
-                    subtitle: const Text('Enable location permissions'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      Geolocator.openAppSettings();
-                    },
-                  ),
-                ],
+            if (_locationPermissionDenied) ...[
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.settings, color: Colors.grey),
+                title: const Text('Open Location Settings'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Geolocator.openAppSettings();
+                },
               ),
+            ],
           ],
         ),
       ),
     );
-  }
-
-  void _showReportDialog(ExtendedPost extendedPost) {
-    String selectedReason = 'Spam';
-    TextEditingController reportController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Report Post'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Select reason for reporting this post:'),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              value: selectedReason,
-              items: const [
-                DropdownMenuItem(value: 'Spam', child: Text('Spam')),
-                DropdownMenuItem(
-                  value: 'Inappropriate',
-                  child: Text('Inappropriate Content'),
-                ),
-                DropdownMenuItem(
-                  value: 'Wrong Category',
-                  child: Text('Wrong Category'),
-                ),
-                DropdownMenuItem(value: 'Fake', child: Text('Fake Post')),
-                DropdownMenuItem(
-                  value: 'Duplicate',
-                  child: Text('Duplicate Post'),
-                ),
-                DropdownMenuItem(value: 'Other', child: Text('Other')),
-              ],
-              onChanged: (value) {
-                selectedReason = value ?? 'Spam';
-              },
-              decoration: const InputDecoration(border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: reportController,
-              decoration: const InputDecoration(
-                hintText: 'Additional details (optional)...',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              _reportPost(
-                extendedPost,
-                selectedReason,
-                reportController.text.isNotEmpty ? reportController.text : null,
-              );
-              Navigator.pop(context);
-            },
-            child: const Text('Submit Report'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showPostOptions(ExtendedPost extendedPost) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(
-                extendedPost.isFavorite
-                    ? Icons.favorite
-                    : Icons.favorite_border,
-                color: extendedPost.isFavorite ? Colors.red : Colors.grey,
-              ),
-              title: Text(
-                extendedPost.isFavorite
-                    ? 'Remove from Favorites'
-                    : 'Add to Favorites',
-              ),
-              onTap: () {
-                _toggleFavorite(extendedPost);
-                Navigator.pop(context);
-              },
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.visibility_off, color: Colors.grey),
-              title: const Text('Hide Post'),
-              onTap: () {
-                _hidePost(extendedPost);
-                Navigator.pop(context);
-              },
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.report, color: Colors.orange),
-              title: const Text('Report Post'),
-              onTap: () {
-                Navigator.pop(context);
-                _showReportDialog(extendedPost);
-              },
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey[200],
-                  foregroundColor: Colors.black,
-                ),
-                child: const Text('Cancel'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _performSearch(String query) {
-    setState(() {
-      _searchQuery = query;
-    });
-    if (query.isEmpty) {
-      setState(() {
-        _filteredPosts = List.from(_posts);
-      });
-      return;
-    }
-    _applyFilters();
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inMinutes < 60) {
-      return '${difference.inMinutes} minutes ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours} hours ago';
-    } else {
-      return '${difference.inDays} days ago';
-    }
-  }
-
-  // Navigate to Hamburger Menu
-  void _navigateToHamburgerMenu() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const HamburgerMenuScreen()),
-    );
-  }
-
-  // Navigate to Trade Chat Screen
-  void _navigateToTradeChat() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const TradeChatScreen()),
-    );
-  }
-
-  // Navigate to Trade Booth Screen
-  void _navigateToTradeBooth() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const TradeBoothScreen()),
-    );
-  }
-
-  // Navigate to Notifications Screen
-  void _showNotificationScreen() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => NotificationsScreen(
-          notifications: const [],
-          onNotificationTap: (p1) {},
-        ),
-      ),
-    ).then((_) {
-      // Refresh unread count when returning from notifications screen
-      _loadUnreadNotificationCount();
-    });
   }
 
   void _showFilterDialog() {
@@ -1081,122 +549,211 @@ class _HomeScreenState extends State<HomeScreen> {
             _selectedWishListCategory = wishListCategory;
             _selectedRadius = radius;
           });
+          _fetchPosts();
           _applyFilters();
           Navigator.pop(context);
         },
-        onClear: () {
-          _clearAllFilters();
-          // Navigator.pop(context);
-        },
+        onClear: _clearAllFilters,
       ),
     );
   }
 
-  // Helper methods
-  String _getBarterStatus(ExtendedPost extendedPost) {
-    if (extendedPost.isForBarter) {
-      return 'Open for barter';
-    } else if (extendedPost.isForSale) {
-      return 'For sale';
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${(difference.inDays / 7).floor()}w ago';
     }
-    return 'No Barter';
   }
 
-  // String _getDistance(ExtendedPost extendedPost) {
-  //   // You would implement actual distance calculation here
-  //   return '1.7 Km';
-  // }
+  String _getBarterStatus(ExtendedPost post) {
+    if (post.isForBarter) return 'Open for barter';
+    if (post.isForSale) return 'For sale';
+    return '';
+  }
 
-  String _getReturnType(ExtendedPost extendedPost) {
-    if (extendedPost.isForBarter) {
-      return extendedPost.wishListCategory.isNotEmpty
-          ? extendedPost.wishListCategory
+  String _getReturnType(ExtendedPost post) {
+    if (post.isForBarter) {
+      return post.wishListCategory.isNotEmpty
+          ? post.wishListCategory
           : 'Open for barter';
-    } else if (extendedPost.isForSale) {
-      return extendedPost.formattedPrice;
     }
-    return extendedPost.formattedPrice;
+    return post.formattedPrice;
   }
 
-  Widget _buildPushNotificationDialog() {
-    return Container(
-      color: Colors.black54,
-      child: Center(
-        child: Container(
-          margin: const EdgeInsets.all(20),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.notifications_active,
-                size: 60,
-                color: Colors.blue,
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Enable Push Notifications',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 10),
-                child: Text(
-                  'Receive alerts for all platform activities including messages, trades, and updates.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey, fontSize: 14),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _handlePushNotificationPermission(false),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: const Text('Not Now'),
-                    ),
+  void _navigateToHamburgerMenu() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const HamburgerMenuScreen()),
+    );
+  }
+
+  void _navigateToTradeChat() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const TradeChatScreen()),
+    );
+  }
+
+  void _navigateToTradeBooth() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const TradeBoothScreen()),
+    );
+  }
+
+  void _showNotificationScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NotificationsScreen(
+          notifications: const [],
+          onNotificationTap: (p1) {},
+        ),
+      ),
+    ).then((_) => _loadUnreadNotificationCount());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async {
+        return await showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Exit App'),
+                content: const Text('Are you sure you want to exit?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('No'),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => _handlePushNotificationPermission(true),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: const Text(
-                        'Allow',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('Yes'),
                   ),
                 ],
+              ),
+            ) ??
+            false;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F8FF),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(),
+              _buildLocationRow(),
+              _buildSearchBar(),
+              Expanded(
+                child: _isLoadingPosts
+                    ? _buildShimmerLoading()
+                    : _filteredPosts.isEmpty
+                    ? _buildEmptyState()
+                    : RefreshIndicator(
+                        onRefresh: _refreshPosts,
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: _filteredPosts.length + 1,
+                          itemBuilder: (context, index) {
+                            if (index == _filteredPosts.length) {
+                              return _buildLoadingMoreIndicator();
+                            }
+                            return _buildProductCard(_filteredPosts[index]);
+                          },
+                        ),
+                      ),
               ),
             ],
           ),
         ),
+        bottomNavigationBar: _buildBottomNav(),
       ),
     );
+  }
+
+  Widget _buildShimmerLoading() {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: 3,
+      itemBuilder: (context, index) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          height: 350,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: const Center(child: CircularProgressIndicator()),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
+          const SizedBox(height: 16),
+          Text(
+            'No posts found',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Try adjusting your filters',
+            style: TextStyle(color: Colors.grey.shade500),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _clearAllFilters,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Clear Filters'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingMoreIndicator() {
+    if (!_isLoadingMore && !_hasMore) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Center(
+          child: Text(
+            'No more posts',
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
+        ),
+      );
+    }
+    if (_isLoadingMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   Widget _buildHeader() {
@@ -1213,8 +770,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.blue, width: 2),
               ),
-              child: profileData != null
-                  ? CircleAvatar(
+              child: _isLoadingProfile
+                  ? const Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : CircleAvatar(
                       radius: 20,
                       backgroundImage: profileData?.profileImage != null
                           ? NetworkImage(profileData!.profileImage!)
@@ -1222,26 +786,28 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: profileData?.profileImage == null
                           ? Text(
                               profileData?.firstName?.isNotEmpty == true
-                                  ? profileData!.firstName![0]
+                                  ? profileData!.firstName![0].toUpperCase()
                                   : 'U',
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
+                                color: Colors.blue,
                               ),
                             )
                           : null,
-                    )
-                  : Container(),
+                    ),
             ),
           ),
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "${profileData?.firstName ?? ''} ${profileData?.lastName ?? ''}",
+                  _isLoadingProfile
+                      ? 'Loading...'
+                      : "${profileData?.firstName ?? ''} ${profileData?.lastName ?? ''}"
+                            .trim(),
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
@@ -1254,8 +820,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-
-          // Notification Icon with Badge using Provider
           Consumer<NotificationProvider>(
             builder: (context, provider, child) {
               return Stack(
@@ -1280,7 +844,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       right: 8,
                       top: 8,
                       child: Container(
-                        padding: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.all(2),
                         decoration: const BoxDecoration(
                           color: Colors.red,
                           shape: BoxShape.circle,
@@ -1289,16 +853,17 @@ class _HomeScreenState extends State<HomeScreen> {
                           minWidth: 18,
                           minHeight: 18,
                         ),
-                        child: Text(
-                          provider.unreadCount > 99
-                              ? '99+'
-                              : '${provider.unreadCount}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                        child: Center(
+                          child: Text(
+                            provider.unreadCount > 9
+                                ? '9+'
+                                : '${provider.unreadCount}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          textAlign: TextAlign.center,
                         ),
                       ),
                     ),
@@ -1306,7 +871,6 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
-
           const SizedBox(width: 8),
           GestureDetector(
             onTap: _navigateToHamburgerMenu,
@@ -1347,9 +911,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  _isLocationLoading
-                      ? 'Updating location...'
-                      : _selectedLocation,
+                  _isLocationLoading ? 'Updating...' : _selectedLocation,
                   style: const TextStyle(fontSize: 14, color: Colors.black87),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
@@ -1394,9 +956,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               child: TextField(
                 controller: _searchController,
-                onChanged: _performSearch,
+                onChanged: (value) {
+                  setState(() => _searchQuery = value);
+                  _applyFilters();
+                },
                 decoration: InputDecoration(
-                  hintText: 'Search products, services, categories...',
+                  hintText: 'Search products, services...',
                   hintStyle: const TextStyle(color: Colors.grey),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
@@ -1409,7 +974,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           icon: const Icon(Icons.close, color: Colors.grey),
                           onPressed: () {
                             _searchController.clear();
-                            _performSearch('');
+                            setState(() => _searchQuery = '');
+                            _applyFilters();
                           },
                         )
                       : null,
@@ -1431,7 +997,15 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             child: IconButton(
-              icon: const Icon(Icons.tune, color: Colors.grey),
+              icon: Icon(
+                Icons.tune,
+                color:
+                    _selectedTradeType != null ||
+                        _selectedPostType != null ||
+                        _selectedCategory != null
+                    ? Colors.blue
+                    : Colors.grey,
+              ),
               onPressed: _showFilterDialog,
             ),
           ),
@@ -1440,14 +1014,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildProductCard(ExtendedPost extendedPost) {
+  Widget _buildProductCard(ExtendedPost post) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) =>
-                PostDetailScreen(post: extendedPost.post, userItems: []),
+                PostDetailScreen(post: post.post, userItems: const []),
           ),
         );
       },
@@ -1469,83 +1043,39 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Stack(
               children: [
-                // Image carousel
-                SizedBox(
-                  height: 200,
-                  child: Stack(
-                    children: [
-                      PageView.builder(
-                        itemCount: extendedPost.processedImages.length,
-                        itemBuilder: (context, index) {
-                          return ClipRRect(
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(24),
-                            ),
-                            child: Image.network(
-                              extendedPost.processedImages[index],
-                              height: 200,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                              loadingBuilder:
-                                  (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Container(
-                                      height: 200,
-                                      width: double.infinity,
-                                      color: Colors.grey[200],
-                                      child: const Center(
-                                        child: CircularProgressIndicator(),
-                                      ),
-                                    );
-                                  },
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  height: 200,
-                                  width: double.infinity,
-                                  color: Colors.grey[200],
-                                  child: const Center(
-                                    child: Icon(
-                                      Icons.photo,
-                                      size: 48,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          );
-                        },
-                      ),
-
-                      // Image indicator
-                      if (extendedPost.processedImages.length > 1)
-                        Positioned(
-                          bottom: 10,
-                          right: 10,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '1/${extendedPost.processedImages.length}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                  child: Image.network(
+                    post.processedImages.isNotEmpty
+                        ? post.processedImages.first
+                        : 'https://via.placeholder.com/300',
+                    height: 200,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 200,
+                        color: Colors.grey.shade200,
+                        child: const Center(child: CircularProgressIndicator()),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 200,
+                        color: Colors.grey.shade200,
+                        child: const Icon(
+                          Icons.image_not_supported,
+                          size: 48,
+                          color: Colors.grey,
                         ),
-                    ],
+                      );
+                    },
                   ),
                 ),
-
-                // Post Type Badge
-                if (extendedPost.postTypeText.contains('Looking for'))
+                if (post.postTypeText.contains('Looking for'))
                   Positioned(
                     top: 15,
                     left: 0,
@@ -1560,16 +1090,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           topRight: Radius.circular(12),
                           bottomRight: Radius.circular(12),
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 4,
-                            offset: const Offset(2, 0),
-                          ),
-                        ],
                       ),
                       child: Text(
-                        extendedPost.postTypeText,
+                        'Looking for',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -1578,34 +1101,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-
-                // 3Dot Menu Button
-                Positioned(
-                  top: 15,
-                  right: 15,
-                  child: InkWell(
-                    onTap: () => _showPostOptions(extendedPost),
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(Icons.more_horiz, color: Colors.grey),
-                    ),
-                  ),
-                ),
-
-                // User info overlay - FIXED: Now using dynamic profile image
                 Positioned(
                   bottom: 12,
                   left: 12,
@@ -1618,20 +1113,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     child: Row(
                       children: [
-                        // FIXED: Dynamic user image similar to PostDetailScreen
                         CircleAvatar(
                           radius: 18,
                           backgroundColor: Colors.grey.shade200,
-                          backgroundImage:
-                              extendedPost.postedBy.profileImage != null
-                              ? NetworkImage(
-                                  extendedPost.postedBy.profileImage!,
-                                )
+                          backgroundImage: post.postedBy.profileImage != null
+                              ? NetworkImage(post.postedBy.profileImage!)
                               : null,
-                          child: extendedPost.postedBy.profileImage == null
+                          child: post.postedBy.profileImage == null
                               ? Text(
-                                  extendedPost.postedBy.firstName.isNotEmpty
-                                      ? extendedPost.postedBy.firstName[0]
+                                  post.postedBy.firstName.isNotEmpty
+                                      ? post.postedBy.firstName[0].toUpperCase()
                                       : 'U',
                                   style: const TextStyle(
                                     fontSize: 16,
@@ -1647,36 +1138,44 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                extendedPost.postedBy.fullName,
+                                post.postedBy.fullName,
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
                                 ),
                               ),
-                              Text(
-                                _formatDate(extendedPost.postedDate),
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 11,
-                                ),
+                              Row(
+                                children: [
+                                  Text(
+                                    _formatDate(post.postedDate),
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  if (post.distance != null) ...[
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
+                                      child: Text(
+                                        '•',
+                                        style: TextStyle(color: Colors.white70),
+                                      ),
+                                    ),
+                                    Text(
+                                      post.formattedDistance,
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ],
-                          ),
-                        ),
-                        if (extendedPost.isFavorite)
-                          const Icon(
-                            Icons.favorite,
-                            color: Colors.red,
-                            size: 20,
-                          ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _formatDate(extendedPost.postedDate),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -1685,8 +1184,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-
-            // Post details
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -1705,7 +1202,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          extendedPost.category.name,
+                          post.category.name,
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.blue.shade800,
@@ -1713,78 +1210,56 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE8EAF6),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.sync_alt,
-                              size: 14,
-                              color: Color(0xFF3F51B5),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _getBarterStatus(extendedPost),
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF3F51B5),
-                                fontWeight: FontWeight.w500,
+                      if (_getBarterStatus(post).isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8EAF6),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.sync_alt,
+                                size: 14,
+                                color: const Color(0xFF3F51B5),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 4),
+                              Text(
+                                _getBarterStatus(post),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF3F51B5),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Row(
-                  //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  //   children: [
-                  //     Text(
-                  //       extendedPost.title,
-                  //       style: const TextStyle(
-                  //         fontWeight: FontWeight.bold,
-                  //         fontSize: 16,
-                  //       ),
-                  //     ),
-                  //     if (_useCurrentLocation && _currentPosition != null)
-                  //       // Text(
-                  //       //   _getDistance(extendedPost),
-                  //       //   style: const TextStyle(
-                  //       //     color: Colors.grey,
-                  //       //     fontSize: 12,
-                  //       //   ),
-                  //       // ),
-                  //   ],
-                  // ),
-                  const SizedBox(height: 6),
                   Text(
-                    'In Return: ${_getReturnType(extendedPost)}',
+                    post.title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'In Return: ${_getReturnType(post)}',
                     style: const TextStyle(
                       color: Colors.black87,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  if (extendedPost.wishList != null &&
-                      extendedPost.wishList!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Wish List: ${extendedPost.wishList!.map((w) => w.title).join(', ')}',
-                        style: const TextStyle(
-                          color: Colors.green,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -1796,8 +1271,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildBottomNav() {
     return Container(
-      height: 85,
-      padding: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
@@ -1805,70 +1278,72 @@ class _HomeScreenState extends State<HomeScreen> {
           BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
         ],
       ),
-      child: Stack(
-        alignment: Alignment.center,
-        clipBehavior: Clip.none,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 70,
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              _navItem(Icons.home_filled, 'Marketplace', true),
-              const SizedBox(width: 60),
-              // Chat navigation item with badge
-              Consumer<NotificationProvider>(
-                builder: (context, provider, child) {
-                  // Count unread messages - you'd need to implement this
-                  // For now, we'll use the same unread count or 0
-                  return _navItem(
-                    Icons.chat_bubble_outline,
-                    'Chat',
-                    false,
-                    badge: provider.unreadCount > 0 ? provider.unreadCount : 0,
-                  );
-                },
-              ),
-            ],
-          ),
-          Positioned(
-            top: -20,
-            child: GestureDetector(
-              onTap: _navigateToTradeBooth,
-              child: Column(
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  Container(
-                    height: 55,
-                    width: 55,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2E5BFF),
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.4),
-                          blurRadius: 12,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.swap_horiz,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Trade booth',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  _navItem(Icons.home_filled, 'Marketplace', true),
+                  const SizedBox(width: 40),
+                  Consumer<NotificationProvider>(
+                    builder: (context, provider, child) {
+                      return _navItem(
+                        Icons.chat_bubble_outline,
+                        'Chat',
+                        false,
+                        badge: provider.unreadCount,
+                      );
+                    },
                   ),
                 ],
               ),
-            ),
+              Positioned(
+                top: -1,
+                child: GestureDetector(
+                  onTap: _navigateToTradeBooth,
+                  child: Column(
+                    children: [
+                      Container(
+                        height: 50,
+                        width: 50,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2E5BFF),
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.4),
+                              blurRadius: 10,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.swap_horiz,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Trade',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1880,11 +1355,10 @@ class _HomeScreenState extends State<HomeScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Stack(
-            clipBehavior: Clip.none,
             children: [
               Icon(
                 icon,
-                color: isActive ? Colors.black : Colors.grey.shade400,
+                color: isActive ? Colors.blue : Colors.grey.shade400,
                 size: 28,
               ),
               if (badge > 0)
@@ -1892,40 +1366,41 @@ class _HomeScreenState extends State<HomeScreen> {
                   right: -4,
                   top: -4,
                   child: Container(
-                    padding: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.all(2),
                     decoration: const BoxDecoration(
-                      color: Color(0xFF2E5BFF),
+                      color: Colors.red,
                       shape: BoxShape.circle,
                     ),
-                    child: Text(
-                      badge > 99 ? '99+' : '$badge',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Center(
+                      child: Text(
+                        badge > 9 ? '9+' : '$badge',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             label,
             style: TextStyle(
-              color: isActive ? Colors.black : Colors.grey.shade400,
+              color: isActive ? Colors.blue : Colors.grey.shade400,
               fontSize: 11,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
             ),
           ),
         ],
       ),
     );
   }
-}
-
-extension on ExtendedPost {
-  get wishList => null;
 }
 
 class FilterScreen extends StatefulWidget {
@@ -1949,11 +1424,10 @@ class FilterScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _FilterScreenState createState() => _FilterScreenState();
+  State<FilterScreen> createState() => _FilterScreenState();
 }
 
 class _FilterScreenState extends State<FilterScreen> {
-  bool _isLoading = true;
   late String? _selectedTradeType;
   late String? _selectedPostType;
   late String? _selectedCategory;
@@ -1961,12 +1435,8 @@ class _FilterScreenState extends State<FilterScreen> {
   late double _selectedRadius;
 
   final List<String> _tradeTypes = ['Barter', 'Sales'];
-  final List<String> _postTypes = [
-    'Looking for a product/service',
-    'Barter/selling a product/service',
-  ];
+  final List<String> _postTypes = ['Looking for', 'Barter/Selling'];
   final List<String> _categories = ['Furniture', 'Plumbing', 'Electronics'];
-  final List<String> _wishListCategories = ['', '', '', ''];
 
   @override
   void initState() {
@@ -1976,117 +1446,121 @@ class _FilterScreenState extends State<FilterScreen> {
     _selectedCategory = widget.selectedCategory;
     _selectedWishListCategory = widget.selectedWishListCategory;
     _selectedRadius = widget.selectedRadius;
-    debugPrint("2222filter ");
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      height: MediaQuery.of(context).size.height * 0.8,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Filters',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: ListView(
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            /// Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Trade Type Filter
-                _buildFilterSection(
-                  title: 'Trade Type',
-                  options: _tradeTypes,
-                  selectedValue: _selectedTradeType,
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedTradeType = value;
-                      if (value != 'Barter') {
-                        _selectedWishListCategory = null;
-                      }
-                    });
-                  },
+                const Text(
+                  'Filters',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
-
-                // Post Type Filter
-                _buildFilterSection(
-                  title: 'Post Type',
-                  options: _postTypes,
-                  selectedValue: _selectedPostType,
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedPostType = value;
-                    });
-                  },
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
                 ),
-
-                // Category Filter
-                _buildFilterSection(
-                  title: 'Category',
-                  options: _categories,
-                  selectedValue: _selectedCategory,
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedCategory = value;
-                    });
-                  },
-                ),
-
-                // Wish List Filter (only shown when Barter is selected)
-                if (_selectedTradeType == 'Barter')
-                  _buildFilterSection(
-                    title: 'Wish List Category',
-                    options: _wishListCategories,
-                    selectedValue: _selectedWishListCategory,
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedWishListCategory = value;
-                      });
-                    },
-                  ),
-
-                // Location Radius Filter
-                _buildRadiusFilter(),
               ],
             ),
-          ),
 
-          // Action Buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    widget.onClear();
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Clear All'),
+            const SizedBox(height: 20),
+
+            /// Filter List
+            Expanded(
+              child: ListView(
+                children: [
+                  _buildFilterSection(
+                    title: 'Trade Type',
+                    options: _tradeTypes,
+                    selectedValue: _selectedTradeType,
+                    onChanged: (value) {
+                      setState(() => _selectedTradeType = value);
+                    },
+                  ),
+                  _buildFilterSection(
+                    title: 'Post Type',
+                    options: _postTypes,
+                    selectedValue: _selectedPostType,
+                    onChanged: (value) {
+                      setState(() => _selectedPostType = value);
+                    },
+                  ),
+                  _buildFilterSection(
+                    title: 'Category',
+                    options: _categories,
+                    selectedValue: _selectedCategory,
+                    onChanged: (value) {
+                      setState(() => _selectedCategory = value);
+                    },
+                  ),
+                  _buildRadiusFilter(),
+                ],
+              ),
+            ),
+
+            /// Bottom Buttons (Fixed)
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          widget.onClear();
+                          Navigator.pop(context);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Clear All'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          widget.onApply(
+                            _selectedTradeType,
+                            _selectedPostType,
+                            _selectedCategory,
+                            _selectedWishListCategory,
+                            _selectedRadius,
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Apply'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    widget.onApply(
-                      _selectedTradeType,
-                      _selectedPostType,
-                      _selectedCategory,
-                      _selectedWishListCategory,
-                      _selectedRadius,
-                    );
-                  },
-                  child: const Text('Apply'),
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
+  /// Filter Section
   Widget _buildFilterSection({
     required String title,
     required List<String> options,
@@ -2105,6 +1579,7 @@ class _FilterScreenState extends State<FilterScreen> {
           spacing: 8,
           children: options.map((option) {
             final isSelected = selectedValue == option;
+
             return FilterChip(
               label: Text(option),
               selected: isSelected,
@@ -2121,12 +1596,13 @@ class _FilterScreenState extends State<FilterScreen> {
     );
   }
 
+  /// Radius Filter
   Widget _buildRadiusFilter() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Location Range',
+          'Distance Radius',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 10),
@@ -2136,12 +1612,10 @@ class _FilterScreenState extends State<FilterScreen> {
           min: 1,
           max: 50,
           divisions: 49,
-          onChanged: (value) {
-            setState(() {
-              _selectedRadius = value;
-            });
-          },
           label: '${_selectedRadius.toStringAsFixed(0)} km',
+          onChanged: (value) {
+            setState(() => _selectedRadius = value);
+          },
         ),
         const SizedBox(height: 20),
       ],

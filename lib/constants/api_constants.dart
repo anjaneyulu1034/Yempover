@@ -25,7 +25,8 @@ class ApiConstants {
 
   // Subscription endpoints
   static const String subscriptionPlans = '$baseUrl/subscription-plans';
-  static const String currentSubscription = '$baseUrl/subscription/current';
+  static const String currentSubscription = '$baseUrl/me/subscription';
+  static const String subscribe = '$baseUrl/me/subscribe';
 
   // Trade Chat endpoints
   static const String tradeChats = '$baseUrl/trade-chat/all';
@@ -35,8 +36,6 @@ class ApiConstants {
   static String tradeChatUploadImage(String id) =>
       '$baseUrl/trade-chat/$id/upload-image';
   static String tradeChatOffer(String id) => '$baseUrl/trade-chat/$id/offer';
-  static String tradeChatCounterOffer(String chatId, String offerId) =>
-      '$baseUrl/trade-chat/$chatId/counteroffer?offerId=$offerId';
   static String tradeChatMarkRead(String id) =>
       '$baseUrl/trade-chat/$id/messages/read';
   static String tradeChatComplete(String id) =>
@@ -53,21 +52,17 @@ class ApiConstants {
   static const String tradeChatInbox = '$baseUrl/trade-chat/inbox';
   static const String tradeChatOutbox = '$baseUrl/trade-chat/outbox';
 
-  // Offer actions
-  static String acceptOffer(String offerId) =>
-      '$baseUrl/trade-chat/offer/$offerId/accept';
-  static String acceptOfferWithDetails(String chatId, String offerId) =>
+  // Offer actions - FIXED ENDPOINTS
+  static String acceptOffer(String chatId, String offerId) =>
       '$baseUrl/trade-chat/$chatId/offer/accept?offerId=$offerId';
-  static String rejectOffer(String offerId) =>
-      '$baseUrl/trade-chat/offer/$offerId/reject';
-  static String rejectOfferWithDetails(String chatId, String offerId) =>
+  static String rejectOffer(String chatId, String offerId) =>
       '$baseUrl/trade-chat/$chatId/offer/reject?offerId=$offerId';
-  static String counterOffer(String offerId) =>
-      '$baseUrl/trade-chat/offer/$offerId/counter';
+  static String counterOffer(String chatId, String offerId) =>
+      '$baseUrl/trade-chat/$chatId/counteroffer?offerId=$offerId';
   static String withdrawOffer(String offerId) =>
       '$baseUrl/trade-chat/offer/$offerId/withdraw';
 
-  // ========== NOTIFICATION ENDPOINTS ==========
+  // Notification endpoints
   static const String notifications = '$baseUrl/notifications';
   static const String unreadCount = '$baseUrl/notifications/unread-count';
   static String markAsRead(String id) => '$baseUrl/notifications/$id/read';
@@ -84,12 +79,10 @@ class ApiConstants {
   // Helper methods
   static String favoritesWithPagination(int page, int limit) =>
       '$favorites?page=$page&limit=$limit';
-
   static String favoriteDetail(String id) => '$favorites/$id';
   static String hiddenPostDetail(String id) => '$hiddenPosts/$id';
   static String postDetail(String id) => '$posts/$id';
   static String updatePostStatus(String id) => '$posts/$id/status';
-
   static const String uploadAvatarBase64 = '$baseUrl/me/avatar/base64';
 
   // Headers

@@ -5,23 +5,25 @@
 // import 'package:Yempover_app/services/token_service.dart';
 // import 'package:Yempover_app/constants/api_constants.dart';
 // import 'package:Yempover_app/models/my_post_model.dart';
+// import 'package:Yempover_app/models/api_response.dart'; // Add this import
 
 // class MyPostsService {
 //   static final MyPostsService _instance = MyPostsService._internal();
 //   factory MyPostsService() => _instance;
 //   MyPostsService._internal();
 
-//   final http.Client _client = http.Client();
-
 //   Future<String?> _getToken() async {
 //     final token = await TokenService().getToken();
 //     debugPrint(
-//       '🔑 MyPostsService: Token retrieved: ${token != null ? 'Yes (${token.substring(0, min(20, token.length))}...)' : 'No'}',
+//       '🔑 MyPostsService: Token retrieved: ${token != null ? 'Yes (${token.substring(0, token.length > 20 ? 20 : token.length)}...)' : 'No'}',
 //     );
 //     return token;
 //   }
 
 //   Future<MyPostsResponse> getMyPosts({int page = 1, int limit = 20}) async {
+//     // Create a new client for this request
+//     final client = http.Client();
+
 //     try {
 //       final token = await _getToken();
 //       if (token == null || token.isEmpty) {
@@ -32,7 +34,7 @@
 //       final url = '${ApiConstants.baseUrl}/me/posts?page=$page&limit=$limit';
 //       debugPrint('🌐 MyPostsService: Fetching my posts from: $url');
 
-//       final response = await _client
+//       final response = await client
 //           .get(
 //             Uri.parse(url),
 //             headers: {
@@ -62,10 +64,81 @@
 //     } catch (e) {
 //       debugPrint('🔴 MyPostsService: Error fetching my posts: $e');
 //       rethrow;
+//     } finally {
+//       // Always close the client
+//       client.close();
+//     }
+//   }
+
+//   // ADD THIS NEW METHOD - Update Post (Product or Service)
+//   Future<ApiResponse> updatePost(
+//     String postId,
+//     Map<String, dynamic> data,
+//   ) async {
+//     final client = http.Client();
+
+//     try {
+//       final token = await _getToken();
+//       if (token == null || token.isEmpty) {
+//         throw Exception('No authentication token found. Please login again.');
+//       }
+
+//       // Determine if it's a product or service based on the data
+//       final bool isProduct =
+//           data['type'] == 'product' ||
+//           (data['categoryId'] != null &&
+//               !data.containsKey('serviceSpecificField'));
+
+//       // Use the correct endpoint based on post type
+//       final String endpoint = isProduct
+//           ? '${ApiConstants.products}/$postId'
+//           : '${ApiConstants.services}/$postId';
+
+//       debugPrint('🌐 MyPostsService: Updating post at: $endpoint');
+//       debugPrint('📦 Request data: ${json.encode(data)}');
+
+//       final response = await client
+//           .put(
+//             Uri.parse(endpoint),
+//             headers: {
+//               'Content-Type': 'application/json',
+//               'Accept': 'application/json',
+//               'Authorization': 'Bearer $token',
+//             },
+//             body: json.encode(data),
+//           )
+//           .timeout(const Duration(seconds: 30));
+
+//       debugPrint('📨 Update response status: ${response.statusCode}');
+//       debugPrint('📨 Update response body: ${response.body}');
+
+//       if (response.statusCode == 200 || response.statusCode == 201) {
+//         final Map<String, dynamic> jsonResponse = json.decode(response.body);
+//         return ApiResponse.fromJson(
+//           jsonResponse,
+//           (json) => MyPost.fromJson(json),
+//         );
+//       } else if (response.statusCode == 401) {
+//         await TokenService().clearTokens();
+//         throw Exception('Session expired. Please login again.');
+//       } else if (response.statusCode == 404) {
+//         throw Exception('Post not found');
+//       } else {
+//         throw Exception(
+//           'Failed to update post: ${response.statusCode} - ${response.body}',
+//         );
+//       }
+//     } catch (e) {
+//       debugPrint('🔴 MyPostsService: Error updating post: $e');
+//       rethrow;
+//     } finally {
+//       client.close();
 //     }
 //   }
 
 //   Future<void> deletePost(String postId) async {
+//     final client = http.Client();
+
 //     try {
 //       final token = await _getToken();
 //       if (token == null || token.isEmpty) {
@@ -75,7 +148,7 @@
 //       final url = '${ApiConstants.baseUrl}/posts/$postId';
 //       debugPrint('🌐 MyPostsService: Deleting post: $url');
 
-//       final response = await _client
+//       final response = await client
 //           .delete(
 //             Uri.parse(url),
 //             headers: {
@@ -100,10 +173,14 @@
 //     } catch (e) {
 //       debugPrint('🔴 MyPostsService: Error deleting post: $e');
 //       rethrow;
+//     } finally {
+//       client.close();
 //     }
 //   }
 
 //   Future<void> updatePostStatus(String postId, String status) async {
+//     final client = http.Client();
+
 //     try {
 //       final token = await _getToken();
 //       if (token == null || token.isEmpty) {
@@ -113,7 +190,7 @@
 //       final url = '${ApiConstants.baseUrl}/posts/$postId/status';
 //       debugPrint('🌐 MyPostsService: Updating post status: $url');
 
-//       final response = await _client
+//       final response = await client
 //           .patch(
 //             Uri.parse(url),
 //             headers: {
@@ -139,12 +216,61 @@
 //     } catch (e) {
 //       debugPrint('🔴 MyPostsService: Error updating post status: $e');
 //       rethrow;
+//     } finally {
+//       client.close();
 //     }
 //   }
 
-//   void dispose() {
-//     _client.close();
+//   // Get post by ID
+//   Future<ApiResponse> getPostById(String postId) async {
+//     final client = http.Client();
+
+//     try {
+//       final token = await _getToken();
+//       if (token == null || token.isEmpty) {
+//         throw Exception('No authentication token found. Please login again.');
+//       }
+
+//       final url = ApiConstants.postDetail(postId);
+//       debugPrint('🌐 MyPostsService: Fetching post by ID: $url');
+
+//       final response = await client
+//           .get(
+//             Uri.parse(url),
+//             headers: {
+//               'Content-Type': 'application/json',
+//               'Accept': 'application/json',
+//               'Authorization': 'Bearer $token',
+//             },
+//           )
+//           .timeout(const Duration(seconds: 30));
+
+//       if (response.statusCode == 200) {
+//         final Map<String, dynamic> jsonResponse = json.decode(response.body);
+//         return ApiResponse.fromJson(
+//           jsonResponse,
+//           (json) => MyPost.fromJson(json),
+//         );
+//       } else if (response.statusCode == 401) {
+//         await TokenService().clearTokens();
+//         throw Exception('Session expired. Please login again.');
+//       } else if (response.statusCode == 404) {
+//         throw Exception('Post not found');
+//       } else {
+//         throw Exception('Failed to load post: ${response.statusCode}');
+//       }
+//     } catch (e) {
+//       debugPrint('🔴 MyPostsService: Error fetching post: $e');
+//       rethrow;
+//     } finally {
+//       client.close();
+//     }
 //   }
+
+//   // Remove dispose method since we're not keeping a persistent client
+//   // void dispose() {
+//   //   _client.close();
+//   // }
 // }
 
 // int min(int a, int b) => a < b ? a : b;
@@ -156,14 +282,12 @@ import 'package:http/http.dart' as http;
 import 'package:Yempover_app/services/token_service.dart';
 import 'package:Yempover_app/constants/api_constants.dart';
 import 'package:Yempover_app/models/my_post_model.dart';
+import 'package:Yempover_app/models/api_response.dart';
 
 class MyPostsService {
   static final MyPostsService _instance = MyPostsService._internal();
   factory MyPostsService() => _instance;
   MyPostsService._internal();
-
-  // Don't keep a persistent client - create new one for each request
-  // or use a single client but don't dispose it
 
   Future<String?> _getToken() async {
     final token = await TokenService().getToken();
@@ -174,7 +298,6 @@ class MyPostsService {
   }
 
   Future<MyPostsResponse> getMyPosts({int page = 1, int limit = 20}) async {
-    // Create a new client for this request
     final client = http.Client();
 
     try {
@@ -208,7 +331,6 @@ class MyPostsService {
         debugPrint(
           '🔴 MyPostsService: Unauthorized - Token expired or invalid',
         );
-        // Clear invalid token
         await TokenService().clearTokens();
         throw Exception('Session expired. Please login again.');
       } else {
@@ -218,7 +340,74 @@ class MyPostsService {
       debugPrint('🔴 MyPostsService: Error fetching my posts: $e');
       rethrow;
     } finally {
-      // Always close the client
+      client.close();
+    }
+  }
+
+  // FIXED: Update Post method with correct endpoint based on post type
+  Future<ApiResponse> updatePost(
+    String postId,
+    Map<String, dynamic> data,
+  ) async {
+    final client = http.Client();
+
+    try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token found. Please login again.');
+      }
+
+      // Determine the correct endpoint based on post type
+      // We need to pass the type in the request data
+      final String postType = data['type'] ?? 'product';
+
+      // Use the correct endpoint based on post type
+      final String endpoint;
+      if (postType == 'service') {
+        endpoint = '${ApiConstants.baseUrl}/me/posts/services/$postId';
+      } else {
+        endpoint = '${ApiConstants.baseUrl}/me/posts/products/$postId';
+      }
+
+      debugPrint('🌐 MyPostsService: Updating post at: $endpoint');
+      debugPrint('📦 Request data: ${json.encode(data)}');
+      debugPrint('📦 Post type: $postType');
+
+      final response = await client
+          .put(
+            Uri.parse(endpoint),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: json.encode(data),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint('📨 Update response status: ${response.statusCode}');
+      debugPrint('📨 Update response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final Map<String, dynamic> jsonResponse = json.decode(response.body);
+        return ApiResponse.fromJson(
+          jsonResponse,
+          (json) => MyPost.fromJson(json),
+        );
+      } else if (response.statusCode == 401) {
+        await TokenService().clearTokens();
+        throw Exception('Session expired. Please login again.');
+      } else if (response.statusCode == 404) {
+        throw Exception('Post not found');
+      } else {
+        throw Exception(
+          'Failed to update post: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      debugPrint('🔴 MyPostsService: Error updating post: $e');
+      rethrow;
+    } finally {
       client.close();
     }
   }
@@ -308,10 +497,50 @@ class MyPostsService {
     }
   }
 
-  // Remove dispose method since we're not keeping a persistent client
-  // void dispose() {
-  //   _client.close();
-  // }
+  Future<ApiResponse> getPostById(String postId) async {
+    final client = http.Client();
+
+    try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token found. Please login again.');
+      }
+
+      final url = ApiConstants.postDetail(postId);
+      debugPrint('🌐 MyPostsService: Fetching post by ID: $url');
+
+      final response = await client
+          .get(
+            Uri.parse(url),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> jsonResponse = json.decode(response.body);
+        return ApiResponse.fromJson(
+          jsonResponse,
+          (json) => MyPost.fromJson(json),
+        );
+      } else if (response.statusCode == 401) {
+        await TokenService().clearTokens();
+        throw Exception('Session expired. Please login again.');
+      } else if (response.statusCode == 404) {
+        throw Exception('Post not found');
+      } else {
+        throw Exception('Failed to load post: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('🔴 MyPostsService: Error fetching post: $e');
+      rethrow;
+    } finally {
+      client.close();
+    }
+  }
 }
 
 int min(int a, int b) => a < b ? a : b;

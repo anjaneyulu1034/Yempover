@@ -32,6 +32,7 @@
 //   List<ChatMessage> _messages = [];
 //   bool _isLoading = false;
 //   bool _isSendingImage = false;
+//   bool _isShowingDealCompletionDialog = false;
 
 //   @override
 //   void initState() {
@@ -40,7 +41,6 @@
 //     _messages = List.from(_currentChat.messages);
 //     _markMessagesAsRead();
 //     _scrollToBottom();
-//     _refreshChat(); // Add this line to refresh messages on load
 //   }
 
 //   @override
@@ -65,7 +65,6 @@
 //     final content = _messageController.text.trim();
 //     _messageController.clear();
 
-//     // Optimistically add message
 //     final tempMessage = ChatMessage(
 //       id: DateTime.now().millisecondsSinceEpoch.toString(),
 //       tradeChatId: _currentChat.id,
@@ -74,10 +73,6 @@
 //       messageType: MessageType.TEXT,
 //       isRead: false,
 //       createdAt: DateTime.now(),
-//       sentBy: null,
-//       imageUrl: null,
-//       readAt: null,
-//       offerId: null,
 //     );
 
 //     setState(() {
@@ -89,10 +84,8 @@
 //       final sentMessage = await _chatService.sendMessage(
 //         chatId: _currentChat.id,
 //         messageText: content,
-//         content: '',
 //       );
 
-//       // Replace temp message with actual
 //       setState(() {
 //         final index = _messages.indexWhere((m) => m.id == tempMessage.id);
 //         if (index != -1) {
@@ -100,28 +93,9 @@
 //         }
 //       });
 
-//       // Update last message in chat
-//       _currentChat = TradeChat(
-//         id: _currentChat.id,
-//         initiatorId: _currentChat.initiatorId,
-//         responderId: _currentChat.responderId,
-//         productId: _currentChat.productId,
-//         serviceId: _currentChat.serviceId,
-//         status: _currentChat.status,
-//         lastMessageAt: DateTime.now(),
-//         createdAt: _currentChat.createdAt,
-//         updatedAt: DateTime.now(),
-//         initiator: _currentChat.initiator,
-//         responder: _currentChat.responder,
-//         product: _currentChat.product,
-//         service: _currentChat.service,
-//         messages: _messages,
-//         offers: _currentChat.offers,
-//       );
-
+//       _updateChatLastMessage();
 //       widget.onChatUpdated(_currentChat);
 //     } catch (e) {
-//       // Show error and remove temp message
 //       setState(() {
 //         _messages.removeWhere((m) => m.id == tempMessage.id);
 //       });
@@ -129,7 +103,7 @@
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
-//             content: Text('Failed to send message: $e'),
+//             content: Text('Failed to send message: ${e.toString()}'),
 //             backgroundColor: Colors.red,
 //           ),
 //         );
@@ -137,7 +111,26 @@
 //     }
 //   }
 
-//   // Add this method to ChatDetailScreen
+//   void _updateChatLastMessage() {
+//     _currentChat = TradeChat(
+//       id: _currentChat.id,
+//       initiatorId: _currentChat.initiatorId,
+//       responderId: _currentChat.responderId,
+//       productId: _currentChat.productId,
+//       serviceId: _currentChat.serviceId,
+//       status: _currentChat.status,
+//       lastMessageAt: DateTime.now(),
+//       createdAt: _currentChat.createdAt,
+//       updatedAt: DateTime.now(),
+//       initiator: _currentChat.initiator,
+//       responder: _currentChat.responder,
+//       product: _currentChat.product,
+//       service: _currentChat.service,
+//       messages: _messages,
+//       offers: _currentChat.offers,
+//     );
+//   }
+
 //   Future<void> _refreshChat() async {
 //     try {
 //       final updatedChat = await _chatService.getChatById(_currentChat.id);
@@ -148,9 +141,11 @@
 //       _scrollToBottom();
 //     } catch (e) {
 //       print('Error refreshing chat: $e');
+//       // Don't show error to user as this is a background refresh
 //     }
 //   }
 
+//   // Updated upload image method
 //   Future<void> _pickAndSendImage() async {
 //     try {
 //       final XFile? pickedFile = await _imagePicker.pickImage(
@@ -168,13 +163,13 @@
 
 //       final imageFile = File(pickedFile.path);
 
-//       // Optimistically add a loading message
+//       // Add temporary loading message
 //       final tempMessage = ChatMessage(
 //         id: DateTime.now().millisecondsSinceEpoch.toString(),
 //         tradeChatId: _currentChat.id,
 //         sentById: widget.currentUserId,
 //         messageText: 'Sending image...',
-//         messageType: MessageType.IMAGE,
+//         messageType: MessageType.TEXT,
 //         isRead: false,
 //         createdAt: DateTime.now(),
 //         sentBy: null,
@@ -188,13 +183,13 @@
 //       });
 //       _scrollToBottom();
 
-//       // Upload image
+//       // Upload image - this will send the message with image URL
 //       final sentMessage = await _chatService.uploadImageMessage(
 //         chatId: _currentChat.id,
 //         imageFile: imageFile,
 //       );
 
-//       // Replace temp message with actual
+//       // Replace temp message with actual image message
 //       setState(() {
 //         final index = _messages.indexWhere((m) => m.id == tempMessage.id);
 //         if (index != -1) {
@@ -207,12 +202,14 @@
 //     } catch (e) {
 //       setState(() {
 //         _isSendingImage = false;
+//         // Remove temp message on error
+//         _messages.removeWhere((m) => m.messageText == 'Sending image...');
 //       });
 
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
-//             content: Text('Failed to send image: $e'),
+//             content: Text('Failed to send image: ${e.toString()}'),
 //             backgroundColor: Colors.red,
 //           ),
 //         );
@@ -380,7 +377,6 @@
 //         currency: currency,
 //       );
 
-//       // Add offer as a system message
 //       final systemMessage = ChatMessage(
 //         id: DateTime.now().millisecondsSinceEpoch.toString(),
 //         tradeChatId: _currentChat.id,
@@ -390,9 +386,6 @@
 //         messageType: MessageType.SYSTEM,
 //         isRead: true,
 //         createdAt: DateTime.now(),
-//         sentBy: null,
-//         imageUrl: null,
-//         readAt: null,
 //         offerId: offer.id,
 //       );
 
@@ -412,7 +405,7 @@
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
-//             content: Text('Failed to create offer: $e'),
+//             content: Text('Failed to create offer: ${e.toString()}'),
 //             backgroundColor: Colors.red,
 //           ),
 //         );
@@ -435,7 +428,6 @@
 //         barterItemDescription: description,
 //       );
 
-//       // Add offer as a system message
 //       final systemMessage = ChatMessage(
 //         id: DateTime.now().millisecondsSinceEpoch.toString(),
 //         tradeChatId: _currentChat.id,
@@ -444,9 +436,6 @@
 //         messageType: MessageType.SYSTEM,
 //         isRead: true,
 //         createdAt: DateTime.now(),
-//         sentBy: null,
-//         imageUrl: null,
-//         readAt: null,
 //         offerId: offer.id,
 //       );
 
@@ -466,7 +455,7 @@
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
-//             content: Text('Failed to create offer: $e'),
+//             content: Text('Failed to create offer: ${e.toString()}'),
 //             backgroundColor: Colors.red,
 //           ),
 //         );
@@ -474,13 +463,24 @@
 //     }
 //   }
 
+//   // Updated accept offer method
 //   Future<void> _acceptOffer(TradeOffer offer) async {
 //     setState(() {
 //       _isLoading = true;
 //     });
 
 //     try {
-//       final acceptedOffer = await _chatService.acceptOffer(offer.id);
+//       final acceptedOffer = await _chatService.acceptOfferWithDetails(
+//         chatId: _currentChat.id,
+//         offerId: offer.id,
+//         offerType: offer.offerType.value,
+//         price: offer.price,
+//         currency: offer.currency,
+//         barterItemTitle: offer.barterItemTitle,
+//         barterItemDescription: offer.barterItemDescription,
+//         barterItemImages: offer.barterItemImages,
+//         barterWishCategories: offer.barterWishCategories,
+//       );
 
 //       // Add system message
 //       final systemMessage = ChatMessage(
@@ -506,6 +506,8 @@
 //         _isLoading = false;
 //       });
 
+//       // Refresh chat to get updated status
+//       await _refreshChat();
 //       _scrollToBottom();
 //       widget.onChatUpdated(_currentChat);
 //     } catch (e) {
@@ -516,7 +518,7 @@
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
-//             content: Text('Failed to accept offer: $e'),
+//             content: Text('Failed to accept offer: ${e.toString()}'),
 //             backgroundColor: Colors.red,
 //           ),
 //         );
@@ -524,13 +526,24 @@
 //     }
 //   }
 
+//   // Updated reject offer method
 //   Future<void> _rejectOffer(TradeOffer offer) async {
 //     setState(() {
 //       _isLoading = true;
 //     });
 
 //     try {
-//       final rejectedOffer = await _chatService.rejectOffer(offer.id);
+//       final rejectedOffer = await _chatService.rejectOfferWithDetails(
+//         chatId: _currentChat.id,
+//         offerId: offer.id,
+//         offerType: offer.offerType.value,
+//         price: offer.price,
+//         currency: offer.currency,
+//         barterItemTitle: offer.barterItemTitle,
+//         barterItemDescription: offer.barterItemDescription,
+//         barterItemImages: offer.barterItemImages,
+//         barterWishCategories: offer.barterWishCategories,
+//       );
 
 //       // Add system message
 //       final systemMessage = ChatMessage(
@@ -566,7 +579,7 @@
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
-//             content: Text('Failed to reject offer: $e'),
+//             content: Text('Failed to reject offer: ${e.toString()}'),
 //             backgroundColor: Colors.red,
 //           ),
 //         );
@@ -582,9 +595,8 @@
 //     });
 
 //     try {
-//       final withdrawnOffer = await _chatService.withdrawOffer(offer.id);
+//       await _chatService.withdrawOffer(offer.id);
 
-//       // Add system message
 //       final systemMessage = ChatMessage(
 //         id: DateTime.now().millisecondsSinceEpoch.toString(),
 //         tradeChatId: _currentChat.id,
@@ -593,16 +605,31 @@
 //         messageType: MessageType.SYSTEM,
 //         isRead: true,
 //         createdAt: DateTime.now(),
-//         sentBy: null,
-//         imageUrl: null,
-//         readAt: null,
-//         offerId: withdrawnOffer.id,
+//         offerId: offer.id,
 //       );
 
 //       setState(() {
 //         final index = _currentChat.offers.indexWhere((o) => o.id == offer.id);
 //         if (index != -1) {
-//           _currentChat.offers[index] = withdrawnOffer;
+//           final updatedOffer = TradeOffer(
+//             id: offer.id,
+//             tradeChatId: offer.tradeChatId,
+//             madeById: offer.madeById,
+//             madeBy: offer.madeBy,
+//             offerType: offer.offerType,
+//             offerStatus: OfferStatus.WITHDRAWN,
+//             price: offer.price,
+//             currency: offer.currency,
+//             barterItemTitle: offer.barterItemTitle,
+//             barterItemDescription: offer.barterItemDescription,
+//             barterItemImages: offer.barterItemImages,
+//             barterWishCategories: offer.barterWishCategories,
+//             counterOfferCount: offer.counterOfferCount,
+//             createdAt: offer.createdAt,
+//             acceptedAt: null,
+//             rejectedAt: null,
+//           );
+//           _currentChat.offers[index] = updatedOffer;
 //         }
 //         _messages.add(systemMessage);
 //         _isLoading = false;
@@ -618,7 +645,7 @@
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
-//             content: Text('Failed to withdraw offer: $e'),
+//             content: Text('Failed to withdraw offer: ${e.toString()}'),
 //             backgroundColor: Colors.red,
 //           ),
 //         );
@@ -627,30 +654,50 @@
 //   }
 
 //   Future<void> _completeTrade() async {
+//     if (_isShowingDealCompletionDialog) return;
+
+//     _isShowingDealCompletionDialog = true;
+
+//     final result = await showDialog<Map<String, dynamic>>(
+//       context: context,
+//       builder: (context) => _DealCompletionDialog(
+//         isPriceOffer: _currentChat.latestAcceptedOffer?.isPriceOffer ?? false,
+//       ),
+//     );
+
+//     _isShowingDealCompletionDialog = false;
+
+//     if (result == null) return;
+
 //     setState(() {
 //       _isLoading = true;
 //     });
 
 //     try {
-//       final completedChat = await _chatService.completeTrade(_currentChat.id);
+//       final bool isCompleted = result['isCompleted'] == true;
 
-//       // Add system message
+//       final updatedChat = isCompleted
+//           ? await _chatService.markDealCompleted(
+//               chatId: _currentChat.id,
+//               remarks: result['remarks'] ?? 'accepted',
+//             )
+//           : await _chatService.cancelTrade(_currentChat.id);
+
 //       final systemMessage = ChatMessage(
 //         id: DateTime.now().millisecondsSinceEpoch.toString(),
 //         tradeChatId: _currentChat.id,
 //         sentById: 'system',
-//         messageText: 'Trade completed successfully',
+//         messageText: result['isCompleted'] == true
+//             ? 'Deal completed successfully'
+//             : 'Deal marked as not completed',
 //         messageType: MessageType.SYSTEM,
 //         isRead: true,
 //         createdAt: DateTime.now(),
-//         sentBy: null,
-//         imageUrl: null,
-//         readAt: null,
 //         offerId: null,
 //       );
 
 //       setState(() {
-//         _currentChat = completedChat;
+//         _currentChat = updatedChat;
 //         _messages.add(systemMessage);
 //         _isLoading = false;
 //       });
@@ -665,7 +712,7 @@
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
-//             content: Text('Failed to complete trade: $e'),
+//             content: Text('Failed to complete deal: ${e.toString()}'),
 //             backgroundColor: Colors.red,
 //           ),
 //         );
@@ -702,7 +749,6 @@
 //     try {
 //       final cancelledChat = await _chatService.cancelTrade(_currentChat.id);
 
-//       // Add system message
 //       final systemMessage = ChatMessage(
 //         id: DateTime.now().millisecondsSinceEpoch.toString(),
 //         tradeChatId: _currentChat.id,
@@ -711,9 +757,6 @@
 //         messageType: MessageType.SYSTEM,
 //         isRead: true,
 //         createdAt: DateTime.now(),
-//         sentBy: null,
-//         imageUrl: null,
-//         readAt: null,
 //         offerId: null,
 //       );
 
@@ -733,7 +776,7 @@
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
-//             content: Text('Failed to cancel trade: $e'),
+//             content: Text('Failed to cancel trade: ${e.toString()}'),
 //             backgroundColor: Colors.red,
 //           ),
 //         );
@@ -773,12 +816,124 @@
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
-//             content: Text('Failed to archive chat: $e'),
+//             content: Text('Failed to archive chat: ${e.toString()}'),
 //             backgroundColor: Colors.red,
 //           ),
 //         );
 //       }
 //     }
+//   }
+
+//   Future<void> _blockUser() async {
+//     final otherUser = _getOtherUser();
+
+//     if (_currentChat.hasAcceptedOffer) {
+//       ScaffoldMessenger.of(context).showSnackBar(
+//         const SnackBar(
+//           content: Text(
+//             'Cannot block user with an accepted deal. Complete the deal first.',
+//           ),
+//           backgroundColor: Colors.orange,
+//         ),
+//       );
+//       return;
+//     }
+
+//     final confirm = await showDialog<bool>(
+//       context: context,
+//       builder: (context) => AlertDialog(
+//         title: const Text('Block User'),
+//         content: Text(
+//           'Are you sure you want to block ${otherUser.firstName}?\n\n'
+//           'You will no longer receive messages or offers from them.',
+//         ),
+//         actions: [
+//           TextButton(
+//             onPressed: () => Navigator.pop(context, false),
+//             child: const Text('Cancel'),
+//           ),
+//           ElevatedButton(
+//             onPressed: () => Navigator.pop(context, true),
+//             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+//             child: const Text('Block'),
+//           ),
+//         ],
+//       ),
+//     );
+
+//     if (confirm != true) return;
+
+//     setState(() {
+//       _isLoading = true;
+//     });
+
+//     try {
+//       final success = await _chatService.blockUser(
+//         chatId: _currentChat.id,
+//         userIdToBlock: otherUser.id,
+//       );
+
+//       setState(() {
+//         _isLoading = false;
+//       });
+
+//       if (success && mounted) {
+//         ScaffoldMessenger.of(context).showSnackBar(
+//           SnackBar(
+//             content: Text('${otherUser.firstName} has been blocked.'),
+//             backgroundColor: Colors.green,
+//           ),
+//         );
+//         Navigator.pop(context);
+//       }
+//     } catch (e) {
+//       setState(() {
+//         _isLoading = false;
+//       });
+
+//       if (mounted) {
+//         ScaffoldMessenger.of(context).showSnackBar(
+//           SnackBar(
+//             content: Text('Failed to block user: ${e.toString()}'),
+//             backgroundColor: Colors.red,
+//           ),
+//         );
+//       }
+//     }
+//   }
+
+//   void _reportUser() {
+//     final otherUser = _getOtherUser();
+
+//     showDialog(
+//       context: context,
+//       builder: (context) => AlertDialog(
+//         title: const Text('Report User'),
+//         content: Text(
+//           'Are you sure you want to report ${otherUser.firstName}?\n\n'
+//           'Our team will review this report.',
+//         ),
+//         actions: [
+//           TextButton(
+//             onPressed: () => Navigator.pop(context),
+//             child: const Text('Cancel'),
+//           ),
+//           ElevatedButton(
+//             onPressed: () {
+//               Navigator.pop(context);
+//               ScaffoldMessenger.of(context).showSnackBar(
+//                 const SnackBar(
+//                   content: Text('User reported. Thank you for your feedback.'),
+//                   backgroundColor: Colors.green,
+//                 ),
+//               );
+//             },
+//             style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+//             child: const Text('Report'),
+//           ),
+//         ],
+//       ),
+//     );
 //   }
 
 //   void _scrollToBottom() {
@@ -883,7 +1038,6 @@
 //                   if (isImageMessage && message.imageUrl != null)
 //                     GestureDetector(
 //                       onTap: () {
-//                         // Show full screen image
 //                         showDialog(
 //                           context: context,
 //                           builder: (context) => Dialog(
@@ -955,7 +1109,6 @@
 //   Widget _buildOfferBanner() {
 //     if (_currentChat.offers.isEmpty) return const SizedBox();
 
-//     // Find the latest pending offer
 //     final pendingOffers = _currentChat.offers
 //         .where((offer) => offer.isPending)
 //         .toList();
@@ -1041,7 +1194,6 @@
 //   Widget _buildMyOfferBanner() {
 //     if (_currentChat.offers.isEmpty) return const SizedBox();
 
-//     // Find the latest pending offer made by current user
 //     final myPendingOffers = _currentChat.offers
 //         .where(
 //           (offer) => offer.isPending && offer.madeById == widget.currentUserId,
@@ -1109,6 +1261,54 @@
 //     );
 //   }
 
+//   Widget _buildDealCompletionBanner() {
+//     if (!_currentChat.canCompleteDeal(widget.currentUserId)) {
+//       return const SizedBox();
+//     }
+
+//     return Container(
+//       margin: const EdgeInsets.all(16),
+//       padding: const EdgeInsets.all(16),
+//       decoration: BoxDecoration(
+//         color: Colors.green.shade50,
+//         borderRadius: BorderRadius.circular(12),
+//         border: Border.all(color: Colors.green.shade200),
+//       ),
+//       child: Column(
+//         children: [
+//           const Row(
+//             children: [
+//               Icon(Icons.check_circle, color: Colors.green),
+//               SizedBox(width: 8),
+//               Text(
+//                 'Deal Ready to Complete',
+//                 style: TextStyle(
+//                   fontWeight: FontWeight.bold,
+//                   color: Colors.green,
+//                 ),
+//               ),
+//             ],
+//           ),
+//           const SizedBox(height: 8),
+//           const Text(
+//             'The offer has been accepted. Complete the deal to finalize the transaction.',
+//             textAlign: TextAlign.center,
+//             style: TextStyle(fontSize: 12),
+//           ),
+//           const SizedBox(height: 12),
+//           ElevatedButton(
+//             onPressed: _completeTrade,
+//             style: ElevatedButton.styleFrom(
+//               backgroundColor: Colors.green,
+//               minimumSize: const Size(double.infinity, 40),
+//             ),
+//             child: const Text('Complete Deal'),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
 //   void _showMoreOptions() {
 //     final otherUser = _getOtherUser();
 
@@ -1128,11 +1328,12 @@
 //             ),
 //             const SizedBox(height: 20),
 
-//             if (_currentChat.isActive) ...[
+//             if (_currentChat.isActive &&
+//                 _currentChat.canCompleteDeal(widget.currentUserId)) ...[
 //               ListTile(
 //                 leading: const Icon(Icons.check_circle, color: Colors.green),
-//                 title: const Text('Complete Trade'),
-//                 subtitle: const Text('Mark this trade as completed'),
+//                 title: const Text('Complete Deal'),
+//                 subtitle: const Text('Mark this deal as completed'),
 //                 onTap: () {
 //                   Navigator.pop(context);
 //                   _completeTrade();
@@ -1154,7 +1355,7 @@
 //               const Divider(),
 //             ],
 
-//             if (_currentChat.isActive) ...[
+//             if (_currentChat.isActive && !_currentChat.hasAcceptedOffer) ...[
 //               ListTile(
 //                 leading: const Icon(Icons.cancel, color: Colors.orange),
 //                 title: const Text('Cancel Trade'),
@@ -1200,74 +1401,6 @@
 //     );
 //   }
 
-//   void _blockUser() {
-//     final otherUser = _getOtherUser();
-
-//     showDialog(
-//       context: context,
-//       builder: (context) => AlertDialog(
-//         title: const Text('Block User'),
-//         content: Text(
-//           'Are you sure you want to block ${otherUser.firstName}?\n\n'
-//           'You will no longer receive messages or offers from them.',
-//         ),
-//         actions: [
-//           TextButton(
-//             onPressed: () => Navigator.pop(context),
-//             child: const Text('Cancel'),
-//           ),
-//           ElevatedButton(
-//             onPressed: () {
-//               Navigator.pop(context);
-//               ScaffoldMessenger.of(context).showSnackBar(
-//                 SnackBar(
-//                   content: Text('${otherUser.firstName} has been blocked.'),
-//                 ),
-//               );
-//               Navigator.pop(context); // Close chat screen
-//             },
-//             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-//             child: const Text('Block'),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-
-//   void _reportUser() {
-//     final otherUser = _getOtherUser();
-
-//     showDialog(
-//       context: context,
-//       builder: (context) => AlertDialog(
-//         title: const Text('Report User'),
-//         content: Text(
-//           'Are you sure you want to report ${otherUser.firstName}?\n\n'
-//           'Our team will review this report.',
-//         ),
-//         actions: [
-//           TextButton(
-//             onPressed: () => Navigator.pop(context),
-//             child: const Text('Cancel'),
-//           ),
-//           ElevatedButton(
-//             onPressed: () {
-//               Navigator.pop(context);
-//               ScaffoldMessenger.of(context).showSnackBar(
-//                 const SnackBar(
-//                   content: Text('User reported. Thank you for your feedback.'),
-//                   backgroundColor: Colors.green,
-//                 ),
-//               );
-//             },
-//             style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-//             child: const Text('Report'),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-
 //   @override
 //   Widget build(BuildContext context) {
 //     final otherUser = _getOtherUser();
@@ -1305,178 +1438,226 @@
 //           ),
 //         ],
 //       ),
-//       body: _isLoading
-//           ? const Center(child: LoadingWidget())
-//           : Column(
-//               children: [
-//                 // Product/Service Info Banner
-//                 Container(
-//                   padding: const EdgeInsets.all(12),
-//                   color: Colors.grey.shade50,
-//                   child: Row(
-//                     children: [
-//                       ClipRRect(
-//                         borderRadius: BorderRadius.circular(8),
-//                         child: _currentChat.postImage.isNotEmpty
-//                             ? Image.network(
-//                                 _currentChat.postImage,
-//                                 width: 60,
-//                                 height: 60,
-//                                 fit: BoxFit.cover,
-//                                 errorBuilder: (context, error, stackTrace) {
-//                                   return Container(
-//                                     width: 60,
-//                                     height: 60,
-//                                     color: Colors.grey.shade300,
-//                                     child: const Icon(
-//                                       Icons.image_not_supported,
-//                                     ),
-//                                   );
-//                                 },
-//                               )
-//                             : Container(
-//                                 width: 60,
-//                                 height: 60,
-//                                 color: Colors.grey.shade300,
-//                                 child: const Icon(Icons.image),
-//                               ),
+
+//       body: SafeArea(
+//         child: _isLoading
+//             ? const Center(child: LoadingWidget())
+//             : Column(
+//                 children: [
+//                   Expanded(
+//                     child: ListView(
+//                       controller: _scrollController,
+//                       padding: const EdgeInsets.symmetric(
+//                         horizontal: 8,
+//                         vertical: 8,
 //                       ),
-//                       const SizedBox(width: 12),
-//                       Expanded(
-//                         child: Column(
-//                           crossAxisAlignment: CrossAxisAlignment.start,
-//                           children: [
-//                             Text(
-//                               _currentChat.postTitle,
-//                               style: const TextStyle(
-//                                 fontWeight: FontWeight.bold,
-//                                 fontSize: 14,
-//                               ),
-//                               maxLines: 2,
-//                               overflow: TextOverflow.ellipsis,
-//                             ),
-//                             const SizedBox(height: 4),
-//                             Container(
-//                               padding: const EdgeInsets.symmetric(
-//                                 horizontal: 8,
-//                                 vertical: 2,
-//                               ),
-//                               decoration: BoxDecoration(
-//                                 color: _getOfferTypeColor(
-//                                   _currentChat.offerType,
-//                                 ),
-//                                 borderRadius: BorderRadius.circular(10),
-//                               ),
-//                               child: Text(
-//                                 _currentChat.offerType,
-//                                 style: const TextStyle(
-//                                   color: Colors.white,
-//                                   fontSize: 10,
-//                                   fontWeight: FontWeight.bold,
-//                                 ),
-//                               ),
-//                             ),
-//                           ],
-//                         ),
-//                       ),
-//                     ],
+//                       children: [
+//                         _buildOfferBanner(),
+//                         _buildMyOfferBanner(),
+//                         _buildDealCompletionBanner(),
+//                         ..._messages.map((msg) => _buildMessageBubble(msg)),
+//                       ],
+//                     ),
 //                   ),
-//                 ),
 
-//                 // Offer Banners
-//                 _buildOfferBanner(),
-//                 _buildMyOfferBanner(),
-
-//                 // Messages
-//                 Expanded(
-//                   child: ListView.builder(
-//                     controller: _scrollController,
-//                     padding: const EdgeInsets.all(8),
-//                     itemCount: _messages.length,
-//                     itemBuilder: (context, index) {
-//                       return _buildMessageBubble(_messages[index]);
-//                     },
-//                   ),
-//                 ),
-
-//                 // Message Input
-//                 if (_currentChat.isActive) _buildMessageInput(),
-//               ],
-//             ),
+//                   if (_currentChat.isActive) _buildMessageInput(),
+//                 ],
+//               ),
+//       ),
 //     );
 //   }
 
-//   Color _getOfferTypeColor(String offerType) {
-//     switch (offerType) {
-//       case 'Product':
-//         return Colors.orange;
-//       case 'Service':
-//         return Colors.blue;
-//       default:
-//         return Colors.grey;
-//     }
-//   }
-
 //   Widget _buildMessageInput() {
-//     return Container(
-//       padding: const EdgeInsets.all(8),
-//       decoration: BoxDecoration(
-//         color: Colors.white,
-//         border: Border(top: BorderSide(color: Colors.grey.shade200)),
-//       ),
-//       child: Row(
-//         children: [
-//           // Attach Image Button
-//           IconButton(
-//             icon: const Icon(Icons.image, color: Colors.blue),
-//             onPressed: _isSendingImage ? null : _pickAndSendImage,
-//           ),
-
-//           // Make Offer Button
-//           IconButton(
-//             icon: const Icon(Icons.request_page, color: Colors.orange),
-//             onPressed: _showMakeOfferDialog,
-//           ),
-
-//           // Text Field
-//           Expanded(
-//             child: TextField(
-//               controller: _messageController,
-//               decoration: InputDecoration(
-//                 hintText: 'Type a message...',
-//                 border: OutlineInputBorder(
-//                   borderRadius: BorderRadius.circular(25),
-//                   borderSide: BorderSide.none,
-//                 ),
-//                 filled: true,
-//                 fillColor: Colors.grey.shade100,
-//                 contentPadding: const EdgeInsets.symmetric(
-//                   horizontal: 16,
-//                   vertical: 12,
-//                 ),
-//               ),
-//               onSubmitted: (_) => _sendMessage(),
+//     return SafeArea(
+//       top: false,
+//       child: Container(
+//         padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+//         decoration: BoxDecoration(
+//           color: Colors.white,
+//           border: Border(top: BorderSide(color: Colors.grey.shade200)),
+//         ),
+//         child: Row(
+//           children: [
+//             IconButton(
+//               icon: const Icon(Icons.image, color: Colors.blue),
+//               onPressed: _isSendingImage ? null : _pickAndSendImage,
 //             ),
-//           ),
-
-//           // Send Button
-//           IconButton(
-//             icon: _isSendingImage
-//                 ? const SizedBox(
-//                     width: 20,
-//                     height: 20,
-//                     child: CircularProgressIndicator(strokeWidth: 2),
-//                   )
-//                 : const Icon(Icons.send, color: Colors.blue),
-//             onPressed: _isSendingImage ? null : _sendMessage,
-//           ),
-//         ],
+//             IconButton(
+//               icon: const Icon(Icons.request_page, color: Colors.orange),
+//               onPressed: _showMakeOfferDialog,
+//             ),
+//             Expanded(
+//               child: TextField(
+//                 controller: _messageController,
+//                 decoration: InputDecoration(
+//                   hintText: 'Type a message...',
+//                   border: OutlineInputBorder(
+//                     borderRadius: BorderRadius.circular(25),
+//                     borderSide: BorderSide.none,
+//                   ),
+//                   filled: true,
+//                   fillColor: Colors.grey.shade100,
+//                   contentPadding: const EdgeInsets.symmetric(
+//                     horizontal: 16,
+//                     vertical: 12,
+//                   ),
+//                 ),
+//                 onSubmitted: (_) => _sendMessage(),
+//               ),
+//             ),
+//             IconButton(
+//               icon: _isSendingImage
+//                   ? const SizedBox(
+//                       width: 20,
+//                       height: 20,
+//                       child: CircularProgressIndicator(strokeWidth: 2),
+//                     )
+//                   : const Icon(Icons.send, color: Colors.blue),
+//               onPressed: _isSendingImage ? null : _sendMessage,
+//             ),
+//           ],
+//         ),
 //       ),
 //     );
 //   }
 // }
 
+// class _DealCompletionDialog extends StatefulWidget {
+//   final bool isPriceOffer;
+
+//   const _DealCompletionDialog({required this.isPriceOffer});
+
+//   @override
+//   State<_DealCompletionDialog> createState() => __DealCompletionDialogState();
+// }
+
+// class __DealCompletionDialogState extends State<_DealCompletionDialog> {
+//   bool _isDealCompleted = true;
+//   final TextEditingController _remarksController = TextEditingController();
+//   final TextEditingController _priceController = TextEditingController();
+
+//   @override
+//   Widget build(BuildContext context) {
+//     return AlertDialog(
+//       title: const Text('Complete Deal'),
+//       content: SingleChildScrollView(
+//         child: Column(
+//           mainAxisSize: MainAxisSize.min,
+//           crossAxisAlignment: CrossAxisAlignment.start,
+//           children: [
+//             Container(
+//               padding: const EdgeInsets.all(12),
+//               decoration: BoxDecoration(
+//                 color: Colors.blue.shade50,
+//                 borderRadius: BorderRadius.circular(8),
+//                 border: Border.all(color: Colors.blue.shade200),
+//               ),
+//               child: const Text(
+//                 'Deal Completed: The trade has been completed. Completing a Deal will close further communication, and the chat becomes inactive. The item will be marked as sold, and the post will be deleted.\n\n'
+//                 'Deal Not Completed: It closes Further Communication with the user and the chat becomes inactive. Since the item is not sold, it will be available on the Marketplace.',
+//                 style: TextStyle(fontSize: 12),
+//               ),
+//             ),
+//             const SizedBox(height: 16),
+//             Row(
+//               children: [
+//                 Expanded(
+//                   child: RadioListTile<bool>(
+//                     title: const Text('Deal Completed'),
+//                     value: true,
+//                     groupValue: _isDealCompleted,
+//                     onChanged: (value) {
+//                       setState(() {
+//                         _isDealCompleted = value ?? true;
+//                       });
+//                     },
+//                   ),
+//                 ),
+//                 Expanded(
+//                   child: RadioListTile<bool>(
+//                     title: const Text('Deal Not Completed'),
+//                     value: false,
+//                     groupValue: _isDealCompleted,
+//                     onChanged: (value) {
+//                       setState(() {
+//                         _isDealCompleted = value ?? false;
+//                       });
+//                     },
+//                   ),
+//                 ),
+//               ],
+//             ),
+//             const SizedBox(height: 16),
+//             TextField(
+//               controller: _remarksController,
+//               maxLines: 3,
+//               decoration: const InputDecoration(
+//                 labelText: 'Remarks',
+//                 hintText: 'Enter any remarks about the deal',
+//                 border: OutlineInputBorder(),
+//               ),
+//             ),
+//             if (_isDealCompleted && widget.isPriceOffer) ...[
+//               const SizedBox(height: 16),
+//               TextField(
+//                 controller: _priceController,
+//                 keyboardType: TextInputType.number,
+//                 decoration: const InputDecoration(
+//                   labelText: 'Selling Price (Required)',
+//                   prefixText: '\$ ',
+//                   border: OutlineInputBorder(),
+//                 ),
+//               ),
+//             ],
+//           ],
+//         ),
+//       ),
+//       actions: [
+//         TextButton(
+//           onPressed: () => Navigator.pop(context),
+//           child: const Text('Cancel'),
+//         ),
+//         ElevatedButton(
+//           onPressed: () {
+//             if (_isDealCompleted &&
+//                 widget.isPriceOffer &&
+//                 _priceController.text.isEmpty) {
+//               ScaffoldMessenger.of(context).showSnackBar(
+//                 const SnackBar(
+//                   content: Text('Please enter the selling price'),
+//                   backgroundColor: Colors.orange,
+//                 ),
+//               );
+//               return;
+//             }
+
+//             Navigator.pop(context, {
+//               'isCompleted': _isDealCompleted,
+//               'remarks': _remarksController.text,
+//               'price': _priceController.text,
+//             });
+//           },
+//           style: ElevatedButton.styleFrom(
+//             backgroundColor: _isDealCompleted ? Colors.green : Colors.orange,
+//           ),
+//           child: Text(
+//             _isDealCompleted ? 'Complete Deal' : 'Mark Not Completed',
+//           ),
+//         ),
+//       ],
+//     );
+//   }
+// }
+
+
+
+
+
+
+// lib/screens/tradechatscreen/ChatDetailScreen.dart
+import 'dart:async';
 import 'dart:io';
+import 'package:Yempover_app/services/socket_io/socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -1500,17 +1681,21 @@ class ChatDetailScreen extends StatefulWidget {
   State<ChatDetailScreen> createState() => _ChatDetailScreenState();
 }
 
-class _ChatDetailScreenState extends State<ChatDetailScreen> {
+class _ChatDetailScreenState extends State<ChatDetailScreen> with WidgetsBindingObserver {
   final TradeChatService _chatService = TradeChatService();
+  final SocketService _socketService = SocketService();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
+  final FocusNode _focusNode = FocusNode();
 
   late TradeChat _currentChat;
   List<ChatMessage> _messages = [];
   bool _isLoading = false;
   bool _isSendingImage = false;
   bool _isShowingDealCompletionDialog = false;
+  bool _isTyping = false;
+  Timer? _typingTimer;
 
   @override
   void initState() {
@@ -1519,22 +1704,577 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _messages = List.from(_currentChat.messages);
     _markMessagesAsRead();
     _scrollToBottom();
-    _refreshChat();
+    _initializeSocketListeners();
+    _joinChatRoom();
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _focusNode.dispose();
+    _typingTimer?.cancel();
+    _leaveChatRoom();
+    _socketService.off('new_message');
+    _socketService.off('offer_accepted');
+    _socketService.off('offer_rejected');
+    _socketService.off('offer_created');
+    _socketService.off('offer_withdrawn');
+    _socketService.off('chat_updated');
+    _socketService.off('deal_completed');
+    _socketService.off('deal_cancelled');
+    _socketService.off('messages_read');
+    _socketService.off('typing');
+    WidgetsBinding.instance.removeObserver(this);
     _chatService.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _sendTypingStatus(false);
+    }
+  }
+
+  void _initializeSocketListeners() {
+    // Listen for new messages
+    _socketService.on('new_message', _handleNewMessage);
+    
+    // Listen for offer events
+    _socketService.on('offer_accepted', _handleOfferAccepted);
+    _socketService.on('offer_rejected', _handleOfferRejected);
+    _socketService.on('offer_created', _handleOfferCreated);
+    _socketService.on('offer_withdrawn', _handleOfferWithdrawn);
+    
+    // Listen for chat updates
+    _socketService.on('chat_updated', _handleChatUpdated);
+    
+    // Listen for deal events
+    _socketService.on('deal_completed', _handleDealCompleted);
+    _socketService.on('deal_cancelled', _handleDealCancelled);
+    
+    // Listen for read receipts
+    _socketService.on('messages_read', _handleMessagesRead);
+    
+    // Listen for typing indicators
+    _socketService.on('typing', _handleTypingIndicator);
+  }
+
+  void _joinChatRoom() {
+    _socketService.joinChat(_currentChat.id);
+  }
+
+  void _leaveChatRoom() {
+    _socketService.leaveChat(_currentChat.id);
+  }
+
+  void _handleNewMessage(dynamic data) {
+    if (!mounted) return;
+    
+    try {
+      final messageData = data['message'] ?? data;
+      final chatId = data['chatId'] ?? _currentChat.id;
+      
+      if (chatId != _currentChat.id) return;
+      
+      final newMessage = ChatMessage.fromJson(messageData);
+      
+      // Don't add if it's our own message (already added optimistically)
+      if (newMessage.sentById == widget.currentUserId) return;
+      
+      setState(() {
+        _messages.add(newMessage);
+        _currentChat = TradeChat(
+          id: _currentChat.id,
+          initiatorId: _currentChat.initiatorId,
+          responderId: _currentChat.responderId,
+          productId: _currentChat.productId,
+          serviceId: _currentChat.serviceId,
+          status: _currentChat.status,
+          lastMessageAt: DateTime.now(),
+          createdAt: _currentChat.createdAt,
+          updatedAt: DateTime.now(),
+          initiator: _currentChat.initiator,
+          responder: _currentChat.responder,
+          product: _currentChat.product,
+          service: _currentChat.service,
+          messages: _messages,
+          offers: _currentChat.offers,
+        );
+      });
+      
+      _scrollToBottom();
+      _markMessagesAsRead();
+      widget.onChatUpdated(_currentChat);
+    } catch (e) {
+      print('Error handling new message: $e');
+    }
+  }
+
+  void _handleOfferAccepted(dynamic data) {
+    if (!mounted) return;
+    
+    try {
+      final chatId = data['chatId'];
+      final offerId = data['offerId'];
+      final offerData = data['offer'];
+      
+      if (chatId != _currentChat.id) return;
+      
+      setState(() {
+        // Update the offer in the list
+        final index = _currentChat.offers.indexWhere((o) => o.id == offerId);
+        if (index != -1) {
+          final updatedOffer = offerData != null 
+              ? TradeOffer.fromJson(offerData)
+              : TradeOffer(
+                  id: _currentChat.offers[index].id,
+                  tradeChatId: _currentChat.offers[index].tradeChatId,
+                  madeById: _currentChat.offers[index].madeById,
+                  madeBy: _currentChat.offers[index].madeBy,
+                  offerType: _currentChat.offers[index].offerType,
+                  offerStatus: OfferStatus.ACCEPTED,
+                  price: _currentChat.offers[index].price,
+                  currency: _currentChat.offers[index].currency,
+                  barterItemTitle: _currentChat.offers[index].barterItemTitle,
+                  barterItemDescription: _currentChat.offers[index].barterItemDescription,
+                  barterItemImages: _currentChat.offers[index].barterItemImages,
+                  barterWishCategories: _currentChat.offers[index].barterWishCategories,
+                  counterOfferCount: _currentChat.offers[index].counterOfferCount,
+                  createdAt: _currentChat.offers[index].createdAt,
+                  acceptedAt: DateTime.now(),
+                  rejectedAt: _currentChat.offers[index].rejectedAt,
+                );
+          _currentChat.offers[index] = updatedOffer;
+        }
+        
+        // Add system message
+        final systemMessage = ChatMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          tradeChatId: _currentChat.id,
+          sentById: 'system',
+          messageText: 'Offer accepted',
+          messageType: MessageType.SYSTEM,
+          isRead: true,
+          createdAt: DateTime.now(),
+          offerId: offerId,
+        );
+        
+        _messages.add(systemMessage);
+        _currentChat = TradeChat(
+          id: _currentChat.id,
+          initiatorId: _currentChat.initiatorId,
+          responderId: _currentChat.responderId,
+          productId: _currentChat.productId,
+          serviceId: _currentChat.serviceId,
+          status: ChatStatus.ACCEPTED,
+          lastMessageAt: _currentChat.lastMessageAt,
+          createdAt: _currentChat.createdAt,
+          updatedAt: DateTime.now(),
+          initiator: _currentChat.initiator,
+          responder: _currentChat.responder,
+          product: _currentChat.product,
+          service: _currentChat.service,
+          messages: _messages,
+          offers: _currentChat.offers,
+        );
+      });
+      
+      _scrollToBottom();
+      widget.onChatUpdated(_currentChat);
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Offer accepted successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error handling offer accepted: $e');
+    }
+  }
+
+  void _handleOfferRejected(dynamic data) {
+    if (!mounted) return;
+    
+    try {
+      final chatId = data['chatId'];
+      final offerId = data['offerId'];
+      final offerData = data['offer'];
+      
+      if (chatId != _currentChat.id) return;
+      
+      setState(() {
+        // Update the offer in the list
+        final index = _currentChat.offers.indexWhere((o) => o.id == offerId);
+        if (index != -1) {
+          final updatedOffer = offerData != null 
+              ? TradeOffer.fromJson(offerData)
+              : TradeOffer(
+                  id: _currentChat.offers[index].id,
+                  tradeChatId: _currentChat.offers[index].tradeChatId,
+                  madeById: _currentChat.offers[index].madeById,
+                  madeBy: _currentChat.offers[index].madeBy,
+                  offerType: _currentChat.offers[index].offerType,
+                  offerStatus: OfferStatus.REJECTED,
+                  price: _currentChat.offers[index].price,
+                  currency: _currentChat.offers[index].currency,
+                  barterItemTitle: _currentChat.offers[index].barterItemTitle,
+                  barterItemDescription: _currentChat.offers[index].barterItemDescription,
+                  barterItemImages: _currentChat.offers[index].barterItemImages,
+                  barterWishCategories: _currentChat.offers[index].barterWishCategories,
+                  counterOfferCount: _currentChat.offers[index].counterOfferCount,
+                  createdAt: _currentChat.offers[index].createdAt,
+                  acceptedAt: _currentChat.offers[index].acceptedAt,
+                  rejectedAt: DateTime.now(),
+                );
+          _currentChat.offers[index] = updatedOffer;
+        }
+        
+        // Add system message
+        final systemMessage = ChatMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          tradeChatId: _currentChat.id,
+          sentById: 'system',
+          messageText: 'Offer rejected',
+          messageType: MessageType.SYSTEM,
+          isRead: true,
+          createdAt: DateTime.now(),
+          offerId: offerId,
+        );
+        
+        _messages.add(systemMessage);
+      });
+      
+      _scrollToBottom();
+      widget.onChatUpdated(_currentChat);
+    } catch (e) {
+      print('Error handling offer rejected: $e');
+    }
+  }
+
+  void _handleOfferCreated(dynamic data) {
+    if (!mounted) return;
+    
+    try {
+      final chatId = data['chatId'];
+      final offer = data['offer'];
+      
+      if (chatId != _currentChat.id) return;
+      
+      final newOffer = TradeOffer.fromJson(offer);
+      
+      setState(() {
+        _currentChat.offers.add(newOffer);
+        
+        final systemMessage = ChatMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          tradeChatId: _currentChat.id,
+          sentById: 'system',
+          messageText: newOffer.isPriceOffer
+              ? 'Price offer created: ${newOffer.currency} ${newOffer.price!.toStringAsFixed(2)}'
+              : 'Barter offer created: ${newOffer.barterItemTitle}',
+          messageType: MessageType.SYSTEM,
+          isRead: true,
+          createdAt: DateTime.now(),
+          offerId: newOffer.id,
+        );
+        
+        _messages.add(systemMessage);
+      });
+      
+      _scrollToBottom();
+      widget.onChatUpdated(_currentChat);
+    } catch (e) {
+      print('Error handling offer created: $e');
+    }
+  }
+
+  void _handleOfferWithdrawn(dynamic data) {
+    if (!mounted) return;
+    
+    try {
+      final chatId = data['chatId'];
+      final offerId = data['offerId'];
+      
+      if (chatId != _currentChat.id) return;
+      
+      setState(() {
+        final index = _currentChat.offers.indexWhere((o) => o.id == offerId);
+        if (index != -1) {
+          final offer = _currentChat.offers[index];
+          _currentChat.offers[index] = TradeOffer(
+            id: offer.id,
+            tradeChatId: offer.tradeChatId,
+            madeById: offer.madeById,
+            madeBy: offer.madeBy,
+            offerType: offer.offerType,
+            offerStatus: OfferStatus.WITHDRAWN,
+            price: offer.price,
+            currency: offer.currency,
+            barterItemTitle: offer.barterItemTitle,
+            barterItemDescription: offer.barterItemDescription,
+            barterItemImages: offer.barterItemImages,
+            barterWishCategories: offer.barterWishCategories,
+            counterOfferCount: offer.counterOfferCount,
+            createdAt: offer.createdAt,
+            acceptedAt: offer.acceptedAt,
+            rejectedAt: offer.rejectedAt,
+          );
+        }
+        
+        final systemMessage = ChatMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          tradeChatId: _currentChat.id,
+          sentById: 'system',
+          messageText: 'Offer withdrawn',
+          messageType: MessageType.SYSTEM,
+          isRead: true,
+          createdAt: DateTime.now(),
+          offerId: offerId,
+        );
+        
+        _messages.add(systemMessage);
+      });
+      
+      _scrollToBottom();
+      widget.onChatUpdated(_currentChat);
+    } catch (e) {
+      print('Error handling offer withdrawn: $e');
+    }
+  }
+
+  void _handleChatUpdated(dynamic data) {
+    if (!mounted) return;
+    
+    try {
+      final chatId = data['chatId'];
+      final chatData = data['chat'];
+      
+      if (chatId != _currentChat.id) return;
+      
+      final updatedChat = TradeChat.fromJson(chatData);
+      
+      setState(() {
+        _currentChat = updatedChat;
+        _messages = List.from(updatedChat.messages);
+      });
+      
+      _scrollToBottom();
+      widget.onChatUpdated(_currentChat);
+    } catch (e) {
+      print('Error handling chat updated: $e');
+    }
+  }
+
+  void _handleDealCompleted(dynamic data) {
+    if (!mounted) return;
+    
+    try {
+      final chatId = data['chatId'];
+      
+      if (chatId != _currentChat.id) return;
+      
+      setState(() {
+        _currentChat = TradeChat(
+          id: _currentChat.id,
+          initiatorId: _currentChat.initiatorId,
+          responderId: _currentChat.responderId,
+          productId: _currentChat.productId,
+          serviceId: _currentChat.serviceId,
+          status: ChatStatus.COMPLETED,
+          lastMessageAt: _currentChat.lastMessageAt,
+          createdAt: _currentChat.createdAt,
+          updatedAt: DateTime.now(),
+          initiator: _currentChat.initiator,
+          responder: _currentChat.responder,
+          product: _currentChat.product,
+          service: _currentChat.service,
+          messages: _messages,
+          offers: _currentChat.offers,
+        );
+        
+        final systemMessage = ChatMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          tradeChatId: _currentChat.id,
+          sentById: 'system',
+          messageText: 'Deal completed successfully',
+          messageType: MessageType.SYSTEM,
+          isRead: true,
+          createdAt: DateTime.now(),
+        );
+        
+        _messages.add(systemMessage);
+      });
+      
+      _scrollToBottom();
+      widget.onChatUpdated(_currentChat);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Deal completed successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error handling deal completed: $e');
+    }
+  }
+
+  void _handleDealCancelled(dynamic data) {
+    if (!mounted) return;
+    
+    try {
+      final chatId = data['chatId'];
+      
+      if (chatId != _currentChat.id) return;
+      
+      setState(() {
+        _currentChat = TradeChat(
+          id: _currentChat.id,
+          initiatorId: _currentChat.initiatorId,
+          responderId: _currentChat.responderId,
+          productId: _currentChat.productId,
+          serviceId: _currentChat.serviceId,
+          status: ChatStatus.CANCELLED,
+          lastMessageAt: _currentChat.lastMessageAt,
+          createdAt: _currentChat.createdAt,
+          updatedAt: DateTime.now(),
+          initiator: _currentChat.initiator,
+          responder: _currentChat.responder,
+          product: _currentChat.product,
+          service: _currentChat.service,
+          messages: _messages,
+          offers: _currentChat.offers,
+        );
+        
+        final systemMessage = ChatMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          tradeChatId: _currentChat.id,
+          sentById: 'system',
+          messageText: 'Trade cancelled',
+          messageType: MessageType.SYSTEM,
+          isRead: true,
+          createdAt: DateTime.now(),
+        );
+        
+        _messages.add(systemMessage);
+      });
+      
+      _scrollToBottom();
+      widget.onChatUpdated(_currentChat);
+    } catch (e) {
+      print('Error handling deal cancelled: $e');
+    }
+  }
+
+  void _handleMessagesRead(dynamic data) {
+    if (!mounted) return;
+    
+    try {
+      final chatId = data['chatId'];
+      final messageIds = data['messageIds'] as List;
+      
+      if (chatId != _currentChat.id) return;
+      
+      setState(() {
+        for (var i = 0; i < _messages.length; i++) {
+          if (messageIds.contains(_messages[i].id)) {
+            final msg = _messages[i];
+            _messages[i] = ChatMessage(
+              id: msg.id,
+              tradeChatId: msg.tradeChatId,
+              sentById: msg.sentById,
+              messageText: msg.messageText,
+              messageType: msg.messageType,
+              isRead: true,
+              createdAt: msg.createdAt,
+              sentBy: msg.sentBy,
+              imageUrl: msg.imageUrl,
+              readAt: DateTime.now(),
+              offerId: msg.offerId,
+            );
+          }
+        }
+      });
+    } catch (e) {
+      print('Error handling messages read: $e');
+    }
+  }
+
+  void _handleTypingIndicator(dynamic data) {
+    if (!mounted) return;
+    
+    try {
+      final chatId = data['chatId'];
+      final userId = data['userId'];
+      final isTyping = data['isTyping'];
+      
+      if (chatId != _currentChat.id || userId == widget.currentUserId) return;
+      
+      // You can show typing indicator in UI here
+      // For now, just log it
+      if (isTyping) {
+        print('User $userId is typing...');
+      }
+    } catch (e) {
+      print('Error handling typing indicator: $e');
+    }
+  }
+
   Future<void> _markMessagesAsRead() async {
     try {
-      await _chatService.markMessagesAsRead(_currentChat.id);
+      final unreadMessageIds = _messages
+          .where((msg) => !msg.isRead && msg.sentById != widget.currentUserId)
+          .map((msg) => msg.id)
+          .toList();
+      
+      if (unreadMessageIds.isNotEmpty) {
+        await _chatService.markMessagesAsRead(_currentChat.id);
+        _socketService.markMessagesRead(_currentChat.id, unreadMessageIds);
+        
+        setState(() {
+          for (var i = 0; i < _messages.length; i++) {
+            if (unreadMessageIds.contains(_messages[i].id)) {
+              final msg = _messages[i];
+              _messages[i] = ChatMessage(
+                id: msg.id,
+                tradeChatId: msg.tradeChatId,
+                sentById: msg.sentById,
+                messageText: msg.messageText,
+                messageType: msg.messageType,
+                isRead: true,
+                createdAt: msg.createdAt,
+                sentBy: msg.sentBy,
+                imageUrl: msg.imageUrl,
+                readAt: DateTime.now(),
+                offerId: msg.offerId,
+              );
+            }
+          }
+        });
+      }
     } catch (e) {
       print('Error marking messages as read: $e');
+    }
+  }
+
+  void _sendTypingStatus(bool isTyping) {
+    if (_isTyping != isTyping) {
+      _isTyping = isTyping;
+      _socketService.sendTyping(_currentChat.id, isTyping);
+      
+      if (isTyping) {
+        _typingTimer?.cancel();
+        _typingTimer = Timer(const Duration(seconds: 3), () {
+          if (_isTyping) {
+            _sendTypingStatus(false);
+          }
+        });
+      }
     }
   }
 
@@ -1543,8 +2283,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     final content = _messageController.text.trim();
     _messageController.clear();
+    _sendTypingStatus(false);
 
-    // Optimistically add message
     final tempMessage = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       tradeChatId: _currentChat.id,
@@ -1553,10 +2293,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       messageType: MessageType.TEXT,
       isRead: false,
       createdAt: DateTime.now(),
-      sentBy: null,
-      imageUrl: null,
-      readAt: null,
-      offerId: null,
     );
 
     setState(() {
@@ -1568,10 +2304,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       final sentMessage = await _chatService.sendMessage(
         chatId: _currentChat.id,
         messageText: content,
-        content: '',
       );
 
-      // Replace temp message with actual
+      // Emit via socket
+      _socketService.sendMessage(_currentChat.id, sentMessage.toJson());
+
       setState(() {
         final index = _messages.indexWhere((m) => m.id == tempMessage.id);
         if (index != -1) {
@@ -1579,28 +2316,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         }
       });
 
-      // Update last message in chat
-      _currentChat = TradeChat(
-        id: _currentChat.id,
-        initiatorId: _currentChat.initiatorId,
-        responderId: _currentChat.responderId,
-        productId: _currentChat.productId,
-        serviceId: _currentChat.serviceId,
-        status: _currentChat.status,
-        lastMessageAt: DateTime.now(),
-        createdAt: _currentChat.createdAt,
-        updatedAt: DateTime.now(),
-        initiator: _currentChat.initiator,
-        responder: _currentChat.responder,
-        product: _currentChat.product,
-        service: _currentChat.service,
-        messages: _messages,
-        offers: _currentChat.offers,
-      );
-
+      _updateChatLastMessage();
       widget.onChatUpdated(_currentChat);
     } catch (e) {
-      // Show error and remove temp message
       setState(() {
         _messages.removeWhere((m) => m.id == tempMessage.id);
       });
@@ -1608,12 +2326,32 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to send message: $e'),
+            content: Text('Failed to send message: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
       }
     }
+  }
+
+  void _updateChatLastMessage() {
+    _currentChat = TradeChat(
+      id: _currentChat.id,
+      initiatorId: _currentChat.initiatorId,
+      responderId: _currentChat.responderId,
+      productId: _currentChat.productId,
+      serviceId: _currentChat.serviceId,
+      status: _currentChat.status,
+      lastMessageAt: DateTime.now(),
+      createdAt: _currentChat.createdAt,
+      updatedAt: DateTime.now(),
+      initiator: _currentChat.initiator,
+      responder: _currentChat.responder,
+      product: _currentChat.product,
+      service: _currentChat.service,
+      messages: _messages,
+      offers: _currentChat.offers,
+    );
   }
 
   Future<void> _refreshChat() async {
@@ -1646,19 +2384,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
       final imageFile = File(pickedFile.path);
 
-      // Optimistically add a loading message
+      // Add temporary loading message
       final tempMessage = ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         tradeChatId: _currentChat.id,
         sentById: widget.currentUserId,
         messageText: 'Sending image...',
-        messageType: MessageType.IMAGE,
+        messageType: MessageType.TEXT,
         isRead: false,
         createdAt: DateTime.now(),
-        sentBy: null,
-        imageUrl: null,
-        readAt: null,
-        offerId: null,
       );
 
       setState(() {
@@ -1672,7 +2406,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         imageFile: imageFile,
       );
 
-      // Replace temp message with actual
+      // Emit via socket
+      _socketService.sendMessage(_currentChat.id, sentMessage.toJson());
+
       setState(() {
         final index = _messages.indexWhere((m) => m.id == tempMessage.id);
         if (index != -1) {
@@ -1685,12 +2421,168 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     } catch (e) {
       setState(() {
         _isSendingImage = false;
+        _messages.removeWhere((m) => m.messageText == 'Sending image...');
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to send image: $e'),
+            content: Text('Failed to send image: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Updated accept offer method with socket emit and full refresh
+  Future<void> _acceptOffer(TradeOffer offer) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final acceptedOffer = await _chatService.acceptOfferWithDetails(
+        chatId: _currentChat.id,
+        offerId: offer.id,
+        offerType: offer.offerType.value,
+        price: offer.price,
+        currency: offer.currency,
+        barterItemTitle: offer.barterItemTitle,
+        barterItemDescription: offer.barterItemDescription,
+        barterItemImages: offer.barterItemImages,
+        barterWishCategories: offer.barterWishCategories,
+      );
+
+      // Emit socket event
+      _socketService.emitOfferAccepted(_currentChat.id, offer.id);
+
+      // Add system message
+      final systemMessage = ChatMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        tradeChatId: _currentChat.id,
+        sentById: 'system',
+        messageText: 'Offer accepted',
+        messageType: MessageType.SYSTEM,
+        isRead: true,
+        createdAt: DateTime.now(),
+        offerId: acceptedOffer.id,
+      );
+
+      setState(() {
+        final index = _currentChat.offers.indexWhere((o) => o.id == offer.id);
+        if (index != -1) {
+          _currentChat.offers[index] = acceptedOffer;
+        }
+        _messages.add(systemMessage);
+        _currentChat = TradeChat(
+          id: _currentChat.id,
+          initiatorId: _currentChat.initiatorId,
+          responderId: _currentChat.responderId,
+          productId: _currentChat.productId,
+          serviceId: _currentChat.serviceId,
+          status: ChatStatus.ACCEPTED,
+          lastMessageAt: _currentChat.lastMessageAt,
+          createdAt: _currentChat.createdAt,
+          updatedAt: DateTime.now(),
+          initiator: _currentChat.initiator,
+          responder: _currentChat.responder,
+          product: _currentChat.product,
+          service: _currentChat.service,
+          messages: _messages,
+          offers: _currentChat.offers,
+        );
+        _isLoading = false;
+      });
+
+      // Refresh entire chat to get latest state
+      await _refreshChat();
+      
+      _scrollToBottom();
+      widget.onChatUpdated(_currentChat);
+      
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Offer accepted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to accept offer: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Updated reject offer method with socket emit and full refresh
+  Future<void> _rejectOffer(TradeOffer offer) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final rejectedOffer = await _chatService.rejectOfferWithDetails(
+        chatId: _currentChat.id,
+        offerId: offer.id,
+        offerType: offer.offerType.value,
+        price: offer.price,
+        currency: offer.currency,
+        barterItemTitle: offer.barterItemTitle,
+        barterItemDescription: offer.barterItemDescription,
+        barterItemImages: offer.barterItemImages,
+        barterWishCategories: offer.barterWishCategories,
+      );
+
+      // Emit socket event
+      _socketService.emitOfferRejected(_currentChat.id, offer.id);
+
+      // Add system message
+      final systemMessage = ChatMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        tradeChatId: _currentChat.id,
+        sentById: 'system',
+        messageText: 'Offer rejected',
+        messageType: MessageType.SYSTEM,
+        isRead: true,
+        createdAt: DateTime.now(),
+        offerId: rejectedOffer.id,
+      );
+
+      setState(() {
+        final index = _currentChat.offers.indexWhere((o) => o.id == offer.id);
+        if (index != -1) {
+          _currentChat.offers[index] = rejectedOffer;
+        }
+        _messages.add(systemMessage);
+        _isLoading = false;
+      });
+
+      // Refresh entire chat to get latest state
+      await _refreshChat();
+      
+      _scrollToBottom();
+      widget.onChatUpdated(_currentChat);
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to reject offer: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1858,7 +2750,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         currency: currency,
       );
 
-      // Add offer as a system message
+      // Emit socket event
+      _socketService.emitOfferCreated(_currentChat.id, offer.toJson());
+
       final systemMessage = ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         tradeChatId: _currentChat.id,
@@ -1868,9 +2762,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         messageType: MessageType.SYSTEM,
         isRead: true,
         createdAt: DateTime.now(),
-        sentBy: null,
-        imageUrl: null,
-        readAt: null,
         offerId: offer.id,
       );
 
@@ -1890,7 +2781,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to create offer: $e'),
+            content: Text('Failed to create offer: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1913,7 +2804,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         barterItemDescription: description,
       );
 
-      // Add offer as a system message
+      // Emit socket event
+      _socketService.emitOfferCreated(_currentChat.id, offer.toJson());
+
       final systemMessage = ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         tradeChatId: _currentChat.id,
@@ -1922,9 +2815,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         messageType: MessageType.SYSTEM,
         isRead: true,
         createdAt: DateTime.now(),
-        sentBy: null,
-        imageUrl: null,
-        readAt: null,
         offerId: offer.id,
       );
 
@@ -1944,275 +2834,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to create offer: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  // Updated accept offer method to use the new detailed API
-  Future<void> _acceptOffer(TradeOffer offer) async {
-    // Check if we need to show counter offer dialog for barter offers
-    if (offer.isBarterOffer &&
-        _currentChat.canCompleteDeal(widget.currentUserId)) {
-      _showCounterOfferDialog(offer);
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final acceptedOffer = await _chatService.acceptOfferWithDetails(
-        chatId: _currentChat.id,
-        offerId: offer.id,
-        offerType: offer.offerType.value,
-        price: offer.price,
-        currency: offer.currency,
-        barterItemTitle: offer.barterItemTitle,
-        barterItemDescription: offer.barterItemDescription,
-        barterItemImages: offer.barterItemImages,
-        barterWishCategories: offer.barterWishCategories,
-      );
-
-      // Add system message
-      final systemMessage = ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        tradeChatId: _currentChat.id,
-        sentById: 'system',
-        messageText: 'Offer accepted',
-        messageType: MessageType.SYSTEM,
-        isRead: true,
-        createdAt: DateTime.now(),
-        sentBy: null,
-        imageUrl: null,
-        readAt: null,
-        offerId: acceptedOffer.id,
-      );
-
-      setState(() {
-        final index = _currentChat.offers.indexWhere((o) => o.id == offer.id);
-        if (index != -1) {
-          _currentChat.offers[index] = acceptedOffer;
-        }
-        _messages.add(systemMessage);
-        _isLoading = false;
-      });
-
-      // Refresh chat to get updated status
-      await _refreshChat();
-      _scrollToBottom();
-      widget.onChatUpdated(_currentChat);
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to accept offer: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  // New method for counter offers
-  Future<void> _showCounterOfferDialog(TradeOffer originalOffer) async {
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Make Counter Offer'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (originalOffer.isPriceOffer) ...[
-              const Text('Modify your price offer'),
-              const SizedBox(height: 16),
-              TextField(
-                controller: TextEditingController(
-                  text: originalOffer.price?.toString(),
-                ),
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'New Price',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (value) {},
-              ),
-            ] else ...[
-              const Text('Modify your barter offer'),
-              const SizedBox(height: 16),
-              TextField(
-                controller: TextEditingController(
-                  text: originalOffer.barterItemTitle,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Item Title',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: TextEditingController(
-                  text: originalOffer.barterItemDescription,
-                ),
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, {'type': 'counter'}),
-            child: const Text('Send Counter Offer'),
-          ),
-        ],
-      ),
-    );
-
-    if (result != null && result['type'] == 'counter') {
-      await _createCounterOffer(originalOffer);
-    }
-  }
-
-  // New method to create counter offer
-  Future<void> _createCounterOffer(TradeOffer originalOffer) async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      double? newPrice;
-      String? newTitle;
-      String? newDescription;
-
-      if (originalOffer.isPriceOffer) {
-        // In a real implementation, you would get these from dialog inputs
-        newPrice = (originalOffer.price ?? 0) * 0.9; // Example: 10% less
-      } else {
-        newTitle = originalOffer.barterItemTitle;
-        newDescription = originalOffer.barterItemDescription;
-      }
-
-      final counterOffer = await _chatService.createCounterOffer(
-        chatId: _currentChat.id,
-        offerId: originalOffer.id,
-        offerType: originalOffer.offerType.value,
-        price: newPrice,
-        currency: originalOffer.currency,
-        barterItemTitle: newTitle,
-        barterItemDescription: newDescription,
-        barterItemImages: originalOffer.barterItemImages,
-        barterWishCategories: originalOffer.barterWishCategories,
-      );
-
-      // Add system message
-      final systemMessage = ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        tradeChatId: _currentChat.id,
-        sentById: 'system',
-        messageText: 'Counter offer created',
-        messageType: MessageType.SYSTEM,
-        isRead: true,
-        createdAt: DateTime.now(),
-        sentBy: null,
-        imageUrl: null,
-        readAt: null,
-        offerId: counterOffer.id,
-      );
-
-      setState(() {
-        _currentChat.offers.add(counterOffer);
-        _messages.add(systemMessage);
-        _isLoading = false;
-      });
-
-      _scrollToBottom();
-      widget.onChatUpdated(_currentChat);
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to create counter offer: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  // Updated reject offer method to use the new detailed API
-  Future<void> _rejectOffer(TradeOffer offer) async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final rejectedOffer = await _chatService.rejectOfferWithDetails(
-        chatId: _currentChat.id,
-        offerId: offer.id,
-        offerType: offer.offerType.value,
-        price: offer.price,
-        currency: offer.currency,
-        barterItemTitle: offer.barterItemTitle,
-        barterItemDescription: offer.barterItemDescription,
-        barterItemImages: offer.barterItemImages,
-        barterWishCategories: offer.barterWishCategories,
-      );
-
-      // Add system message
-      final systemMessage = ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        tradeChatId: _currentChat.id,
-        sentById: 'system',
-        messageText: 'Offer rejected',
-        messageType: MessageType.SYSTEM,
-        isRead: true,
-        createdAt: DateTime.now(),
-        sentBy: null,
-        imageUrl: null,
-        readAt: null,
-        offerId: rejectedOffer.id,
-      );
-
-      setState(() {
-        final index = _currentChat.offers.indexWhere((o) => o.id == offer.id);
-        if (index != -1) {
-          _currentChat.offers[index] = rejectedOffer;
-        }
-        _messages.add(systemMessage);
-        _isLoading = false;
-      });
-
-      _scrollToBottom();
-      widget.onChatUpdated(_currentChat);
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to reject offer: $e'),
+            content: Text('Failed to create offer: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -2228,9 +2850,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     });
 
     try {
-      final withdrawnOffer = await _chatService.withdrawOffer(offer.id);
+      await _chatService.withdrawOffer(offer.id);
 
-      // Add system message
+      // Emit socket event
+      _socketService.emitOfferWithdrawn(_currentChat.id, offer.id);
+
       final systemMessage = ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         tradeChatId: _currentChat.id,
@@ -2239,16 +2863,30 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         messageType: MessageType.SYSTEM,
         isRead: true,
         createdAt: DateTime.now(),
-        sentBy: null,
-        imageUrl: null,
-        readAt: null,
-        offerId: withdrawnOffer.id,
+        offerId: offer.id,
       );
 
       setState(() {
         final index = _currentChat.offers.indexWhere((o) => o.id == offer.id);
         if (index != -1) {
-          _currentChat.offers[index] = withdrawnOffer;
+          _currentChat.offers[index] = TradeOffer(
+            id: offer.id,
+            tradeChatId: offer.tradeChatId,
+            madeById: offer.madeById,
+            madeBy: offer.madeBy,
+            offerType: offer.offerType,
+            offerStatus: OfferStatus.WITHDRAWN,
+            price: offer.price,
+            currency: offer.currency,
+            barterItemTitle: offer.barterItemTitle,
+            barterItemDescription: offer.barterItemDescription,
+            barterItemImages: offer.barterItemImages,
+            barterWishCategories: offer.barterWishCategories,
+            counterOfferCount: offer.counterOfferCount,
+            createdAt: offer.createdAt,
+            acceptedAt: offer.acceptedAt,
+            rejectedAt: offer.rejectedAt,
+          );
         }
         _messages.add(systemMessage);
         _isLoading = false;
@@ -2264,7 +2902,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to withdraw offer: $e'),
+            content: Text('Failed to withdraw offer: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -2272,7 +2910,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
   }
 
-  // Updated complete trade method to use the new deal completion API
   Future<void> _completeTrade() async {
     if (_isShowingDealCompletionDialog) return;
 
@@ -2294,12 +2931,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     });
 
     try {
-      final completedChat = await _chatService.markDealCompleted(
-        chatId: _currentChat.id,
-        remarks: result['remarks'] ?? '',
-      );
+      final bool isCompleted = result['isCompleted'] == true;
 
-      // Add system message
+      final updatedChat = isCompleted
+          ? await _chatService.markDealCompleted(
+              chatId: _currentChat.id,
+              remarks: result['remarks'] ?? 'accepted',
+            )
+          : await _chatService.cancelTrade(_currentChat.id);
+
+      // Emit socket event
+      if (isCompleted) {
+        _socketService.emitDealCompleted(_currentChat.id, result);
+      } else {
+        _socketService.emitDealCancelled(_currentChat.id);
+      }
+
       final systemMessage = ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         tradeChatId: _currentChat.id,
@@ -2310,14 +2957,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         messageType: MessageType.SYSTEM,
         isRead: true,
         createdAt: DateTime.now(),
-        sentBy: null,
-        imageUrl: null,
-        readAt: null,
-        offerId: null,
       );
 
       setState(() {
-        _currentChat = completedChat;
+        _currentChat = updatedChat;
         _messages.add(systemMessage);
         _isLoading = false;
       });
@@ -2332,7 +2975,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to complete deal: $e'),
+            content: Text('Failed to complete deal: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -2369,7 +3012,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     try {
       final cancelledChat = await _chatService.cancelTrade(_currentChat.id);
 
-      // Add system message
+      // Emit socket event
+      _socketService.emitDealCancelled(_currentChat.id);
+
       final systemMessage = ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         tradeChatId: _currentChat.id,
@@ -2378,10 +3023,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         messageType: MessageType.SYSTEM,
         isRead: true,
         createdAt: DateTime.now(),
-        sentBy: null,
-        imageUrl: null,
-        readAt: null,
-        offerId: null,
       );
 
       setState(() {
@@ -2400,7 +3041,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to cancel trade: $e'),
+            content: Text('Failed to cancel trade: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -2440,7 +3081,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to archive chat: $e'),
+            content: Text('Failed to archive chat: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -2448,11 +3089,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
   }
 
-  // New method to block user
   Future<void> _blockUser() async {
     final otherUser = _getOtherUser();
 
-    // Check if there's an open accepted deal
     if (_currentChat.hasAcceptedOffer) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -2510,7 +3149,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context); // Close chat screen
+        Navigator.pop(context);
       }
     } catch (e) {
       setState(() {
@@ -2520,7 +3159,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to block user: $e'),
+            content: Text('Failed to block user: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -2664,7 +3303,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   if (isImageMessage && message.imageUrl != null)
                     GestureDetector(
                       onTap: () {
-                        // Show full screen image
                         showDialog(
                           context: context,
                           builder: (context) => Dialog(
@@ -2736,7 +3374,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Widget _buildOfferBanner() {
     if (_currentChat.offers.isEmpty) return const SizedBox();
 
-    // Find the latest pending offer
     final pendingOffers = _currentChat.offers
         .where((offer) => offer.isPending)
         .toList();
@@ -2822,7 +3459,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Widget _buildMyOfferBanner() {
     if (_currentChat.offers.isEmpty) return const SizedBox();
 
-    // Find the latest pending offer made by current user
     final myPendingOffers = _currentChat.offers
         .where(
           (offer) => offer.isPending && offer.madeById == widget.currentUserId,
@@ -2890,7 +3526,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
-  // New widget for deal completion banner
   Widget _buildDealCompletionBanner() {
     if (!_currentChat.canCompleteDeal(widget.currentUserId)) {
       return const SizedBox();
@@ -2909,7 +3544,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           const Row(
             children: [
               Icon(Icons.check_circle, color: Colors.green),
-              SizedBox(width: 8),
+              const SizedBox(width: 8),
               Text(
                 'Deal Ready to Complete',
                 style: TextStyle(
@@ -3068,179 +3703,97 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: LoadingWidget())
-          : Column(
-              children: [
-                // Product/Service Info Banner
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  color: Colors.grey.shade50,
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: _currentChat.postImage.isNotEmpty
-                            ? Image.network(
-                                _currentChat.postImage,
-                                width: 60,
-                                height: 60,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Container(
-                                    width: 60,
-                                    height: 60,
-                                    color: Colors.grey.shade300,
-                                    child: const Icon(
-                                      Icons.image_not_supported,
-                                    ),
-                                  );
-                                },
-                              )
-                            : Container(
-                                width: 60,
-                                height: 60,
-                                color: Colors.grey.shade300,
-                                child: const Icon(Icons.image),
-                              ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _currentChat.postTitle,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _getOfferTypeColor(
-                                  _currentChat.offerType,
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                _currentChat.offerType,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
+
+      body: SafeArea(
+        child: _isLoading
+            ? const Center(child: LoadingWidget())
+            : Column(
+                children: [
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: _refreshChat,
+                      child: ListView(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 8,
                         ),
+                        children: [
+                          _buildOfferBanner(),
+                          _buildMyOfferBanner(),
+                          _buildDealCompletionBanner(),
+                          ..._messages.map((msg) => _buildMessageBubble(msg)),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
 
-                // Offer Banners
-                _buildOfferBanner(),
-                _buildMyOfferBanner(),
-                _buildDealCompletionBanner(),
-
-                // Messages
-                Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(8),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      return _buildMessageBubble(_messages[index]);
-                    },
-                  ),
-                ),
-
-                // Message Input
-                if (_currentChat.isActive) _buildMessageInput(),
-              ],
-            ),
+                  if (_currentChat.isActive) _buildMessageInput(),
+                ],
+              ),
+      ),
     );
   }
 
-  Color _getOfferTypeColor(String offerType) {
-    switch (offerType) {
-      case 'Product':
-        return Colors.orange;
-      case 'Service':
-        return Colors.blue;
-      default:
-        return Colors.grey;
-    }
-  }
-
   Widget _buildMessageInput() {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: Row(
-        children: [
-          // Attach Image Button
-          IconButton(
-            icon: const Icon(Icons.image, color: Colors.blue),
-            onPressed: _isSendingImage ? null : _pickAndSendImage,
-          ),
-
-          // Make Offer Button
-          IconButton(
-            icon: const Icon(Icons.request_page, color: Colors.orange),
-            onPressed: _showMakeOfferDialog,
-          ),
-
-          // Text Field
-          Expanded(
-            child: TextField(
-              controller: _messageController,
-              decoration: InputDecoration(
-                hintText: 'Type a message...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(25),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              onSubmitted: (_) => _sendMessage(),
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Colors.grey.shade200)),
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.image, color: Colors.blue),
+              onPressed: _isSendingImage ? null : _pickAndSendImage,
             ),
-          ),
-
-          // Send Button
-          IconButton(
-            icon: _isSendingImage
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.send, color: Colors.blue),
-            onPressed: _isSendingImage ? null : _sendMessage,
-          ),
-        ],
+            IconButton(
+              icon: const Icon(Icons.request_page, color: Colors.orange),
+              onPressed: _showMakeOfferDialog,
+            ),
+            Expanded(
+              child: TextField(
+                controller: _messageController,
+                focusNode: _focusNode,
+                decoration: InputDecoration(
+                  hintText: 'Type a message...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(25),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+                onChanged: (text) {
+                  _sendTypingStatus(text.isNotEmpty);
+                },
+                onSubmitted: (_) => _sendMessage(),
+              ),
+            ),
+            IconButton(
+              icon: _isSendingImage
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send, color: Colors.blue),
+              onPressed: _isSendingImage ? null : _sendMessage,
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// New Deal Completion Dialog Widget
 class _DealCompletionDialog extends StatefulWidget {
   final bool isPriceOffer;
 
