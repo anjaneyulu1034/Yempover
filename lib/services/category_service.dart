@@ -103,9 +103,6 @@ class CategoryService {
 
     try {
       final token = await TokenService().getToken();
-      if (token == null) {
-        throw Exception('No authentication token found');
-      }
 
       final url = '${ApiConstants.baseUrl}/categories?type=$type';
       debugPrint('🌐 CategoryService: Fetching $type categories from: $url');
@@ -116,7 +113,8 @@ class CategoryService {
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
-              'Authorization': 'Bearer $token',
+              if (token != null && token.isNotEmpty)
+                'Authorization': 'Bearer $token',
             },
           )
           .timeout(const Duration(seconds: 30));

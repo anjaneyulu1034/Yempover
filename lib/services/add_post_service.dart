@@ -308,6 +308,8 @@ class AddPostService {
         'categoryId': request.categoryId,
         'images': images, // These should be base64 data URLs
         'location': request.location,
+        if (request.latitude != null) 'latitude': request.latitude,
+        if (request.longitude != null) 'longitude': request.longitude,
         'barterStatus': request.barterStatus,
         'price': request.price,
       };
@@ -370,6 +372,14 @@ class AddPostService {
         'description': request.description,
         'categoryId': request.categoryId,
         'images': request.images ?? [], // Services might have optional images
+        if (request.location != null && request.location!.isNotEmpty)
+          'location': request.location,
+        if (request.latitude != null) 'latitude': request.latitude,
+        if (request.longitude != null) 'longitude': request.longitude,
+        if (request.validFrom != null && request.validFrom!.isNotEmpty)
+          'validFrom': request.validFrom,
+        if (request.validUntil != null && request.validUntil!.isNotEmpty)
+          'validUntil': request.validUntil,
         'status': request.status,
         'price': request.price,
       };

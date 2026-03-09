@@ -1,10 +1,21 @@
+// // lib/screens/tradechatscreen/TradeChatScreen.dart
+
+// import 'package:Yempover_app/services/socket_io/socket_service.dart';
+
 // import 'package:flutter/material.dart';
+
 // import 'package:intl/intl.dart';
+
 // import 'package:Yempover_app/models/chats/trade_chat.dart';
+
 // import 'package:Yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+
 // import 'package:Yempover_app/services/token_service.dart';
+
 // import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
+
 // import 'package:Yempover_app/utils/error_widget.dart';
+
 // import 'package:Yempover_app/utils/loading_widget.dart';
 
 // class TradeChatScreen extends StatefulWidget {
@@ -17,67 +28,218 @@
 // class _TradeChatScreenState extends State<TradeChatScreen>
 //     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
 //   late TabController _tabController;
+
 //   final TradeChatService _chatService = TradeChatService();
+
 //   final TokenService _tokenService = TokenService();
 
+//   final SocketService _socketService = SocketService();
+
 //   List<TradeChat> _allChats = [];
+
 //   List<TradeChat> _inboxChats = [];
+
 //   List<TradeChat> _outboxChats = [];
+
 //   List<String> _userProducts = [];
 
 //   bool _isLoading = true;
+
 //   String? _errorMessage;
 
-//   // Pagination for All Chats
+//   // Pagination variables
+
 //   int _allChatsCurrentPage = 1;
+
 //   int _allChatsTotalPages = 1;
+
 //   bool _isLoadingMoreAllChats = false;
 
-//   // Pagination for Inbox
 //   int _inboxCurrentPage = 1;
+
 //   int _inboxTotalPages = 1;
+
 //   bool _isLoadingMoreInbox = false;
 
-//   // Pagination for Outbox
 //   int _outboxCurrentPage = 1;
+
 //   int _outboxTotalPages = 1;
+
 //   bool _isLoadingMoreOutbox = false;
 
 //   String? _currentUserId;
+
 //   String? _selectedProductFilter;
 
 //   @override
 //   void initState() {
 //     super.initState();
+
 //     debugPrint('🏁 TradeChatScreen: initState called');
+
 //     _tabController = TabController(length: 3, vsync: this);
+
 //     _tabController.addListener(_handleTabChange);
+
 //     WidgetsBinding.instance.addObserver(this);
+
 //     _loadCurrentUser();
+
+//     _initializeSocketListeners();
 //   }
 
 //   @override
 //   void dispose() {
 //     debugPrint('🗑️ TradeChatScreen: dispose called');
+
+//     _socketService.off('chat_updated', _handleChatUpdated);
+
+//     _socketService.off('offer_accepted', _handleOfferUpdated);
+
+//     _socketService.off('offer_rejected', _handleOfferUpdated);
+
+//     _socketService.off('offer_created', _handleOfferCreated);
+
+//     _socketService.off('deal_completed', _handleChatStatusChanged);
+
+//     _socketService.off('deal_cancelled', _handleChatStatusChanged);
+
 //     _tabController.removeListener(_handleTabChange);
+
 //     _tabController.dispose();
+
 //     _chatService.dispose();
+
 //     WidgetsBinding.instance.removeObserver(this);
+
 //     super.dispose();
 //   }
 
 //   @override
 //   void didChangeAppLifecycleState(AppLifecycleState state) {
 //     if (state == AppLifecycleState.resumed) {
-//       // Refresh chats when app resumes
 //       _refreshChats();
 //     }
 //   }
 
+//   void _initializeSocketListeners() {
+//     // Listen for chat updates
+
+//     _socketService.on('chat_updated', _handleChatUpdated);
+
+//     _socketService.on('offer_accepted', _handleOfferUpdated);
+
+//     _socketService.on('offer_rejected', _handleOfferUpdated);
+
+//     _socketService.on('offer_created', _handleOfferCreated);
+
+//     _socketService.on('deal_completed', _handleChatStatusChanged);
+
+//     _socketService.on('deal_cancelled', _handleChatStatusChanged);
+//   }
+
+//   void _handleChatUpdated(dynamic data) {
+//     if (!mounted) return;
+
+//     try {
+//       final chatId = data['chatId'];
+
+//       final chatData = data['chat'];
+
+//       if (chatData != null) {
+//         final updatedChat = TradeChat.fromJson(chatData);
+
+//         _updateChatInLists(updatedChat);
+//       } else {
+//         // Refresh specific chat
+
+//         _refreshSingleChat(chatId);
+//       }
+//     } catch (e) {
+//       print('Error handling chat updated: $e');
+//     }
+//   }
+
+//   void _handleOfferUpdated(dynamic data) {
+//     if (!mounted) return;
+
+//     try {
+//       final chatId = data['chatId'];
+
+//       _refreshSingleChat(chatId);
+//     } catch (e) {
+//       print('Error handling offer update: $e');
+//     }
+//   }
+
+//   void _handleOfferCreated(dynamic data) {
+//     if (!mounted) return;
+
+//     try {
+//       final chatId = data['chatId'];
+
+//       _refreshSingleChat(chatId);
+//     } catch (e) {
+//       print('Error handling offer created: $e');
+//     }
+//   }
+
+//   void _handleChatStatusChanged(dynamic data) {
+//     if (!mounted) return;
+
+//     try {
+//       final chatId = data['chatId'];
+
+//       _refreshSingleChat(chatId);
+//     } catch (e) {
+//       print('Error handling chat status change: $e');
+//     }
+//   }
+
+//   Future<void> _refreshSingleChat(String chatId) async {
+//     try {
+//       final updatedChat = await _chatService.getChatById(chatId);
+
+//       _updateChatInLists(updatedChat);
+//     } catch (e) {
+//       print('Error refreshing single chat: $e');
+//     }
+//   }
+
+//   void _updateChatInLists(TradeChat updatedChat) {
+//     setState(() {
+//       // Update in all chats list
+
+//       final allIndex = _allChats.indexWhere((c) => c.id == updatedChat.id);
+
+//       if (allIndex != -1) {
+//         _allChats[allIndex] = updatedChat;
+//       }
+
+//       // Update in inbox chats list
+
+//       final inboxIndex = _inboxChats.indexWhere((c) => c.id == updatedChat.id);
+
+//       if (inboxIndex != -1) {
+//         _inboxChats[inboxIndex] = updatedChat;
+//       }
+
+//       // Update in outbox chats list
+
+//       final outboxIndex = _outboxChats.indexWhere(
+//         (c) => c.id == updatedChat.id,
+//       );
+
+//       if (outboxIndex != -1) {
+//         _outboxChats[outboxIndex] = updatedChat;
+//       }
+//     });
+//   }
+
 //   void _handleTabChange() {
-//     // Load data for the selected tab if needed
 //     if (_tabController.indexIsChanging) {
 //       final index = _tabController.index;
+
 //       if (index == 0 && _allChats.isEmpty) {
 //         _loadAllChats();
 //       } else if (index == 1 && _inboxChats.isEmpty) {
@@ -91,12 +253,14 @@
 //   Future<void> _refreshChats() async {
 //     setState(() {
 //       _allChatsCurrentPage = 1;
+
 //       _inboxCurrentPage = 1;
+
 //       _outboxCurrentPage = 1;
 //     });
 
-//     // Refresh all tabs based on current tab
 //     final currentIndex = _tabController.index;
+
 //     if (currentIndex == 0) {
 //       await _loadAllChats(refresh: true);
 //     } else if (currentIndex == 1) {
@@ -111,40 +275,55 @@
 
 //     try {
 //       _currentUserId = await _tokenService.getUserId();
+
 //       debugPrint(
 //         '👤 TradeChatScreen: User ID from TokenService: $_currentUserId',
 //       );
 
 //       final token = await _tokenService.getToken();
+
 //       debugPrint(
 //         '🔑 TradeChatScreen: Token exists: ${token != null && token.isNotEmpty}',
 //       );
 
 //       if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+//         // Initialize socket service with token
+
+//         if (token != null) {
+//           _socketService.init(token: token);
+//         }
+
 //         debugPrint('✅ TradeChatScreen: User ID found, loading chats...');
-//         // Load initial data for all tabs
+
 //         await Future.wait([
 //           _loadAllChats(refresh: true),
+
 //           _loadInboxChats(refresh: true),
+
 //           _loadOutboxChats(refresh: true),
 //         ]);
 //       } else {
 //         debugPrint('❌ TradeChatScreen: User ID is null or empty');
+
 //         setState(() {
 //           _isLoading = false;
+
 //           _errorMessage = 'User not logged in. Please login to continue.';
 //         });
 //       }
 //     } catch (e) {
 //       debugPrint('❌ TradeChatScreen: Error loading user: $e');
+
 //       setState(() {
 //         _isLoading = false;
+
 //         _errorMessage = 'Error loading user: $e';
 //       });
 //     }
 //   }
 
 //   // Load All Chats
+
 //   Future<void> _loadAllChats({bool refresh = true}) async {
 //     debugPrint(
 //       '📥 TradeChatScreen: Loading all chats - refresh: $refresh, page: $_allChatsCurrentPage',
@@ -153,7 +332,9 @@
 //     if (refresh) {
 //       setState(() {
 //         _isLoading = true;
+
 //         _errorMessage = null;
+
 //         _allChatsCurrentPage = 1;
 //       });
 //     } else {
@@ -164,12 +345,15 @@
 
 //     try {
 //       debugPrint('🌐 TradeChatScreen: Calling getAllChats service...');
+
 //       final response = await _chatService.getAllChats(
 //         page: _allChatsCurrentPage,
+
 //         limit: 20,
 //       );
 
 //       debugPrint('✅ TradeChatScreen: Received all chats response');
+
 //       debugPrint(
 //         '📊 TradeChatScreen: Total chats received: ${response.data.chats.length}',
 //       );
@@ -177,30 +361,39 @@
 //       setState(() {
 //         if (refresh) {
 //           _allChats = response.data.chats.cast<TradeChat>();
+
 //           debugPrint(
 //             '🔄 TradeChatScreen: Refreshed all chats, new count: ${_allChats.length}',
 //           );
 //         } else {
 //           _allChats.addAll(response.data.chats as Iterable<TradeChat>);
+
 //           debugPrint(
 //             '➕ TradeChatScreen: Added more chats, new total: ${_allChats.length}',
 //           );
 //         }
+
 //         _allChatsTotalPages = response.data.pagination.pages;
+
 //         _isLoading = false;
+
 //         _isLoadingMoreAllChats = false;
 //       });
 //     } catch (e) {
 //       debugPrint('❌ TradeChatScreen: Error loading all chats: $e');
+
 //       setState(() {
 //         _errorMessage = e.toString().replaceAll('Exception: ', '');
+
 //         _isLoading = false;
+
 //         _isLoadingMoreAllChats = false;
 //       });
 //     }
 //   }
 
 //   // Load Inbox Chats
+
 //   Future<void> _loadInboxChats({bool refresh = true}) async {
 //     debugPrint(
 //       '📥 TradeChatScreen: Loading inbox chats - refresh: $refresh, page: $_inboxCurrentPage, filter: $_selectedProductFilter',
@@ -215,13 +408,16 @@
 //     try {
 //       final response = await _chatService.getInboxChats(
 //         page: _inboxCurrentPage,
+
 //         limit: 20,
+
 //         productId: _selectedProductFilter != 'All Products'
 //             ? _selectedProductFilter
 //             : null,
 //       );
 
 //       debugPrint('✅ TradeChatScreen: Received inbox chats response');
+
 //       debugPrint(
 //         '📊 TradeChatScreen: Total inbox chats received: ${response.data.chats.length}',
 //       );
@@ -229,23 +425,29 @@
 //       setState(() {
 //         if (refresh) {
 //           _inboxChats = response.data.chats.cast<TradeChat>();
+
 //           debugPrint(
 //             '🔄 TradeChatScreen: Refreshed inbox chats, new count: ${_inboxChats.length}',
 //           );
 //         } else {
 //           _inboxChats.addAll(response.data.chats as Iterable<TradeChat>);
+
 //           debugPrint(
 //             '➕ TradeChatScreen: Added more inbox chats, new total: ${_inboxChats.length}',
 //           );
 //         }
+
 //         _inboxTotalPages = response.data.pagination.pages;
+
 //         _isLoadingMoreInbox = false;
 
 //         // Load user products from inbox chats
+
 //         _loadUserProducts();
 //       });
 //     } catch (e) {
 //       debugPrint('❌ TradeChatScreen: Error loading inbox chats: $e');
+
 //       setState(() {
 //         _isLoadingMoreInbox = false;
 //       });
@@ -253,6 +455,7 @@
 //   }
 
 //   // Load Outbox Chats
+
 //   Future<void> _loadOutboxChats({bool refresh = true}) async {
 //     debugPrint(
 //       '📥 TradeChatScreen: Loading outbox chats - refresh: $refresh, page: $_outboxCurrentPage',
@@ -267,10 +470,12 @@
 //     try {
 //       final response = await _chatService.getOutboxChats(
 //         page: _outboxCurrentPage,
+
 //         limit: 20,
 //       );
 
 //       debugPrint('✅ TradeChatScreen: Received outbox chats response');
+
 //       debugPrint(
 //         '📊 TradeChatScreen: Total outbox chats received: ${response.data.chats.length}',
 //       );
@@ -278,20 +483,25 @@
 //       setState(() {
 //         if (refresh) {
 //           _outboxChats = response.data.chats.cast<TradeChat>();
+
 //           debugPrint(
 //             '🔄 TradeChatScreen: Refreshed outbox chats, new count: ${_outboxChats.length}',
 //           );
 //         } else {
 //           _outboxChats.addAll(response.data.chats as Iterable<TradeChat>);
+
 //           debugPrint(
 //             '➕ TradeChatScreen: Added more outbox chats, new total: ${_outboxChats.length}',
 //           );
 //         }
+
 //         _outboxTotalPages = response.data.pagination.pages;
+
 //         _isLoadingMoreOutbox = false;
 //       });
 //     } catch (e) {
 //       debugPrint('❌ TradeChatScreen: Error loading outbox chats: $e');
+
 //       setState(() {
 //         _isLoadingMoreOutbox = false;
 //       });
@@ -305,30 +515,33 @@
 //     final currentIndex = _tabController.index;
 
 //     if (currentIndex == 0) {
-//       // Load more all chats
 //       if (_allChatsCurrentPage < _allChatsTotalPages) {
 //         setState(() {
 //           _allChatsCurrentPage++;
+
 //           _isLoadingMoreAllChats = true;
 //         });
+
 //         _loadAllChats(refresh: false);
 //       }
 //     } else if (currentIndex == 1) {
-//       // Load more inbox chats
 //       if (_inboxCurrentPage < _inboxTotalPages) {
 //         setState(() {
 //           _inboxCurrentPage++;
+
 //           _isLoadingMoreInbox = true;
 //         });
+
 //         _loadInboxChats(refresh: false);
 //       }
 //     } else if (currentIndex == 2) {
-//       // Load more outbox chats
 //       if (_outboxCurrentPage < _outboxTotalPages) {
 //         setState(() {
 //           _outboxCurrentPage++;
+
 //           _isLoadingMoreOutbox = true;
 //         });
+
 //         _loadOutboxChats(refresh: false);
 //       }
 //     }
@@ -354,51 +567,68 @@
 
 //   void _showProductFilterDialog() {
 //     debugPrint('🎯 TradeChatScreen: Showing product filter dialog');
+
 //     showModalBottomSheet(
 //       context: context,
+
 //       shape: const RoundedRectangleBorder(
 //         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
 //       ),
+
 //       builder: (context) => Container(
 //         padding: const EdgeInsets.all(20),
+
 //         child: Column(
 //           mainAxisSize: MainAxisSize.min,
+
 //           children: [
 //             const Text(
 //               'Filter by Your Product',
+
 //               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
 //             ),
+
 //             const SizedBox(height: 20),
+
 //             ..._userProducts.map((product) {
 //               return ListTile(
 //                 title: Text(product),
+
 //                 trailing: _selectedProductFilter == product
 //                     ? const Icon(Icons.check, color: Colors.blue)
 //                     : null,
+
 //                 onTap: () {
 //                   debugPrint(
 //                     '🎯 TradeChatScreen: Selected product filter: $product',
 //                   );
+
 //                   setState(() {
 //                     _selectedProductFilter = product;
 //                   });
+
 //                   Navigator.pop(context);
-//                   // Reload inbox chats with new filter
+
 //                   _loadInboxChats(refresh: true);
 //                 },
 //               );
 //             }).toList(),
+
 //             const SizedBox(height: 20),
+
 //             OutlinedButton(
 //               onPressed: () {
 //                 debugPrint('🎯 TradeChatScreen: Clearing product filter');
+
 //                 setState(() {
 //                   _selectedProductFilter = null;
 //                 });
+
 //                 Navigator.pop(context);
-//                 // Reload inbox chats without filter
+
 //                 _loadInboxChats(refresh: true);
 //               },
+
 //               child: const Text('Clear Filter'),
 //             ),
 //           ],
@@ -412,6 +642,7 @@
 //       debugPrint(
 //         '⚠️ TradeChatScreen: Cannot open chat - currentUserId is null',
 //       );
+
 //       return;
 //     }
 
@@ -421,10 +652,13 @@
 
 //     Navigator.push(
 //       context,
+
 //       MaterialPageRoute(
 //         builder: (context) => ChatDetailScreen(
 //           chat: chat,
+
 //           currentUserId: _currentUserId!,
+
 //           onChatUpdated: _updateChat,
 //         ),
 //       ),
@@ -433,27 +667,8 @@
 
 //   void _updateChat(TradeChat updatedChat) {
 //     debugPrint('🔄 TradeChatScreen: Updating chat: ${updatedChat.id}');
-//     setState(() {
-//       // Update in all chats list
-//       final allIndex = _allChats.indexWhere((c) => c.id == updatedChat.id);
-//       if (allIndex != -1) {
-//         _allChats[allIndex] = updatedChat;
-//       }
 
-//       // Update in inbox chats list
-//       final inboxIndex = _inboxChats.indexWhere((c) => c.id == updatedChat.id);
-//       if (inboxIndex != -1) {
-//         _inboxChats[inboxIndex] = updatedChat;
-//       }
-
-//       // Update in outbox chats list
-//       final outboxIndex = _outboxChats.indexWhere(
-//         (c) => c.id == updatedChat.id,
-//       );
-//       if (outboxIndex != -1) {
-//         _outboxChats[outboxIndex] = updatedChat;
-//       }
-//     });
+//     _updateChatInLists(updatedChat);
 //   }
 
 //   String _getLastMessagePreview(TradeChat chat) {
@@ -462,9 +677,9 @@
 //     }
 
 //     final lastMessage = chat.messages.last;
+
 //     final content = lastMessage.messageText.trim();
 
-//     // Check for special message types based on content patterns
 //     if (content.isEmpty) {
 //       return 'No messages yet';
 //     } else if (content.toLowerCase().contains('image')) {
@@ -480,68 +695,95 @@
 //     }
 
 //     final otherUser = chat.getOtherUserInfo(_currentUserId!);
+
 //     final unreadCount = chat.messages
 //         .where((msg) => !msg.isRead && msg.sentById != _currentUserId)
 //         .length;
 
 //     return InkWell(
 //       onTap: () => _openChatDetail(chat),
+
 //       child: Container(
 //         margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+
 //         padding: const EdgeInsets.all(12),
+
 //         decoration: BoxDecoration(
 //           color: Colors.white,
+
 //           borderRadius: BorderRadius.circular(16),
+
 //           boxShadow: [
 //             BoxShadow(
 //               color: Colors.black.withOpacity(0.05),
+
 //               blurRadius: 10,
+
 //               offset: const Offset(0, 4),
 //             ),
 //           ],
 //         ),
+
 //         child: Row(
 //           children: [
 //             Stack(
 //               children: [
 //                 CircleAvatar(
 //                   radius: 28,
+
 //                   backgroundImage: otherUser.profileImage != null
 //                       ? NetworkImage(otherUser.profileImage!)
 //                       : null,
+
 //                   child: otherUser.profileImage == null
 //                       ? Text(otherUser.firstName[0].toUpperCase())
 //                       : null,
 //                 ),
+
 //                 if (chat.isActive)
 //                   Positioned(
 //                     right: 0,
+
 //                     bottom: 0,
+
 //                     child: Container(
 //                       width: 14,
+
 //                       height: 14,
+
 //                       decoration: BoxDecoration(
 //                         color: Colors.green,
+
 //                         shape: BoxShape.circle,
+
 //                         border: Border.all(color: Colors.white, width: 2),
 //                       ),
 //                     ),
 //                   ),
+
 //                 if (unreadCount > 0)
 //                   Positioned(
 //                     top: 0,
+
 //                     right: 0,
+
 //                     child: Container(
 //                       padding: const EdgeInsets.all(4),
+
 //                       decoration: const BoxDecoration(
 //                         color: Colors.red,
+
 //                         shape: BoxShape.circle,
 //                       ),
+
 //                       child: Text(
 //                         unreadCount > 9 ? '9+' : unreadCount.toString(),
+
 //                         style: const TextStyle(
 //                           color: Colors.white,
+
 //                           fontSize: 10,
+
 //                           fontWeight: FontWeight.bold,
 //                         ),
 //                       ),
@@ -549,137 +791,197 @@
 //                   ),
 //               ],
 //             ),
+
 //             const SizedBox(width: 12),
+
 //             Expanded(
 //               child: Column(
 //                 crossAxisAlignment: CrossAxisAlignment.start,
+
 //                 children: [
 //                   Row(
 //                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
 //                     children: [
 //                       Expanded(
 //                         child: Text(
 //                           otherUser.firstName,
+
 //                           style: const TextStyle(
 //                             fontWeight: FontWeight.bold,
+
 //                             fontSize: 16,
 //                           ),
+
 //                           maxLines: 1,
+
 //                           overflow: TextOverflow.ellipsis,
 //                         ),
 //                       ),
+
 //                       Text(
 //                         chat.formattedDate,
+
 //                         style: const TextStyle(
 //                           color: Colors.grey,
+
 //                           fontSize: 12,
 //                         ),
 //                       ),
 //                     ],
 //                   ),
+
 //                   const SizedBox(height: 4),
+
 //                   Text(
 //                     chat.postTitle,
+
 //                     style: const TextStyle(
 //                       fontSize: 14,
+
 //                       color: Colors.black87,
+
 //                       fontWeight: FontWeight.w500,
 //                     ),
+
 //                     maxLines: 1,
+
 //                     overflow: TextOverflow.ellipsis,
 //                   ),
+
 //                   const SizedBox(height: 4),
+
 //                   Row(
 //                     children: [
 //                       Container(
 //                         padding: const EdgeInsets.symmetric(
 //                           horizontal: 8,
+
 //                           vertical: 2,
 //                         ),
+
 //                         decoration: BoxDecoration(
 //                           color: _getOfferTypeColor(chat.offerType),
+
 //                           borderRadius: BorderRadius.circular(10),
 //                         ),
+
 //                         child: Text(
 //                           chat.offerType,
+
 //                           style: const TextStyle(
 //                             color: Colors.white,
+
 //                             fontSize: 10,
+
 //                             fontWeight: FontWeight.bold,
 //                           ),
 //                         ),
 //                       ),
+
 //                       const SizedBox(width: 8),
+
 //                       if (chat.status == ChatStatus.COMPLETED)
 //                         Container(
 //                           padding: const EdgeInsets.symmetric(
 //                             horizontal: 8,
+
 //                             vertical: 2,
 //                           ),
+
 //                           decoration: BoxDecoration(
 //                             color: Colors.green.shade100,
+
 //                             borderRadius: BorderRadius.circular(10),
 //                           ),
+
 //                           child: const Text(
 //                             'Completed',
+
 //                             style: TextStyle(color: Colors.green, fontSize: 10),
 //                           ),
 //                         ),
+
 //                       if (chat.status == ChatStatus.CANCELLED)
 //                         Container(
 //                           padding: const EdgeInsets.symmetric(
 //                             horizontal: 8,
+
 //                             vertical: 2,
 //                           ),
+
 //                           decoration: BoxDecoration(
 //                             color: Colors.grey.shade200,
+
 //                             borderRadius: BorderRadius.circular(10),
 //                           ),
+
 //                           child: const Text(
 //                             'Cancelled',
+
 //                             style: TextStyle(color: Colors.grey, fontSize: 10),
 //                           ),
 //                         ),
 //                     ],
 //                   ),
+
 //                   const SizedBox(height: 8),
+
 //                   Text(
 //                     _getLastMessagePreview(chat),
+
 //                     style: TextStyle(
 //                       fontSize: 12,
+
 //                       color: unreadCount > 0 ? Colors.black : Colors.grey,
+
 //                       fontWeight: unreadCount > 0
 //                           ? FontWeight.bold
 //                           : FontWeight.normal,
 //                     ),
+
 //                     maxLines: 1,
+
 //                     overflow: TextOverflow.ellipsis,
 //                   ),
 //                 ],
 //               ),
 //             ),
+
 //             const SizedBox(width: 12),
+
 //             ClipRRect(
 //               borderRadius: BorderRadius.circular(8),
+
 //               child: chat.postImage.isNotEmpty
 //                   ? Image.network(
 //                       chat.postImage,
+
 //                       width: 60,
+
 //                       height: 60,
+
 //                       fit: BoxFit.cover,
+
 //                       errorBuilder: (context, error, stackTrace) {
 //                         return Container(
 //                           width: 60,
+
 //                           height: 60,
+
 //                           color: Colors.grey.shade300,
+
 //                           child: const Icon(Icons.image_not_supported),
 //                         );
 //                       },
 //                     )
 //                   : Container(
 //                       width: 60,
+
 //                       height: 60,
+
 //                       color: Colors.grey.shade300,
+
 //                       child: const Icon(Icons.image),
 //                     ),
 //             ),
@@ -693,8 +995,10 @@
 //     switch (offerType) {
 //       case 'Product':
 //         return Colors.orange;
+
 //       case 'Service':
 //         return Colors.blue;
+
 //       default:
 //         return Colors.grey;
 //     }
@@ -710,10 +1014,14 @@
 //       return Scaffold(
 //         appBar: AppBar(
 //           title: const Text('Trade Chat'),
+
 //           backgroundColor: Colors.white,
+
 //           elevation: 0,
+
 //           foregroundColor: Colors.black,
 //         ),
+
 //         body: const Center(child: LoadingWidget()),
 //       );
 //     }
@@ -722,15 +1030,21 @@
 //       return Scaffold(
 //         appBar: AppBar(
 //           title: const Text('Trade Chat'),
+
 //           backgroundColor: Colors.white,
+
 //           elevation: 0,
+
 //           foregroundColor: Colors.black,
 //         ),
+
 //         body: Center(
 //           child: ErrorDisplayWidget(
 //             message: _errorMessage!,
+
 //             onRetry: () {
 //               debugPrint('🔄 TradeChatScreen: Retry button pressed');
+
 //               _loadCurrentUser();
 //             },
 //           ),
@@ -740,28 +1054,50 @@
 
 //     return Scaffold(
 //       appBar: AppBar(
+//         leading: IconButton(
+//           icon: const Icon(Icons.arrow_back),
+
+//           onPressed: () {
+//             Navigator.maybePop(context);
+//           },
+//         ),
+
 //         title: const Text('Trade Chat'),
+
 //         backgroundColor: Colors.white,
+
 //         elevation: 0,
+
 //         foregroundColor: Colors.black,
+
 //         bottom: TabBar(
 //           controller: _tabController,
+
 //           tabs: const [
 //             Tab(text: 'All Chats'),
+
 //             Tab(text: 'Inbox'),
+
 //             Tab(text: 'Outbox'),
 //           ],
+
 //           labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+
 //           indicatorSize: TabBarIndicatorSize.tab,
 //         ),
 //       ),
+
 //       body: RefreshIndicator(
 //         onRefresh: _refreshChats,
+
 //         child: TabBarView(
 //           controller: _tabController,
+
 //           children: [
 //             _buildChatList(_allChats, isLoadingMore: _isLoadingMoreAllChats),
+
 //             _buildInboxList(),
+
 //             _buildChatList(_outboxChats, isLoadingMore: _isLoadingMoreOutbox),
 //           ],
 //         ),
@@ -776,21 +1112,31 @@
 //       return Center(
 //         child: Column(
 //           mainAxisAlignment: MainAxisAlignment.center,
+
 //           children: [
 //             Icon(
 //               Icons.chat_bubble_outline,
+
 //               size: 64,
+
 //               color: Colors.grey.shade400,
 //             ),
+
 //             const SizedBox(height: 16),
+
 //             Text(
 //               'No chats yet',
+
 //               style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
 //             ),
+
 //             const SizedBox(height: 8),
+
 //             Text(
 //               'When you start a conversation,\n it will appear here',
+
 //               textAlign: TextAlign.center,
+
 //               style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
 //             ),
 //           ],
@@ -804,22 +1150,29 @@
 //             scrollInfo.metrics.pixels >=
 //                 scrollInfo.metrics.maxScrollExtent - 100) {
 //           debugPrint('📜 Scroll threshold reached, loading more chats...');
+
 //           _loadMoreChats();
 //         }
+
 //         return true;
 //       },
+
 //       child: ListView.builder(
 //         padding: const EdgeInsets.only(top: 8, bottom: 8),
+
 //         itemCount: chats.length + (isLoadingMore ? 1 : 0),
+
 //         itemBuilder: (context, index) {
 //           if (index == chats.length) {
 //             return const Center(
 //               child: Padding(
 //                 padding: EdgeInsets.all(16),
+
 //                 child: CircularProgressIndicator(),
 //               ),
 //             );
 //           }
+
 //           return _buildChatItem(chats[index]);
 //         },
 //       ),
@@ -831,17 +1184,25 @@
 //       return Center(
 //         child: Column(
 //           mainAxisAlignment: MainAxisAlignment.center,
+
 //           children: [
 //             Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
+
 //             const SizedBox(height: 16),
+
 //             Text(
 //               'No incoming offers',
+
 //               style: TextStyle(color: Colors.grey.shade600, fontSize: 18),
 //             ),
+
 //             const SizedBox(height: 8),
+
 //             Text(
 //               'When someone makes an offer on your items,\n they will appear here',
+
 //               textAlign: TextAlign.center,
+
 //               style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
 //             ),
 //           ],
@@ -854,37 +1215,47 @@
 //         if (_userProducts.length > 1)
 //           Padding(
 //             padding: const EdgeInsets.all(16),
+
 //             child: Row(
 //               children: [
 //                 Expanded(
 //                   child: OutlinedButton.icon(
 //                     onPressed: _showProductFilterDialog,
+
 //                     icon: const Icon(Icons.filter_list, size: 20),
+
 //                     label: Text(
 //                       _selectedProductFilter ?? 'Filter by Your Product',
+
 //                       overflow: TextOverflow.ellipsis,
 //                     ),
+
 //                     style: OutlinedButton.styleFrom(
 //                       padding: const EdgeInsets.symmetric(
 //                         vertical: 12,
+
 //                         horizontal: 16,
 //                       ),
 //                     ),
 //                   ),
 //                 ),
+
 //                 if (_selectedProductFilter != null)
 //                   IconButton(
 //                     icon: const Icon(Icons.clear),
+
 //                     onPressed: () {
 //                       setState(() {
 //                         _selectedProductFilter = null;
 //                       });
+
 //                       _loadInboxChats(refresh: true);
 //                     },
 //                   ),
 //               ],
 //             ),
 //           ),
+
 //         Expanded(
 //           child: NotificationListener<ScrollNotification>(
 //             onNotification: (scrollInfo) {
@@ -893,20 +1264,26 @@
 //                       scrollInfo.metrics.maxScrollExtent - 100) {
 //                 _loadMoreChats();
 //               }
+
 //               return true;
 //             },
+
 //             child: ListView.builder(
 //               padding: const EdgeInsets.only(bottom: 8),
+
 //               itemCount: _inboxChats.length + (_isLoadingMoreInbox ? 1 : 0),
+
 //               itemBuilder: (context, index) {
 //                 if (index == _inboxChats.length) {
 //                   return const Center(
 //                     child: Padding(
 //                       padding: EdgeInsets.all(16),
+
 //                       child: CircularProgressIndicator(),
 //                     ),
 //                   );
 //                 }
+
 //                 return _buildChatItem(_inboxChats[index]);
 //               },
 //             ),
@@ -918,6 +1295,8 @@
 // }
 
 // lib/screens/tradechatscreen/TradeChatScreen.dart
+
+import 'package:Yempover_app/screens/Home_screen.dart';
 import 'package:Yempover_app/services/socket_io/socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -954,11 +1333,9 @@ class _TradeChatScreenState extends State<TradeChatScreen>
   int _allChatsCurrentPage = 1;
   int _allChatsTotalPages = 1;
   bool _isLoadingMoreAllChats = false;
-
   int _inboxCurrentPage = 1;
   int _inboxTotalPages = 1;
   bool _isLoadingMoreInbox = false;
-
   int _outboxCurrentPage = 1;
   int _outboxTotalPages = 1;
   bool _isLoadingMoreOutbox = false;
@@ -970,6 +1347,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
   void initState() {
     super.initState();
     debugPrint('🏁 TradeChatScreen: initState called');
+
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_handleTabChange);
     WidgetsBinding.instance.addObserver(this);
@@ -980,6 +1358,14 @@ class _TradeChatScreenState extends State<TradeChatScreen>
   @override
   void dispose() {
     debugPrint('🗑️ TradeChatScreen: dispose called');
+    _socketService.off('new_message', _handleNewMessage);
+    _socketService.off('chat_updated', _handleChatUpdated);
+    _socketService.off('offer_accepted', _handleOfferUpdated);
+    _socketService.off('offer_rejected', _handleOfferUpdated);
+    _socketService.off('offer_created', _handleOfferCreated);
+    _socketService.off('deal_completed', _handleChatStatusChanged);
+    _socketService.off('deal_cancelled', _handleChatStatusChanged);
+
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
     _chatService.dispose();
@@ -994,8 +1380,53 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     }
   }
 
+  /// 🔙 Navigation method to go back to HomeScreen
+  void _navigateToHomeScreen() {
+    debugPrint('🏠 TradeChatScreen: Navigating to HomeScreen');
+
+    // Use a post-frame callback to avoid navigator lock issues
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      try {
+        // First try to pop until we find HomeScreen
+        bool foundHomeScreen = false;
+
+        Navigator.popUntil(context, (route) {
+          if (route.settings.name == '/home' ||
+              route.settings.name == 'HomeScreen' ||
+              route.settings.name == '/') {
+            foundHomeScreen = true;
+            return true; // Stop at HomeScreen
+          }
+          return false; // Continue popping
+        });
+
+        // If we didn't find HomeScreen in the stack, just pop
+        if (!foundHomeScreen && mounted) {
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+          } else {
+            // If can't pop, push HomeScreen and remove all previous
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+              (route) => false,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('❌ Navigation error: $e');
+        // Fallback: just pop if possible
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+      }
+    });
+  }
+
   void _initializeSocketListeners() {
-    // Listen for chat updates
+    _socketService.on('new_message', _handleNewMessage);
     _socketService.on('chat_updated', _handleChatUpdated);
     _socketService.on('offer_accepted', _handleOfferUpdated);
     _socketService.on('offer_rejected', _handleOfferUpdated);
@@ -1006,16 +1437,13 @@ class _TradeChatScreenState extends State<TradeChatScreen>
 
   void _handleChatUpdated(dynamic data) {
     if (!mounted) return;
-
     try {
       final chatId = data['chatId'];
       final chatData = data['chat'];
-
       if (chatData != null) {
         final updatedChat = TradeChat.fromJson(chatData);
         _updateChatInLists(updatedChat);
       } else {
-        // Refresh specific chat
         _refreshSingleChat(chatId);
       }
     } catch (e) {
@@ -1025,7 +1453,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
 
   void _handleOfferUpdated(dynamic data) {
     if (!mounted) return;
-
     try {
       final chatId = data['chatId'];
       _refreshSingleChat(chatId);
@@ -1036,7 +1463,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
 
   void _handleOfferCreated(dynamic data) {
     if (!mounted) return;
-
     try {
       final chatId = data['chatId'];
       _refreshSingleChat(chatId);
@@ -1045,9 +1471,27 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     }
   }
 
+  void _handleNewMessage(dynamic data) {
+    if (!mounted) return;
+    try {
+      final chatId = data?['chatId']?.toString();
+      if (chatId == null || chatId.isEmpty) return;
+      _refreshSingleChat(chatId);
+    } catch (e) {
+      debugPrint('Error handling new message in list screen: $e');
+    }
+  }
+
+  void _joinLoadedChatRooms(List<TradeChat> chats) {
+    for (final chat in chats) {
+      if (chat.id.isNotEmpty) {
+        _socketService.joinChat(chat.id);
+      }
+    }
+  }
+
   void _handleChatStatusChanged(dynamic data) {
     if (!mounted) return;
-
     try {
       final chatId = data['chatId'];
       _refreshSingleChat(chatId);
@@ -1067,19 +1511,16 @@ class _TradeChatScreenState extends State<TradeChatScreen>
 
   void _updateChatInLists(TradeChat updatedChat) {
     setState(() {
-      // Update in all chats list
       final allIndex = _allChats.indexWhere((c) => c.id == updatedChat.id);
       if (allIndex != -1) {
         _allChats[allIndex] = updatedChat;
       }
 
-      // Update in inbox chats list
       final inboxIndex = _inboxChats.indexWhere((c) => c.id == updatedChat.id);
       if (inboxIndex != -1) {
         _inboxChats[inboxIndex] = updatedChat;
       }
 
-      // Update in outbox chats list
       final outboxIndex = _outboxChats.indexWhere(
         (c) => c.id == updatedChat.id,
       );
@@ -1121,7 +1562,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
 
   Future<void> _loadCurrentUser() async {
     debugPrint('👤 TradeChatScreen: Loading current user...');
-
     try {
       _currentUserId = await _tokenService.getUserId();
       debugPrint(
@@ -1134,12 +1574,11 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       );
 
       if (_currentUserId != null && _currentUserId!.isNotEmpty) {
-        // Initialize socket service with token
         if (token != null) {
           _socketService.init(token: token);
         }
-
         debugPrint('✅ TradeChatScreen: User ID found, loading chats...');
+
         await Future.wait([
           _loadAllChats(refresh: true),
           _loadInboxChats(refresh: true),
@@ -1161,12 +1600,10 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     }
   }
 
-  // Load All Chats
   Future<void> _loadAllChats({bool refresh = true}) async {
     debugPrint(
       '📥 TradeChatScreen: Loading all chats - refresh: $refresh, page: $_allChatsCurrentPage',
     );
-
     if (refresh) {
       setState(() {
         _isLoading = true;
@@ -1207,6 +1644,8 @@ class _TradeChatScreenState extends State<TradeChatScreen>
         _isLoading = false;
         _isLoadingMoreAllChats = false;
       });
+
+      _joinLoadedChatRooms(response.data.chats.cast<TradeChat>());
     } catch (e) {
       debugPrint('❌ TradeChatScreen: Error loading all chats: $e');
       setState(() {
@@ -1217,12 +1656,10 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     }
   }
 
-  // Load Inbox Chats
   Future<void> _loadInboxChats({bool refresh = true}) async {
     debugPrint(
       '📥 TradeChatScreen: Loading inbox chats - refresh: $refresh, page: $_inboxCurrentPage, filter: $_selectedProductFilter',
     );
-
     if (refresh) {
       setState(() {
         _inboxCurrentPage = 1;
@@ -1257,10 +1694,10 @@ class _TradeChatScreenState extends State<TradeChatScreen>
         }
         _inboxTotalPages = response.data.pagination.pages;
         _isLoadingMoreInbox = false;
-
-        // Load user products from inbox chats
         _loadUserProducts();
       });
+
+      _joinLoadedChatRooms(response.data.chats.cast<TradeChat>());
     } catch (e) {
       debugPrint('❌ TradeChatScreen: Error loading inbox chats: $e');
       setState(() {
@@ -1269,12 +1706,10 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     }
   }
 
-  // Load Outbox Chats
   Future<void> _loadOutboxChats({bool refresh = true}) async {
     debugPrint(
       '📥 TradeChatScreen: Loading outbox chats - refresh: $refresh, page: $_outboxCurrentPage',
     );
-
     if (refresh) {
       setState(() {
         _outboxCurrentPage = 1;
@@ -1307,6 +1742,8 @@ class _TradeChatScreenState extends State<TradeChatScreen>
         _outboxTotalPages = response.data.pagination.pages;
         _isLoadingMoreOutbox = false;
       });
+
+      _joinLoadedChatRooms(response.data.chats.cast<TradeChat>());
     } catch (e) {
       debugPrint('❌ TradeChatScreen: Error loading outbox chats: $e');
       setState(() {
@@ -1320,7 +1757,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       return;
 
     final currentIndex = _tabController.index;
-
     if (currentIndex == 0) {
       if (_allChatsCurrentPage < _allChatsTotalPages) {
         setState(() {
@@ -1350,7 +1786,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
 
   void _loadUserProducts() {
     debugPrint('📦 TradeChatScreen: Loading user products from inbox chats...');
-
     final products = _inboxChats
         .map((chat) => chat.postTitle)
         .where((title) => title.isNotEmpty)
@@ -1360,7 +1795,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     setState(() {
       _userProducts = ['All Products', ...products];
     });
-
     debugPrint(
       '📦 TradeChatScreen: Found ${_userProducts.length - 1} unique products',
     );
@@ -1430,7 +1864,6 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     debugPrint(
       '👉 TradeChatScreen: Opening chat detail for chat ID: ${chat.id}',
     );
-
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1452,16 +1885,13 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     if (chat.messages.isEmpty) {
       return 'No messages yet';
     }
-
     final lastMessage = chat.messages.last;
     final content = lastMessage.messageText.trim();
-
     if (content.isEmpty) {
       return 'No messages yet';
     } else if (content.toLowerCase().contains('image')) {
       return '📷 Image';
     }
-
     return content.length > 50 ? '${content.substring(0, 50)}...' : content;
   }
 
@@ -1700,6 +2130,10 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _navigateToHomeScreen,
+          ),
           title: const Text('Trade Chat'),
           backgroundColor: Colors.white,
           elevation: 0,
@@ -1712,6 +2146,10 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     if (_errorMessage != null) {
       return Scaffold(
         appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _navigateToHomeScreen,
+          ),
           title: const Text('Trade Chat'),
           backgroundColor: Colors.white,
           elevation: 0,
@@ -1731,6 +2169,10 @@ class _TradeChatScreenState extends State<TradeChatScreen>
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _navigateToHomeScreen,
+        ),
         title: const Text('Trade Chat'),
         backgroundColor: Colors.white,
         elevation: 0,

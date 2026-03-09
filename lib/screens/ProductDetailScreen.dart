@@ -71,7 +71,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
     );
 
     if (result == true && mounted) {
-      _refreshPost();
+      Navigator.pop(context, true);
     }
   }
 

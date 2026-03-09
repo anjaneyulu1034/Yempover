@@ -27,6 +27,36 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   final TextEditingController _descriptionController = TextEditingController();
   bool _isSubmitting = false;
 
+  String _buildOfferTitle() {
+    if (widget.selectedItems.isEmpty) {
+      return 'Offer for ${widget.post.title}';
+    }
+
+    if (widget.selectedItems.length == 1) {
+      return widget.selectedItems.first.name;
+    }
+
+    final firstTwo = widget.selectedItems
+        .take(2)
+        .map((item) => item.name)
+        .join(', ');
+    final remaining = widget.selectedItems.length - 2;
+    return remaining > 0 ? '$firstTwo +$remaining more' : firstTwo;
+  }
+
+  String _buildOfferDescription() {
+    final userDescription = _descriptionController.text.trim();
+    final selectedItemNames = widget.selectedItems
+        .map((item) => item.name)
+        .join(', ');
+
+    if (selectedItemNames.isEmpty) {
+      return userDescription;
+    }
+
+    return '$userDescription\n\nOffered items: $selectedItemNames';
+  }
+
   @override
   void dispose() {
     _descriptionController.dispose();
@@ -72,6 +102,15 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
 
       print('✅ Chat initiated successfully!');
       print('   Chat ID: ${chat.id}');
+
+      final createdOffer = await _chatService.createBarterOffer(
+        chatId: chat.id,
+        barterItemTitle: _buildOfferTitle(),
+        barterItemDescription: _buildOfferDescription(),
+      );
+
+      print('✅ Offer created successfully!');
+      print('   Offer ID: ${createdOffer.id}');
 
       // Show success message
       if (!mounted) return;

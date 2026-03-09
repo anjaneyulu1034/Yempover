@@ -1,13 +1,19 @@
+import 'package:Yempover_app/models/ProductPostmain.dart' hide AppNotification;
+import 'package:Yempover_app/screens/PostDetailScreen.dart';
 import 'package:Yempover_app/screens/notification_preferences_screen.dart';
+import 'package:Yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:Yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:Yempover_app/services/api_service.dart';
+import 'package:Yempover_app/services/token_service.dart';
+import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:Yempover_app/utils/CustomErrorWidget.dart';
 import 'package:Yempover_app/utils/loading_widget.dart';
 import 'package:Yempover_app/utils/notification_provider.dart';
 import 'package:Yempover_app/utils/notification_tile.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import '../models/notification_model.dart';
-
-import 'FavoritesScreen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({
@@ -22,18 +28,26 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final ScrollController _scrollController = ScrollController();
+  final ApiService _apiService = ApiService();
+  final TradeChatService _tradeChatService = TradeChatService();
+  final TokenService _tokenService = TokenService();
   bool _isLoadingMore = false;
 
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadInitialData();
+    });
     _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _apiService.dispose();
+    _tradeChatService.dispose();
     super.dispose();
   }
 
@@ -54,10 +68,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final provider = Provider.of<NotificationProvider>(context, listen: false);
 
     if (!_isLoadingMore && provider.hasMorePages && !provider.isLoading) {
-      setState(() => _isLoadingMore = true);
+      _setLoadingMoreSafely(true);
       await provider.loadMoreNotifications();
-      setState(() => _isLoadingMore = false);
+      _setLoadingMoreSafely(false);
     }
+  }
+
+  void _setLoadingMoreSafely(bool value) {
+    if (!mounted || _isLoadingMore == value) return;
+
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    final isBuilding =
+        phase == SchedulerPhase.persistentCallbacks ||
+        phase == SchedulerPhase.transientCallbacks;
+
+    if (isBuilding) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _isLoadingMore == value) return;
+        setState(() => _isLoadingMore = value);
+      });
+      return;
+    }
+
+    setState(() => _isLoadingMore = value);
   }
 
   Future<void> _refreshNotifications() async {
@@ -94,16 +127,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   }
                 },
                 itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'mark_all_read',
-                    child: Row(
-                      children: [
-                        Icon(Icons.done_all, size: 20),
-                        SizedBox(width: 8),
-                        Text('Mark all as read'),
-                      ],
-                    ),
-                  ),
+                  // const PopupMenuItem(
+                  //   value: 'mark_all_read',
+                  //   child: Row(
+                  //     // children: [
+                  //     //   Icon(Icons.done_all, size: 20),
+                  //     //   SizedBox(width: 8),
+                  //     //   Text('Mark all as read'),
+                  //     // ],
+                  //   ),
+                  // ),
                   // const PopupMenuItem(
                   //   value: 'clear_all',
                   //   child: Row(
@@ -114,16 +147,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   //     ],
                   //   ),
                   // ),
-                  const PopupMenuItem(
-                    value: 'preferences',
-                    child: Row(
-                      children: [
-                        Icon(Icons.settings, size: 20),
-                        SizedBox(width: 8),
-                        Text('Preferences'),
-                      ],
-                    ),
-                  ),
+                  // const PopupMenuItem(
+                  //   value: 'preferences',
+                  //   child: Row(
+                  //     children: [
+                  //       Icon(Icons.settings, size: 20),
+                  //       SizedBox(width: 8),
+                  //       Text('Preferences'),
+                  //     ],
+                  //   ),
+                  // ),
                 ],
               );
             },
@@ -151,8 +184,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           icon: Icons.notifications_off,
                           title: 'No notifications',
                           message: 'You\'re all caught up!',
-                          buttonText: '',
-                          onButtonPressed: () {},
+                          // buttonText: '',
+                          // onButtonPressed: () {},
                         )
                       : ListView.builder(
                           controller: _scrollController,
@@ -262,33 +295,181 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     AppNotification notification,
     NotificationProvider provider,
   ) async {
-    // Mark as read if not already read
     if (!notification.isRead) {
       await provider.markAsRead(notification.id);
     }
 
-    // Navigate based on notification type
-    final route = notification.navigationRoute;
-    if (route != null) {
-      // Navigate to the appropriate screen
-      // You'll implement navigation based on your routing system
+    try {
+      final chatId = _resolveTradeChatId(notification);
+      if (chatId != null) {
+        await _openChatDetail(chatId);
+        return;
+      }
+
+      final postId = _resolvePostId(notification);
+      if (postId != null) {
+        await _openPostDetail(postId, _isServiceNotification(notification));
+        return;
+      }
+
+      if (_isTradeNotification(notification)) {
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const TradeChatScreen()),
+        );
+        return;
+      }
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Navigating to: $route'),
-          backgroundColor: Colors.blue,
-          duration: const Duration(seconds: 1),
-        ),
-      );
-    } else {
-      // Handle notifications without navigation
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(notification.message),
-          backgroundColor: Colors.grey,
+          content: Text('Unable to open notification: $e'),
+          backgroundColor: Colors.red,
           duration: const Duration(seconds: 2),
         ),
       );
+      return;
     }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(notification.message),
+        backgroundColor: Colors.grey,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  String? _extractIdFromRoute(String? route, List<String> prefixes) {
+    if (route == null || route.trim().isEmpty) return null;
+
+    final trimmedRoute = route.trim();
+    Uri? uri;
+    try {
+      uri = Uri.parse(trimmedRoute);
+    } catch (_) {
+      uri = null;
+    }
+
+    final path = (uri?.path.isNotEmpty == true) ? uri!.path : trimmedRoute;
+    for (final prefix in prefixes) {
+      if (!path.startsWith(prefix)) continue;
+
+      final remaining = path.substring(prefix.length);
+      final segments = remaining
+          .split('/')
+          .where((segment) => segment.isNotEmpty)
+          .toList();
+      if (segments.isNotEmpty) {
+        return segments.first;
+      }
+    }
+
+    return null;
+  }
+
+  bool _isTradeNotification(AppNotification notification) {
+    switch (notification.type) {
+      case NotificationType.OFFER_RECEIVED:
+      case NotificationType.OFFER_ACCEPTED:
+      case NotificationType.OFFER_REJECTED:
+      case NotificationType.OFFER_COUNTERED:
+      case NotificationType.OFFER_WITHDRAWN:
+      case NotificationType.MESSAGE_RECEIVED:
+      case NotificationType.DEAL_COMPLETED:
+      case NotificationType.DEAL_CANCELLED:
+      case NotificationType.TRADE_COMPLETED:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  String? _resolveTradeChatId(AppNotification notification) {
+    if (notification.tradeChatId != null &&
+        notification.tradeChatId!.isNotEmpty) {
+      return notification.tradeChatId;
+    }
+
+    return _extractIdFromRoute(notification.navigationRoute, [
+      '/trade-chat/',
+      '/trade-chats/',
+      '/chat/',
+      '/chats/',
+    ]);
+  }
+
+  String? _resolvePostId(AppNotification notification) {
+    if (notification.productId != null && notification.productId!.isNotEmpty) {
+      return notification.productId;
+    }
+
+    if (notification.serviceId != null && notification.serviceId!.isNotEmpty) {
+      return notification.serviceId;
+    }
+
+    return _extractIdFromRoute(notification.navigationRoute, [
+      '/product/',
+      '/products/',
+      '/service/',
+      '/services/',
+      '/post/',
+      '/posts/',
+    ]);
+  }
+
+  bool _isServiceNotification(AppNotification notification) {
+    if (notification.serviceId != null && notification.serviceId!.isNotEmpty) {
+      return true;
+    }
+
+    if (notification.productId != null && notification.productId!.isNotEmpty) {
+      return false;
+    }
+
+    final route = notification.navigationRoute ?? '';
+    return route.contains('/service/') || route.contains('/services/');
+  }
+
+  Future<void> _openChatDetail(String chatId) async {
+    final chat = await _tradeChatService.getChatById(chatId);
+    final currentUserId = await _tokenService.getUserId();
+
+    if (currentUserId == null || currentUserId.isEmpty) {
+      throw Exception('User not found');
+    }
+
+    if (!mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatDetailScreen(
+          chat: chat,
+          currentUserId: currentUserId,
+          onChatUpdated: (_) {},
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openPostDetail(String postId, bool isService) async {
+    final response = await _apiService.getPostDetail(
+      postId: postId,
+      type: isService ? PostType.service : PostType.product,
+    );
+
+    if (!mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            PostDetailScreen(post: response.post, userItems: const []),
+      ),
+    );
   }
 
   Future<void> _dismissNotification(

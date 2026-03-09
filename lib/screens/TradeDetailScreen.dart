@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:Yempover_app/screens/TradeHistoryScreen.dart';
+import '../models/trade_history_model.dart';
 
 class TradeDetailScreen extends StatelessWidget {
-  final TradeHistoryItem trade;
+  final TradeItem trade;
+  final String? currentUserId;
 
-  const TradeDetailScreen({super.key, required this.trade});
+  const TradeDetailScreen({super.key, required this.trade, this.currentUserId});
 
   @override
   Widget build(BuildContext context) {
+    final tradeType = currentUserId != null
+        ? trade.getTradeType(currentUserId!)
+        : trade.getDisplayTradeType();
+
+    final isBarter = trade.isBarter;
+    final price = trade.displayPrice;
+    final actualPrice = trade.product.price;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -57,11 +66,11 @@ class TradeDetailScreen extends StatelessWidget {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: _getTradeTypeColor(trade.tradeType),
+                            color: _getTradeTypeColor(tradeType),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            trade.tradeType,
+                            tradeType,
                             style: const TextStyle(
                               fontSize: 14,
                               color: Colors.white,
@@ -86,7 +95,7 @@ class TradeDetailScreen extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          _formatDateWithSuffix(trade.date),
+                          _formatDateWithSuffix(trade.completedDate),
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -123,28 +132,31 @@ class TradeDetailScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    // Other User
+                    // Other User (the person they traded with)
                     _buildUserSection(
-                      title: trade.otherPartyName,
-                      imageUrl: trade.otherPartyImage,
-                      itemTitle: trade.tradeType == 'Barter'
-                          ? trade.swappedItemTitle!
-                          : trade.title,
-                      itemImageUrl: trade.tradeType == 'Barter'
-                          ? trade.swappedItemImage!
-                          : trade.imageUrl,
+                      title: trade.otherUser.fullName,
+                      imageUrl:
+                          trade.otherUser.profileImage ??
+                          'https://via.placeholder.com/150',
+                      itemTitle: trade.product.title,
+                      itemImageUrl: trade.product.primaryImage.isNotEmpty
+                          ? trade.product.primaryImage
+                          : 'https://via.placeholder.com/150',
                       isOtherUser: true,
                     ),
                     const SizedBox(height: 16),
                     const Divider(),
                     const SizedBox(height: 16),
 
-                    // Current User
+                    // Current User (Me)
                     _buildUserSection(
                       title: 'Me',
-                      imageUrl: 'https://i.pravatar.cc/150?img=11',
-                      itemTitle: trade.title,
-                      itemImageUrl: trade.imageUrl,
+                      imageUrl:
+                          'https://via.placeholder.com/150', // Placeholder for current user
+                      itemTitle: trade.product.title,
+                      itemImageUrl: trade.product.primaryImage.isNotEmpty
+                          ? trade.product.primaryImage
+                          : 'https://via.placeholder.com/150',
                       isOtherUser: false,
                     ),
                   ],
@@ -155,7 +167,7 @@ class TradeDetailScreen extends StatelessWidget {
             const SizedBox(height: 24),
 
             // Price Information (for Sold/Purchased)
-            if (trade.tradeType == 'Sold' || trade.tradeType == 'Purchased')
+            if (!isBarter && price != null && actualPrice != null)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -179,13 +191,13 @@ class TradeDetailScreen extends StatelessWidget {
                         children: [
                           _buildPriceRow(
                             'Actual Price',
-                            '\$${trade.actualPrice!.toStringAsFixed(2)}',
+                            '\$${actualPrice.toStringAsFixed(2)}',
                             Colors.grey,
                           ),
                           const SizedBox(height: 12),
                           _buildPriceRow(
                             'Selling Price',
-                            '\$${trade.sellingPrice!.toStringAsFixed(2)}',
+                            '\$${price.toStringAsFixed(2)}',
                             Colors.green,
                           ),
                           const SizedBox(height: 12),
@@ -193,10 +205,8 @@ class TradeDetailScreen extends StatelessWidget {
                           const SizedBox(height: 12),
                           _buildPriceRow(
                             'Price Difference',
-                            '\$${(trade.actualPrice! - trade.sellingPrice!).abs().toStringAsFixed(2)}',
-                            trade.actualPrice! > trade.sellingPrice!
-                                ? Colors.red
-                                : Colors.green,
+                            '\$${(actualPrice - price).abs().toStringAsFixed(2)}',
+                            actualPrice > price ? Colors.red : Colors.green,
                           ),
                         ],
                       ),
@@ -240,7 +250,95 @@ class TradeDetailScreen extends StatelessWidget {
                 ],
               ),
 
+            // Participant Remarks (if available)
+            if (trade.participantRemarks.isNotEmpty)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Participant Remarks:',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        trade.participantRemarks,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.black87,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+
+            // Initiator Remarks (if available)
+            if (trade.initiatorRemarks != null &&
+                trade.initiatorRemarks!.isNotEmpty)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Initiator Remarks:',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        trade.initiatorRemarks!,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.black87,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
             const SizedBox(height: 40),
+
+            // Product Location (if available)
+            if (trade.product.location.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Row(
+                  children: [
+                    Icon(Icons.location_on, size: 20, color: Colors.grey[600]),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        trade.product.location,
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
@@ -259,7 +357,14 @@ class TradeDetailScreen extends StatelessWidget {
       children: [
         Row(
           children: [
-            CircleAvatar(radius: 24, backgroundImage: NetworkImage(imageUrl)),
+            CircleAvatar(
+              radius: 24,
+              backgroundImage: NetworkImage(imageUrl),
+              onBackgroundImageError: (_, __) => const Icon(Icons.person),
+              child: imageUrl.contains('placeholder')
+                  ? const Icon(Icons.person, size: 24)
+                  : null,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -318,8 +423,19 @@ class TradeDetailScreen extends StatelessWidget {
                   image: DecorationImage(
                     image: NetworkImage(itemImageUrl),
                     fit: BoxFit.cover,
+                    onError: (exception, stackTrace) {
+                      // Handle image error
+                    },
                   ),
                 ),
+                child: itemImageUrl.contains('placeholder')
+                    ? const Center(
+                        child: Icon(
+                          Icons.image_not_supported,
+                          color: Colors.grey,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -329,6 +445,8 @@ class TradeDetailScreen extends StatelessWidget {
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],

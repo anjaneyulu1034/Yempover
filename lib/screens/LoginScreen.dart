@@ -381,6 +381,7 @@ import 'package:Yempover_app/screens/OTPVerificationScreen.dart';
 import 'package:Yempover_app/screens/SignupScreen.dart';
 import 'package:Yempover_app/services/api_service.dart' hide ErrorMessages;
 import 'package:Yempover_app/services/auth_service.dart';
+import 'package:Yempover_app/services/token_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -393,6 +394,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _phoneController = TextEditingController();
   bool _isLoading = false;
   final AuthService _authService = AuthService();
+  final TokenService _tokenService = TokenService();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   @override
@@ -437,8 +439,9 @@ class _LoginScreenState extends State<LoginScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               debugPrint('🟣 LoginScreen: Continuing as guest');
+              await _tokenService.enableGuestMode();
               Navigator.pop(context); // Close dialog
               _navigateToHomeScreen(); // Navigate to home screen
             },

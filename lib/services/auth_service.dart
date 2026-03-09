@@ -14,6 +14,7 @@ class AuthService extends ChangeNotifier {
     required String lastName,
     required String email,
     required String mobileNumber,
+    required String photo,
     required bool acceptedTerms, // ✅ NEW
   }) async {
     debugPrint('👤 AuthService: registerUser called');
@@ -25,6 +26,7 @@ class AuthService extends ChangeNotifier {
       lastName: lastName,
       email: email,
       mobileNumber: mobileNumber,
+      photo: photo,
       acceptedTerms: acceptedTerms, // ✅ NEW
     );
 

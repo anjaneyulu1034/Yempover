@@ -1,114 +1,93 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:Yempover_app/screens/TradeDetailScreen.dart';
+import '../models/trade_history_model.dart';
+import '../services/trade_history_service.dart';
+import 'TradeDetailScreen.dart';
 
 class TradeHistoryScreen extends StatefulWidget {
   const TradeHistoryScreen({super.key});
 
   @override
-  _TradeHistoryScreenState createState() => _TradeHistoryScreenState();
+  State<TradeHistoryScreen> createState() => _TradeHistoryScreenState();
 }
 
 class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
-  final List<TradeHistoryItem> _tradeHistory = [
-    TradeHistoryItem(
-      id: '1',
-      title: 'Books',
-      imageUrl:
-          'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&q=80',
-      tradeType: 'Barter',
-      date: DateTime(2023, 11, 28),
-      otherPartyName: 'Clara Ari',
-      otherPartyImage: 'https://i.pravatar.cc/150?img=32',
-      actualPrice: null,
-      sellingPrice: null,
-      swappedItemTitle: 'Backpack',
-      swappedItemImage:
-          'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&q=80',
-      remarks:
-          'Deal was completed on-time. Additional expenses 20 dollars transportation',
-    ),
-    TradeHistoryItem(
-      id: '2',
-      title: 'Armchair',
-      imageUrl:
-          'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&q=80',
-      tradeType: 'Purchased',
-      date: DateTime(2023, 11, 27),
-      price: 25.00,
-      otherPartyName: 'Michael Chen',
-      otherPartyImage: 'https://i.pravatar.cc/150?img=45',
-      actualPrice: 30.00,
-      sellingPrice: 25.00,
-    ),
-    TradeHistoryItem(
-      id: '3',
-      title: 'Bicycle',
-      imageUrl:
-          'https://images.unsplash.com/photo-1532298229144-0ec0c57515c7?w=400&q=80',
-      tradeType: 'Purchased',
-      date: DateTime(2023, 11, 27),
-      price: 132.49,
-      otherPartyName: 'Sarah Johnson',
-      otherPartyImage: 'https://i.pravatar.cc/150?img=22',
-      actualPrice: 150.00,
-      sellingPrice: 132.49,
-    ),
-    TradeHistoryItem(
-      id: '4',
-      title: 'Sofa',
-      imageUrl:
-          'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400&q=80',
-      tradeType: 'Sold',
-      date: DateTime(2023, 10, 11),
-      price: 145.49,
-      otherPartyName: 'Robert Wilson',
-      otherPartyImage: 'https://i.pravatar.cc/150?img=15',
-      actualPrice: 160.00,
-      sellingPrice: 145.49,
-    ),
-    TradeHistoryItem(
-      id: '5',
-      title: 'Smart Speaker',
-      imageUrl:
-          'https://images.unsplash.com/photo-1543512214-318c7553f230?w=400&q=80',
-      tradeType: 'Sold',
-      date: DateTime(2023, 10, 5),
-      price: 99.99,
-      otherPartyName: 'Emma Davis',
-      otherPartyImage: 'https://i.pravatar.cc/150?img=28',
-      actualPrice: 120.00,
-      sellingPrice: 99.99,
-    ),
-    TradeHistoryItem(
-      id: '6',
-      title: 'Water Bottle',
-      imageUrl:
-          'https://images.unsplash.com/photo-1523362628745-0c100150b504?w=400&q=80',
-      tradeType: 'Barter',
-      date: DateTime(2023, 10, 2),
-      otherPartyName: 'David Lee',
-      otherPartyImage: 'https://i.pravatar.cc/150?img=19',
-      actualPrice: null,
-      sellingPrice: null,
-      swappedItemTitle: 'Coffee Mug',
-      swappedItemImage:
-          'https://images.unsplash.com/photo-1514228742587-6b1558fcf93a?w=400&q=80',
-    ),
-    TradeHistoryItem(
-      id: '7',
-      title: 'Sweatshirt',
-      imageUrl:
-          'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&q=80',
-      tradeType: 'Sold',
-      date: DateTime(2023, 8, 26),
-      price: 29.99,
-      otherPartyName: 'Lisa Brown',
-      otherPartyImage: 'https://i.pravatar.cc/150?img=34',
-      actualPrice: 35.00,
-      sellingPrice: 29.99,
-    ),
-  ];
+  final TradeHistoryService _service = TradeHistoryService();
+  List<TradeItem> _trades = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+  String? _currentUserId;
+  int _totalTrades = 0;
+  Breakdown? _breakdown;
+  Subscription? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTradeHistory();
+  }
+
+  Future<void> _loadTradeHistory() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Get current user ID
+      _currentUserId = await _service.getCurrentUserId();
+
+      // Fetch stats from API
+      final statsData = await _service.getUserStats();
+
+      setState(() {
+        _trades = statsData.trades.getAllTrades();
+        _totalTrades = statsData.totalTradesCompleted;
+        _breakdown = statsData.breakdown;
+        _subscription = statsData.subscription;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        _isLoading = false;
+      });
+
+      // Show error snackbar
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_errorMessage!),
+          backgroundColor: Colors.red,
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: _loadTradeHistory,
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _refreshTradeHistory() async {
+    try {
+      final statsData = await _service.refreshStats();
+      setState(() {
+        _trades = statsData.trades.getAllTrades();
+        _totalTrades = statsData.totalTradesCompleted;
+        _breakdown = statsData.breakdown;
+        _subscription = statsData.subscription;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to refresh: ${e.toString().replaceFirst('Exception: ', '')}',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -122,26 +101,130 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
+        actions: [
+          if (_totalTrades > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Center(
+                child: Text(
+                  '$_totalTrades total',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                ),
+              ),
+            ),
+        ],
       ),
       backgroundColor: Colors.white,
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _tradeHistory.length,
-        itemBuilder: (context, index) {
-          final trade = _tradeHistory[index];
-          return _buildTradeItem(trade);
-        },
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+          ? _buildErrorWidget()
+          : _trades.isEmpty
+          ? _buildEmptyWidget()
+          : RefreshIndicator(
+              onRefresh: _refreshTradeHistory,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _trades.length,
+                itemBuilder: (context, index) {
+                  final trade = _trades[index];
+                  return _buildTradeItem(trade);
+                },
+              ),
+            ),
+    );
+  }
+
+  Widget _buildErrorWidget() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'Unable to load trade history',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _loadTradeHistory,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Try Again'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildTradeItem(TradeHistoryItem trade) {
+  Widget _buildEmptyWidget() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.history, size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No Trade History',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your completed trades will appear here',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTradeItem(TradeItem trade) {
+    final tradeType = _currentUserId != null
+        ? trade.getTradeType(_currentUserId!)
+        : trade.getDisplayTradeType();
+
+    final price = trade.displayPrice;
+    final imageUrl = trade.product.primaryImage.isNotEmpty
+        ? trade.product.primaryImage
+        : 'https://via.placeholder.com/150';
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => TradeDetailScreen(trade: trade),
+            builder: (context) =>
+                TradeDetailScreen(trade: trade, currentUserId: _currentUserId),
           ),
         );
       },
@@ -169,10 +252,21 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
                 image: DecorationImage(
-                  image: NetworkImage(trade.imageUrl),
+                  image: NetworkImage(imageUrl),
                   fit: BoxFit.cover,
+                  onError: (exception, stackTrace) {
+                    // Handle image loading error
+                  },
                 ),
               ),
+              child: imageUrl.contains('placeholder')
+                  ? const Center(
+                      child: Icon(
+                        Icons.image_not_supported,
+                        color: Colors.grey,
+                      ),
+                    )
+                  : null,
             ),
 
             const SizedBox(width: 16),
@@ -183,16 +277,18 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    trade.title,
+                    trade.product.title,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
 
-                  // Trade Type and Price/Barter
+                  // Trade Type and Price
                   Row(
                     children: [
                       Container(
@@ -201,11 +297,11 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: _getTradeTypeColor(trade.tradeType),
+                          color: _getTradeTypeColor(tradeType),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          trade.tradeType,
+                          tradeType,
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.white,
@@ -214,16 +310,17 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      if (trade.tradeType == 'Sold' ||
-                          trade.tradeType == 'Purchased')
+                      if (price != null)
                         Text(
-                          '\$${trade.price!.toStringAsFixed(2)}',
+                          '\$${price.toStringAsFixed(2)}',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: trade.tradeType == 'Sold'
+                            color: tradeType == 'Sold'
                                 ? Colors.green
-                                : Colors.blue,
+                                : tradeType == 'Purchased'
+                                ? Colors.blue
+                                : Colors.orange,
                           ),
                         ),
                     ],
@@ -231,10 +328,29 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
 
                   const SizedBox(height: 4),
 
-                  // Date
-                  Text(
-                    DateFormat('dd MMM yyyy').format(trade.date),
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  // Other Party and Date
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'with ${trade.otherUser.fullName}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        DateFormat('dd MMM yyyy').format(trade.completedDate),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -260,36 +376,4 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
         return Colors.grey;
     }
   }
-}
-
-class TradeHistoryItem {
-  final String id;
-  final String title;
-  final String imageUrl;
-  final String tradeType;
-  final DateTime date;
-  final double? price;
-  final String otherPartyName;
-  final String otherPartyImage;
-  final double? actualPrice;
-  final double? sellingPrice;
-  final String? swappedItemTitle;
-  final String? swappedItemImage;
-  final String? remarks;
-
-  TradeHistoryItem({
-    required this.id,
-    required this.title,
-    required this.imageUrl,
-    required this.tradeType,
-    required this.date,
-    this.price,
-    required this.otherPartyName,
-    required this.otherPartyImage,
-    this.actualPrice,
-    this.sellingPrice,
-    this.swappedItemTitle,
-    this.swappedItemImage,
-    this.remarks,
-  });
 }

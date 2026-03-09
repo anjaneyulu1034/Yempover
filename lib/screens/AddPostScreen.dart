@@ -6,8 +6,10 @@ import 'dart:io';
 import 'package:Yempover_app/services/category_service.dart';
 import 'package:Yempover_app/services/add_post_service.dart';
 import 'package:Yempover_app/models/add_post_model.dart';
+import 'package:Yempover_app/screens/service/ServiceAvailabilityScreen.dart';
 import 'package:Yempover_app/services/token_service.dart';
 import 'package:Yempover_app/services/location_service.dart';
+import 'package:Yempover_app/services/service_booking_service.dart';
 
 class AddPostScreen extends StatefulWidget {
   final Function()? onPostAdded;
@@ -24,6 +26,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
   final CategoryService _categoryService = CategoryService();
   final AddPostService _addPostService = AddPostService();
   final LocationService _locationService = LocationService();
+  final ServiceBookingService _serviceBookingService = ServiceBookingService();
 
   // Step 1 variables
   int _selectedOption = 1;
@@ -36,6 +39,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _willPayAmountController =
       TextEditingController();
+  final TextEditingController _validFromController = TextEditingController();
+  final TextEditingController _validUntilController = TextEditingController();
 
   // Category data - Two level selection
   List<Map<String, dynamic>> _mainCategories = [];
@@ -53,6 +58,10 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
   // Location variables
   bool _isGettingLocation = false;
+  double? _selectedLatitude;
+  double? _selectedLongitude;
+  DateTime? _validFromDate;
+  DateTime? _validUntilDate;
 
   @override
   void initState() {
@@ -67,6 +76,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
     _locationController.dispose();
     _priceController.dispose();
     _willPayAmountController.dispose();
+    _validFromController.dispose();
+    _validUntilController.dispose();
     _addPostService.dispose();
     super.dispose();
   }
@@ -223,11 +234,15 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
       if (address != null && address.isNotEmpty) {
         setState(() {
+          _selectedLatitude = position.latitude;
+          _selectedLongitude = position.longitude;
           _locationController.text = address;
         });
         _showSuccessSnackBar('Location updated successfully');
       } else {
         setState(() {
+          _selectedLatitude = position.latitude;
+          _selectedLongitude = position.longitude;
           _locationController.text =
               '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
         });
@@ -437,8 +452,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
         GestureDetector(
           onTap: _showImageSourceDialog,
           child: Container(
-            height: 120,
             width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 120),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               border: Border.all(
                 color:
@@ -456,32 +472,39 @@ class _AddPostScreenState extends State<AddPostScreen> {
               ),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.cloud_upload, size: 40, color: Colors.grey),
-                const SizedBox(height: 8),
-                const Text(
-                  'Upload your Images',
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Tap to upload',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const SizedBox(height: 8),
-                if (_postType == 'Product' && _selectedOption == 1)
-                  Text(
-                    _selectedImages.isEmpty
-                        ? '*At least 1 image required'
-                        : 'Add more images (optional)',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: _selectedImages.isEmpty ? Colors.red : Colors.grey,
-                    ),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_upload, size: 40, color: Colors.grey),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Upload your Images',
+                    style: TextStyle(color: Colors.grey),
+                    textAlign: TextAlign.center,
                   ),
-              ],
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Tap to upload',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  if (_postType == 'Product' && _selectedOption == 1)
+                    Text(
+                      _selectedImages.isEmpty
+                          ? '*At least 1 image required'
+                          : 'Add more images (optional)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: _selectedImages.isEmpty
+                            ? Colors.red
+                            : Colors.grey,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -800,8 +823,10 @@ class _AddPostScreenState extends State<AddPostScreen> {
       children: [
         Row(
           children: [
-            const Text(
-              'Enter Product Location',
+            Text(
+              _postType == 'Product'
+                  ? 'Enter Product Location'
+                  : 'Enter Service Location',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
             const Text(
@@ -846,6 +871,96 @@ class _AddPostScreenState extends State<AddPostScreen> {
         Text(
           'Your current location will be used to find nearby items',
           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickValidityDate({required bool isStart}) async {
+    final now = DateTime.now();
+    final initial = isStart
+        ? (_validFromDate ?? now)
+        : (_validUntilDate ?? _validFromDate ?? now);
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year + 5),
+    );
+
+    if (picked == null) return;
+
+    setState(() {
+      if (isStart) {
+        _validFromDate = picked;
+        _validFromController.text = _formatDateOnly(picked);
+        if (_validUntilDate != null &&
+            !_validUntilDate!.isAfter(_validFromDate!)) {
+          _validUntilDate = null;
+          _validUntilController.clear();
+        }
+      } else {
+        _validUntilDate = picked;
+        _validUntilController.text = _formatDateOnly(picked);
+      }
+    });
+  }
+
+  String _formatDateOnly(DateTime date) {
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year-$month-$day';
+  }
+
+  Widget _buildValidityFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Validity (Optional)',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _validFromController,
+                readOnly: true,
+                onTap: () => _pickValidityDate(isStart: true),
+                decoration: InputDecoration(
+                  hintText: 'Valid From',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.calendar_today),
+                    onPressed: () => _pickValidityDate(isStart: true),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _validUntilController,
+                readOnly: true,
+                onTap: () => _pickValidityDate(isStart: false),
+                decoration: InputDecoration(
+                  hintText: 'Valid Until',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.calendar_today),
+                    onPressed: () => _pickValidityDate(isStart: false),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -1221,11 +1336,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
         // Upload Photos
         _buildImageUploadSection(),
 
-        if (_postType == 'Product') ...[
+        if (_selectedOption == 1) ...[
           const SizedBox(height: 24),
 
           // Location with current location feature
           _buildLocationField(),
+        ],
+
+        if (_postType == 'Service' && _selectedOption == 1) ...[
+          const SizedBox(height: 24),
+          _buildValidityFields(),
         ],
 
         const SizedBox(height: 24),
@@ -1404,9 +1524,17 @@ class _AddPostScreenState extends State<AddPostScreen> {
       }
     }
 
-    // For all posts, require location
-    if (_locationController.text.isEmpty && _postType == 'Product') {
+    if (_selectedOption == 1 && _locationController.text.isEmpty) {
       _showError('Please enter a location');
+      return;
+    }
+
+    if (_postType == 'Service' &&
+        _selectedOption == 1 &&
+        _validFromDate != null &&
+        _validUntilDate != null &&
+        !_validUntilDate!.isAfter(_validFromDate!)) {
+      _showError('Valid Until must be later than Valid From');
       return;
     }
 
@@ -1508,6 +1636,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
             categoryId: _selectedSubCategoryId!,
             images: imageUrls,
             location: _locationController.text.trim(),
+            latitude: _selectedLatitude,
+            longitude: _selectedLongitude,
             barterStatus: 'NO_BARTER', // Default value
             price: price,
           );
@@ -1518,21 +1648,102 @@ class _AddPostScreenState extends State<AddPostScreen> {
           final response = await _addPostService.createProductPost(request);
           debugPrint('✅ Product created successfully');
         } else {
-          // Create service
-          final request = CreateServiceRequest(
-            title: _titleController.text.trim(),
-            description: _descriptionController.text.trim(),
-            categoryId: _selectedSubCategoryId!,
-            images: imageUrls,
-            status: 'PROVIDE_SERVICE',
-            price: price,
-          );
-
           debugPrint(
-            '📦 Creating service post with ${imageUrls.length} images',
+            '📦 Creating provider service with ${imageUrls.length} images via /api/services',
           );
-          final response = await _addPostService.createServicePost(request);
-          debugPrint('✅ Service created successfully');
+          try {
+            final response = await _serviceBookingService.createService(
+              title: _titleController.text.trim(),
+              description: _descriptionController.text.trim(),
+              category: _selectedSubCategoryId!,
+              price: price,
+              location: _locationController.text.trim(),
+              images: imageUrls,
+              validFrom: _validFromController.text.trim().isEmpty
+                  ? null
+                  : _validFromController.text.trim(),
+              validUntil: _validUntilController.text.trim().isEmpty
+                  ? null
+                  : _validUntilController.text.trim(),
+            );
+
+            final data = response['data'];
+            String? serviceId;
+            if (data is Map<String, dynamic>) {
+              if (data['service'] is Map<String, dynamic>) {
+                serviceId = data['service']['id']?.toString();
+              }
+              serviceId ??= data['id']?.toString();
+              serviceId ??= data['serviceId']?.toString();
+            }
+
+            if (serviceId == null || serviceId.isEmpty) {
+              throw Exception(
+                'Service created but ID was not returned by server',
+              );
+            }
+
+            if (!mounted) return;
+
+            widget.onPostAdded?.call();
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ServiceAvailabilityScreen(
+                  serviceId: serviceId!,
+                  isInitialSetup: true,
+                ),
+              ),
+            );
+            return;
+          } catch (serviceError) {
+            final message = serviceError.toString().toLowerCase();
+            final shouldFallback =
+                message.contains('something went very wrong') ||
+                message.contains('500') ||
+                message.contains('req.user') ||
+                message.contains('internal');
+
+            if (!shouldFallback) rethrow;
+
+            debugPrint(
+              '⚠️ /api/services failed, falling back to legacy /me/posts/services endpoint: $serviceError',
+            );
+
+            final request = CreateServiceRequest(
+              title: _titleController.text.trim(),
+              description: _descriptionController.text.trim(),
+              categoryId: _selectedSubCategoryId!,
+              images: imageUrls,
+              location: _locationController.text.trim(),
+              latitude: _selectedLatitude,
+              longitude: _selectedLongitude,
+              validFrom: _validFromController.text.trim().isEmpty
+                  ? null
+                  : _validFromController.text.trim(),
+              validUntil: _validUntilController.text.trim().isEmpty
+                  ? null
+                  : _validUntilController.text.trim(),
+              status: 'PROVIDE_SERVICE',
+              price: price,
+            );
+
+            await _addPostService.createServicePost(request);
+
+            if (!mounted) return;
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Service posted successfully (fallback mode). Availability setup will open once /api/services is fixed on backend.',
+                ),
+                backgroundColor: Colors.orange,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            widget.onPostAdded?.call();
+            return;
+          }
         }
       } else {
         // Handle "Looking For" posts
@@ -1543,6 +1754,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
             categoryId: _selectedSubCategoryId!,
             images: imageUrls,
             location: _locationController.text.trim(),
+            latitude: _selectedLatitude,
+            longitude: _selectedLongitude,
             barterStatus: 'LOOKING_FOR',
             price: price,
           );
@@ -1558,6 +1771,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
             description: _descriptionController.text.trim(),
             categoryId: _selectedSubCategoryId!,
             images: imageUrls,
+            location: _locationController.text.trim(),
+            latitude: _selectedLatitude,
+            longitude: _selectedLongitude,
             status: 'LOOKING_FOR_SERVICE',
             price: price,
           );

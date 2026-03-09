@@ -1,4 +1,4 @@
-// lib/screens/HamburgerMenuScreen.dart
+import 'package:Yempover_app/models/logout_response.dart';
 import 'package:Yempover_app/utils/notification_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -7,13 +7,17 @@ import 'package:Yempover_app/payment/SubscriptionScreen.dart';
 import 'package:Yempover_app/screens/EditProfileScreen.dart';
 import 'package:Yempover_app/screens/FavoritesScreen.dart';
 import 'package:Yempover_app/screens/HelpSupportScreen.dart';
+import 'package:Yempover_app/screens/HiddenPostsScreen.dart';
 import 'package:Yempover_app/screens/NotificationsScreen.dart';
 import 'package:Yempover_app/screens/PrivacyScreen.dart';
 import 'package:Yempover_app/screens/TermsScreen.dart';
 import 'package:Yempover_app/screens/TradeHistoryScreen.dart';
+import 'package:Yempover_app/services/account_service.dart';
+import 'package:Yempover_app/services/auth_service.dart';
 import 'package:Yempover_app/services/profile_session_manager.dart';
-import 'package:Yempover_app/utils/token_manager.dart';
+import 'package:Yempover_app/services/token_service.dart';
 import 'package:Yempover_app/screens/LoginScreen.dart';
+import 'package:Yempover_app/screens/Home_screen.dart';
 import 'package:Yempover_app/services/subscription_plan_service.dart';
 import 'package:Yempover_app/models/get_current_subscription_plan_response.dart';
 
@@ -27,15 +31,38 @@ class HamburgerMenuScreen extends StatefulWidget {
 class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
   CurrentPlan? _currentSubscription;
   bool _isLoadingSubscription = false;
+  bool _isGuestUser = false;
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
     super.initState();
     // Load unread count when screen opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadUnreadCount();
-      _loadCurrentSubscription();
+      _initializeMenuData();
     });
+  }
+
+  Future<void> _initializeMenuData() async {
+    final isGuest = await TokenService().isGuestUser();
+    if (mounted) {
+      setState(() {
+        _isGuestUser = isGuest;
+      });
+    }
+
+    if (_isGuestUser) {
+      if (mounted) {
+        setState(() {
+          _isLoadingSubscription = false;
+          _currentSubscription = null;
+        });
+      }
+      return;
+    }
+
+    await _loadUnreadCount();
+    await _loadCurrentSubscription();
   }
 
   Future<void> _loadUnreadCount() async {
@@ -46,13 +73,21 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
   Future<void> _loadCurrentSubscription() async {
     if (!mounted) return;
 
+    if (_isGuestUser) {
+      setState(() {
+        _isLoadingSubscription = false;
+        _currentSubscription = null;
+      });
+      return;
+    }
+
     setState(() {
       _isLoadingSubscription = true;
     });
 
     try {
-      final token = await TokenManager.getToken();
-      if (token == null || token.isEmpty) {
+      final isLoggedIn = await TokenService().isLoggedIn();
+      if (!isLoggedIn) {
         setState(() {
           _isLoadingSubscription = false;
           _currentSubscription = null;
@@ -84,6 +119,20 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+              (route) => false,
+            );
+          },
+        ),
+      ),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,6 +154,19 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
   Widget _buildProfileSection(BuildContext context) {
     final profile = ProfileSessionManager.instance.profile;
     final sessionManager = ProfileSessionManager.instance;
+    final hasHomeLocation =
+        profile?.homeAddress != null &&
+        profile!.homeAddress.toString().trim().isNotEmpty;
+    final displayName = _isGuestUser
+        ? 'Guest User'
+        : (sessionManager.fullName.isNotEmpty
+              ? sessionManager.fullName
+              : 'James William');
+    final displayLocation = _isGuestUser
+        ? 'Guest Mode'
+        : (hasHomeLocation
+              ? profile!.homeAddress.toString()
+              : 'Home Location not set');
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -123,14 +185,17 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
                 child: CircleAvatar(
                   radius: 48,
                   backgroundColor: Colors.blue.shade100,
-                  backgroundImage: profile?.profileImage != null
+                  backgroundImage:
+                      !_isGuestUser && profile?.profileImage != null
                       ? NetworkImage(profile!.profileImage!)
                       : null,
-                  child: profile?.profileImage == null
+                  child: (_isGuestUser || profile?.profileImage == null)
                       ? Text(
-                          sessionManager.initials.isNotEmpty
-                              ? sessionManager.initials
-                              : '?',
+                          _isGuestUser
+                              ? 'G'
+                              : (sessionManager.initials.isNotEmpty
+                                    ? sessionManager.initials
+                                    : '?'),
                           style: const TextStyle(
                             fontSize: 36,
                             fontWeight: FontWeight.bold,
@@ -140,35 +205,40 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
                       : null,
                 ),
               ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: const BoxDecoration(
-                    color: Colors.blue,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.edit, size: 18, color: Colors.white),
-                    onPressed: () async {
-                      // Navigate to Edit Profile Screen
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const EditProfileScreen(),
-                        ),
-                      );
+              if (!_isGuestUser)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: const BoxDecoration(
+                      color: Colors.blue,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.edit,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      onPressed: () async {
+                        // Navigate to Edit Profile Screen
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const EditProfileScreen(),
+                          ),
+                        );
 
-                      // If profile was updated, refresh the UI
-                      if (result != null && mounted) {
-                        setState(() {});
-                      }
-                    },
+                        // If profile was updated, refresh the UI
+                        if (result != null && mounted) {
+                          setState(() {});
+                        }
+                      },
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
 
@@ -176,9 +246,7 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
 
           // Name
           Text(
-            sessionManager.fullName.isNotEmpty
-                ? sessionManager.fullName
-                : 'James William',
+            displayName,
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -195,24 +263,36 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
               const Icon(Icons.location_on, size: 16, color: Colors.grey),
               const SizedBox(width: 4),
               Text(
-                profile?.homeAddress != null
-                    ? profile!.homeAddress.toString()
-                    : 'Location not set',
+                displayLocation,
                 style: const TextStyle(fontSize: 14, color: Colors.grey),
               ),
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade50,
+                  color: hasHomeLocation
+                      ? Colors.green.shade50
+                      : (_isGuestUser
+                            ? Colors.blue.shade50
+                            : Colors.red.shade50),
                   borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.green.shade200),
+                  border: Border.all(
+                    color: hasHomeLocation
+                        ? Colors.green.shade200
+                        : (_isGuestUser
+                              ? Colors.blue.shade200
+                              : Colors.red.shade200),
+                  ),
                 ),
-                child: const Text(
-                  'Verified',
+                child: Text(
+                  _isGuestUser
+                      ? 'Guest'
+                      : (hasHomeLocation ? 'Verified' : 'Not Verified'),
                   style: TextStyle(
                     fontSize: 10,
-                    color: Colors.green,
+                    color: _isGuestUser
+                        ? Colors.blue
+                        : (hasHomeLocation ? Colors.green : Colors.red),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -228,12 +308,16 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
             children: [
               _buildStatItem(
                 'Joined',
-                formatJoinedDate(profile?.registrationDate),
+                _isGuestUser
+                    ? '-'
+                    : formatJoinedDate(profile?.registrationDate),
                 Icons.calendar_today,
               ),
               _buildStatItem(
                 'Trades',
-                profile?.totalTradesCompleted?.toString() ?? '0',
+                _isGuestUser
+                    ? '0'
+                    : (profile?.totalTradesCompleted?.toString() ?? '0'),
                 Icons.swap_horiz,
               ),
               _buildStatItem(
@@ -287,6 +371,17 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () async {
+                    if (_isGuestUser) {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const LoginScreen(),
+                        ),
+                        (route) => false,
+                      );
+                      return;
+                    }
+
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -303,7 +398,7 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('Manage'),
+                  child: Text(_isGuestUser ? 'Login' : 'Manage'),
                 ),
               ],
             ),
@@ -314,6 +409,9 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
   }
 
   String _getCurrentPlanName() {
+    if (_isGuestUser) {
+      return 'Guest Account';
+    }
     if (_isLoadingSubscription) {
       return 'Loading...';
     }
@@ -324,6 +422,9 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
   }
 
   String _getSubscriptionStatus() {
+    if (_isGuestUser) {
+      return 'Guest';
+    }
     if (_isLoadingSubscription) {
       return '...';
     }
@@ -334,6 +435,9 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
   }
 
   String _getSubscriptionExpiryDate() {
+    if (_isGuestUser) {
+      return 'Login to manage subscription';
+    }
     if (_isLoadingSubscription) {
       return 'Loading...';
     }
@@ -371,100 +475,135 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
       padding: const EdgeInsets.all(0),
       children: [
         // Edit Profile Menu Item
-        _buildMenuItem(
-          icon: Icons.person_outline,
-          title: 'Edit Profile',
-          onTap: () async {
-            final result = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const EditProfileScreen(),
-              ),
-            );
-            if (result != null && mounted) {
-              setState(() {});
-            }
-          },
-        ),
+        if (!_isGuestUser)
+          _buildMenuItem(
+            icon: Icons.person_outline,
+            title: 'Edit Profile',
+            onTap: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const EditProfileScreen(),
+                ),
+              );
+              if (result != null && mounted) {
+                setState(() {});
+              }
+            },
+          ),
+
+        if (_isGuestUser)
+          _buildMenuItem(
+            icon: Icons.login,
+            title: 'Login / Sign Up',
+            onTap: () {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                (route) => false,
+              );
+            },
+          ),
 
         // Favorites
-        _buildMenuItem(
-          icon: Icons.favorite_border,
-          title: 'Favorites',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const FavoritesScreen()),
-            );
-          },
-        ),
+        if (!_isGuestUser)
+          _buildMenuItem(
+            icon: Icons.favorite_border,
+            title: 'Favorites',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const FavoritesScreen(),
+                ),
+              );
+            },
+          ),
 
-        // Trade History
-        // _buildMenuItem(
-        //   icon: Icons.history,
-        //   title: 'Trade History',
-        //   onTap: () {
-        //     Navigator.push(
-        //       context,
-        //       MaterialPageRoute(
-        //         builder: (context) => const TradeHistoryScreen(),
-        //       ),
-        //     );
-        //   },
-        // ),
+        //Trade History
+        if (!_isGuestUser)
+          _buildMenuItem(
+            icon: Icons.history,
+            title: 'Trade History',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TradeHistoryScreen(),
+                ),
+              );
+            },
+          ),
+
+        if (!_isGuestUser)
+          _buildMenuItem(
+            icon: Icons.visibility_off_outlined,
+            title: 'Hidden Posts',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const HiddenPostsScreen(),
+                ),
+              );
+            },
+          ),
 
         // Subscription
-        _buildMenuItem(
-          icon: Icons.subscriptions,
-          title: 'Subscription',
-          trailing: _isLoadingSubscription
-              ? Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  child: const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+        if (!_isGuestUser)
+          _buildMenuItem(
+            icon: Icons.subscriptions,
+            title: 'Subscription',
+            trailing: _isLoadingSubscription
+                ? Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
                     ),
-                  ),
-                )
-              : Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _getSubscriptionStatus() == 'Active'
-                        ? Colors.orange.shade50
-                        : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    _getSubscriptionStatus(),
-                    style: TextStyle(
-                      fontSize: 12,
+                    child: const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.orange,
+                        ),
+                      ),
+                    ),
+                  )
+                : Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
                       color: _getSubscriptionStatus() == 'Active'
-                          ? Colors.orange
-                          : Colors.grey,
-                      fontWeight: FontWeight.bold,
+                          ? Colors.orange.shade50
+                          : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _getSubscriptionStatus(),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _getSubscriptionStatus() == 'Active'
+                            ? Colors.orange
+                            : Colors.grey,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SubscriptionScreen(),
                 ),
-          onTap: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const SubscriptionScreen(),
-              ),
-            );
-            // Refresh subscription data when returning
-            _loadCurrentSubscription();
-          },
-        ),
+              );
+              // Refresh subscription data when returning
+              _loadCurrentSubscription();
+            },
+          ),
 
         // Divider
         const Padding(
@@ -556,71 +695,35 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
           },
         ),
 
-        // Logout
-        _buildMenuItem(
-          icon: Icons.logout,
-          title: 'Logout',
-          titleColor: Colors.red,
-          iconColor: Colors.red,
-          onTap: () {
-            _showLogoutDialog(context);
-          },
+        // Divider before account actions
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Divider(height: 1, thickness: 0.5),
         ),
 
-        // App version
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              const Text(
-                'iScripts Solutions',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Dedicated, Development, Service',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.phone, size: 14, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  const Text(
-                    '1 847 607 6123',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  const SizedBox(width: 16),
-                  const Icon(Icons.language, size: 14, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  GestureDetector(
-                    onTap: () {
-                      _showComingSoon(context, 'Website');
-                    },
-                    child: const Text(
-                      'http://www.iscripts.com',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'App Version 1.0.0',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
+        // Delete Account (New Menu Item)
+        if (!_isGuestUser)
+          _buildMenuItem(
+            icon: Icons.delete_outline,
+            title: 'Delete Account',
+            titleColor: Colors.red,
+            iconColor: Colors.red,
+            onTap: () {
+              _showDeleteAccountDialog(context);
+            },
           ),
-        ),
+
+        // Logout
+        if (!_isGuestUser)
+          _buildMenuItem(
+            icon: Icons.logout,
+            title: 'Logout',
+            titleColor: Colors.red,
+            iconColor: Colors.red,
+            onTap: () {
+              _showLogoutDialog(context);
+            },
+          ),
       ],
     );
   }
@@ -633,6 +736,196 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
         duration: const Duration(seconds: 2),
       ),
     );
+  }
+
+  // Updated logout method with API call - FIXED
+  Future<void> _logout() async {
+    try {
+      // Show loading indicator
+      if (!mounted) return;
+
+      // Use a flag to track if dialog is showing
+      bool isDialogShowing = true;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text(
+                  'Logging out...',
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Call logout API
+      try {
+        await _authService.logout();
+      } catch (apiError) {
+        // If API fails, still proceed with local logout
+        debugPrint(
+          '⚠️ Logout API failed, proceeding with local logout: $apiError',
+        );
+      }
+
+      // Clear all local data using the correct method name
+      await TokenService()
+          .clearTokens(); // FIXED: Using clearTokens() instead of deleteToken()
+
+      // Clear session manager
+      ProfileSessionManager.instance.clearSession();
+
+      // Close loading dialog if it's still showing
+      if (mounted && isDialogShowing) {
+        Navigator.pop(context);
+        isDialogShowing = false;
+      }
+
+      if (!mounted) return;
+
+      // Navigate to login screen and remove all previous routes
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Logged out successfully'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      debugPrint('🔴 Error during logout: $e');
+
+      // Close loading dialog if open
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      if (!mounted) return;
+
+      // Still attempt to clear local data and navigate to login
+      try {
+        await TokenService()
+            .clearTokens(); // FIXED: Using clearTokens() here too
+        ProfileSessionManager.instance.clearSession();
+
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Logged out successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } catch (cleanupError) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error during logout: ${e.toString().replaceFirst('Exception: ', '')}',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    try {
+      // Show loading indicator
+      if (!mounted) return;
+
+      bool isDialogShowing = true;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text(
+                  'Deleting your account...',
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Call API to delete account
+      final accountService = AccountService();
+      final response = await accountService.deleteAccount();
+
+      // Clear all local data
+      await accountService.clearAllLocalData();
+
+      // Close loading dialog
+      if (mounted && isDialogShowing) {
+        Navigator.pop(context);
+        isDialogShowing = false;
+      }
+
+      if (!mounted) return;
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(response.message),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+
+      // Navigate to login screen and remove all previous routes
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      // Close loading dialog if open
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      debugPrint('🔴 Error deleting account: $e');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to delete account: ${e.toString().replaceFirst('Exception: ', '')}',
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   void _showLogoutDialog(BuildContext context) {
@@ -648,23 +941,65 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () async {
-                // Clear session and token
-                ProfileSessionManager.instance.clearSession();
-                await TokenManager.clearToken();
-
-                if (mounted) {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const LoginScreen(),
-                    ),
-                    (route) => false,
-                  );
-                }
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+                _logout(); // Perform logout with API
               },
               style: TextButton.styleFrom(foregroundColor: Colors.red),
               child: const Text('Logout'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showDeleteAccountDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(
+            'Delete Account',
+            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Are you absolutely sure you want to delete your account?'),
+              SizedBox(height: 16),
+              Text(
+                'This action cannot be undone. This will permanently delete:',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              SizedBox(height: 8),
+              Padding(
+                padding: EdgeInsets.only(left: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('• Your profile and all personal information'),
+                    Text('• All your posts and trade history'),
+                    Text('• All your messages and conversations'),
+                    Text('• Your subscription and payment information'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+                _deleteAccount(); // Perform account deletion
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete Permanently'),
             ),
           ],
         );

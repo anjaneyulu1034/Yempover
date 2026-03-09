@@ -38,6 +38,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _base64Image;
   String? _imageMimeType;
 
+  bool get _isBusy => _isLoading || _isUploadingImage;
+
   @override
   void initState() {
     super.initState();
@@ -124,6 +126,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             duration: Duration(seconds: 2),
           ),
         );
+      } else {
+        if (mounted) {
+          setState(() {
+            _isUploadingImage = false;
+          });
+        }
       }
     } catch (e) {
       setState(() {
@@ -136,6 +144,50 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  String _detectMimeTypeFromPath(String path) {
+    final extension = path.split('.').last.toLowerCase();
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return 'image/jpeg';
+    }
+  }
+
+  Future<void> _ensureImagePreparedForUpload() async {
+    if (_selectedImageFile == null) return;
+
+    if (_base64Image != null &&
+        _base64Image!.isNotEmpty &&
+        _imageMimeType != null &&
+        _imageMimeType!.isNotEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isUploadingImage = true;
+    });
+
+    try {
+      final bytes = await _selectedImageFile!.readAsBytes();
+      _base64Image = base64Encode(bytes);
+      _imageMimeType = _detectMimeTypeFromPath(_selectedImageFile!.path);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+      }
     }
   }
 
@@ -188,6 +240,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _updateProfile() async {
+    if (_isBusy) return;
+
+    if (_isUploadingImage) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please wait for image processing to finish'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -195,8 +259,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
+      await _ensureImagePreparedForUpload();
+
       // If there's a selected image, upload it first
-      if (_base64Image != null && _imageMimeType != null) {
+      if (_selectedImageFile != null) {
+        if (_base64Image == null ||
+            _base64Image!.isEmpty ||
+            _imageMimeType == null ||
+            _imageMimeType!.isEmpty) {
+          throw Exception('Unable to process selected image. Please retry.');
+        }
+
         final apiService = ApiService();
         final imageResponse = await apiService.uploadProfileImageBase64(
           base64Image: _base64Image!,
@@ -302,7 +375,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           centerTitle: true,
           actions: [
             TextButton(
-              onPressed: _updateProfile,
+              onPressed: _isBusy ? null : _updateProfile,
               child: const Text(
                 'Save',
                 style: TextStyle(
@@ -366,7 +439,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     size: 20,
                                     color: Colors.white,
                                   ),
-                                  onPressed: _showImageSourceDialog,
+                                  onPressed: _isBusy
+                                      ? null
+                                      : _showImageSourceDialog,
                                 ),
                         ),
                       ),
@@ -532,118 +607,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 24),
-
-                // Privacy Settings Section
-                const Text(
-                  'Privacy Settings',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Share Email Toggle
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: SwitchListTile(
-                    title: const Text(
-                      'Share Email',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                    subtitle: const Text(
-                      'Allow others to see your email',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    value: _shareEmail,
-                    activeColor: AppConstants.primaryColor,
-                    onChanged: (value) {
-                      setState(() {
-                        _shareEmail = value;
-                      });
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Share Phone Toggle
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: SwitchListTile(
-                    title: const Text(
-                      'Share Phone Number',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                    subtitle: const Text(
-                      'Allow others to see your phone number',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    value: _sharePhone,
-                    activeColor: AppConstants.primaryColor,
-                    onChanged: (value) {
-                      setState(() {
-                        _sharePhone = value;
-                      });
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Notification Toggle
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: SwitchListTile(
-                    title: const Text(
-                      'Enable Notifications',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                    subtitle: const Text(
-                      'Receive updates and alerts',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    value: _notificationEnabled,
-                    activeColor: AppConstants.primaryColor,
-                    onChanged: (value) {
-                      setState(() {
-                        _notificationEnabled = value;
-                      });
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-
                 // Save Button
                 SizedBox(
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
-                    onPressed: _updateProfile,
+                    onPressed: _isBusy ? null : _updateProfile,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppConstants.primaryColor,
                       foregroundColor: Colors.white,

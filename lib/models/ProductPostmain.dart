@@ -205,12 +205,8 @@ class Post {
           ? double.tryParse(json['price'].toString()) ?? 0.0
           : 0.0,
       categoryId: json['categoryId'] ?? '',
-      latitude: json['latitude'] != null
-          ? double.tryParse(json['latitude'].toString())
-          : null,
-      longitude: json['longitude'] != null
-          ? double.tryParse(json['longitude'].toString())
-          : null,
+      latitude: _parseCoordinate(json, ['latitude', 'lat']),
+      longitude: _parseCoordinate(json, ['longitude', 'lng', 'lon']),
       location: json['location'] ?? '',
       postedById: json['postedById'] ?? '',
       postedDate: DateTime.parse(
@@ -230,13 +226,44 @@ class Post {
           ? BarterDetails.fromJson(json['barterDetails'])
           : null,
       type: json['type'] == 'service' ? PostType.service : PostType.product,
-      distance: json['distance'] != null
-          ? double.tryParse(json['distance'].toString())
-          : null,
+      distance: _parseDistance(json),
       canClubItems: json['canClubItems'] == null
           ? (json['isClubbable'] ?? true)
           : json['canClubItems'],
     );
+  }
+
+  static double? _parseCoordinate(
+    Map<String, dynamic> json,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final value = json[key];
+      if (value == null) continue;
+      final parsed = double.tryParse(value.toString());
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  static double? _parseDistance(Map<String, dynamic> json) {
+    const distanceKeys = [
+      'distance',
+      'distanceKm',
+      'distanceInKm',
+      'distance_km',
+      'userDistance',
+      'user_distance',
+    ];
+
+    for (final key in distanceKeys) {
+      final value = json[key];
+      if (value == null) continue;
+      final parsed = double.tryParse(value.toString());
+      if (parsed != null) return parsed;
+    }
+
+    return null;
   }
 
   static PostStatus _parsePostStatus(String status) {

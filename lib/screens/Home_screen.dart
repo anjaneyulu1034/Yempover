@@ -14,6 +14,7 @@ import 'package:Yempover_app/screens/HamburgerMenuScreen.dart';
 import 'package:Yempover_app/screens/NotificationsScreen.dart';
 import 'package:Yempover_app/services/my_profile_service.dart';
 import 'package:Yempover_app/services/profile_session_manager.dart';
+import 'package:Yempover_app/services/category_service.dart';
 import 'package:Yempover_app/services/token_service.dart';
 import 'package:Yempover_app/utils/snackbar_utils.dart';
 import '../services/post_action_service.dart';
@@ -87,14 +88,18 @@ class _HomeScreenState extends State<HomeScreen> {
   final ApiService _apiService = ApiService();
   final MyProfileService _myProfileService = MyProfileService();
   final PostActionService _postActionService = PostActionService();
+  final CategoryService _categoryService = CategoryService();
+  final TokenService _tokenService = TokenService();
   final TextEditingController _searchController = TextEditingController();
 
   final ScrollController _scrollController = ScrollController();
+  final Map<String, Location?> _postLocationCache = {};
 
   // Data states
   List<ExtendedPost> _posts = [];
   ProfileData? profileData;
   List<ExtendedPost> _filteredPosts = [];
+  bool _isGuestUser = false;
 
   // Loading states - separate for different sections
   bool _isLoadingPosts = true;
@@ -117,6 +122,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _selectedWishListCategory;
   double _selectedRadius = 10.0;
   String _searchQuery = '';
+  bool _isLoadingFilterCategories = false;
+  List<Map<String, String>> _filterMainCategories = [];
+  Map<String, List<Map<String, String>>> _filterSubCategories = {};
 
   @override
   void initState() {
@@ -138,13 +146,93 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _initializeData() async {
-    // Run all initial data fetching in parallel
-    await Future.wait([
-      _fetchMyProfile(),
-      _getCurrentLocation(),
-      _fetchPosts(),
-      _loadUnreadNotificationCount(),
-    ]);
+    try {
+      // Check if user is logged in
+      final isLoggedIn = await _tokenService.isLoggedIn();
+      _isGuestUser = await _tokenService.isGuestUser();
+
+      if (!isLoggedIn && !_isGuestUser) {
+        if (mounted) {
+          SnackbarUtils.showLoginDialog(context);
+        }
+        setState(() {
+          _isLoadingPosts = false;
+          _isLoadingProfile = false;
+        });
+        return;
+      }
+
+      if (_isGuestUser) {
+        setState(() {
+          profileData = ProfileData(
+            firstName: 'Guest',
+            lastName: 'User',
+            homeAddress: 'Guest Mode',
+            totalTradesCompleted: 0,
+          );
+          _isLoadingProfile = false;
+        });
+        ProfileSessionManager.instance.clearSession();
+      }
+
+      // Run all initial data fetching in parallel with error handling
+      await Future.wait([
+        if (!_isGuestUser)
+          _fetchMyProfile().catchError((e) {
+            debugPrint('🔴 Profile fetch error: $e');
+            if (e.toString().contains('Session expired')) {
+              _handleSessionExpired();
+            }
+            return null;
+          }),
+        _getCurrentLocation().catchError((e) {
+          debugPrint('🔴 Location error: $e');
+        }),
+        _fetchPosts().catchError((e) {
+          debugPrint('🔴 Posts fetch error: $e');
+          if (e.toString().contains('Session expired')) {
+            _handleSessionExpired();
+          }
+        }),
+        if (!_isGuestUser)
+          _loadUnreadNotificationCount().catchError((e) {
+            debugPrint('🔴 Notification error: $e');
+          }),
+        _loadFilterCategories().catchError((e) {
+          debugPrint('🔴 Filter category error: $e');
+        }),
+      ]);
+    } catch (e) {
+      debugPrint('🔴 Initialization error: $e');
+      setState(() {
+        _isLoadingPosts = false;
+        _isLoadingProfile = false;
+      });
+    }
+  }
+
+  void _handleSessionExpired() {
+    if (mounted) {
+      // Show session expired dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Session Expired'),
+          content: const Text('Your session has expired. Please login again.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Navigate to login screen
+                Navigator.pushReplacementNamed(context, '/login');
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   double _calculateDistance(
@@ -171,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _updatePostDistances() {
-    if (_currentPosition == null) return;
+    if (_currentPosition == null || _posts.isEmpty) return;
 
     for (var post in _posts) {
       if (post.latitude != null && post.longitude != null) {
@@ -184,6 +272,52 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
     _sortPostsByDistance();
+    _applyFilters();
+  }
+
+  Future<void> _updatePostDistancesFromGeocoding() async {
+    if (_currentPosition == null || _posts.isEmpty) return;
+
+    bool hasUpdates = false;
+
+    for (final post in _posts) {
+      if (post.distance != null) continue;
+      if ((post.latitude != null && post.longitude != null) ||
+          post.location.trim().isEmpty) {
+        continue;
+      }
+
+      final normalizedLocation = post.location.trim().toLowerCase();
+
+      Location? geocodedLocation;
+      if (_postLocationCache.containsKey(normalizedLocation)) {
+        geocodedLocation = _postLocationCache[normalizedLocation];
+      } else {
+        try {
+          final locations = await locationFromAddress(post.location.trim());
+          geocodedLocation = locations.isNotEmpty ? locations.first : null;
+          _postLocationCache[normalizedLocation] = geocodedLocation;
+        } catch (_) {
+          _postLocationCache[normalizedLocation] = null;
+          continue;
+        }
+      }
+
+      if (geocodedLocation != null) {
+        post.distance = _calculateDistance(
+          _currentPosition!.latitude,
+          _currentPosition!.longitude,
+          geocodedLocation.latitude,
+          geocodedLocation.longitude,
+        );
+        hasUpdates = true;
+      }
+    }
+
+    if (!mounted || !hasUpdates) return;
+
+    _sortPostsByDistance();
+    _applyFilters();
   }
 
   void _sortPostsByDistance() {
@@ -263,6 +397,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _currentPosition = position;
       });
 
+      _updatePostDistances();
+      _updatePostDistancesFromGeocoding();
+
       await _getAddressFromLatLng(position);
     } catch (e) {
       setState(() {
@@ -309,10 +446,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchMyProfile() async {
     try {
-      final isLoggedIn = await TokenService().isLoggedIn();
+      if (_isGuestUser) {
+        setState(() => _isLoadingProfile = false);
+        return;
+      }
+
+      final isLoggedIn = await _tokenService.isLoggedIn();
       if (!isLoggedIn) {
         setState(() => _isLoadingProfile = false);
-        if (mounted) SnackbarUtils.showLoginDialog(context);
         return;
       }
 
@@ -325,15 +466,28 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       setState(() => _isLoadingProfile = false);
       debugPrint('🔴 Error fetching profile: $e');
+
+      if (e.toString().contains('Session expired')) {
+        _handleSessionExpired();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load profile: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
   Future<void> _fetchPosts({bool loadMore = false}) async {
     try {
-      final isLoggedIn = await TokenService().isLoggedIn();
-      if (!isLoggedIn) {
+      final isLoggedIn = await _tokenService.isLoggedIn();
+      final canBrowse = isLoggedIn || _isGuestUser;
+      if (!canBrowse) {
         setState(() {
           _isLoadingPosts = false;
+          _isLoadingMore = false;
         });
         return;
       }
@@ -347,6 +501,8 @@ class _HomeScreenState extends State<HomeScreen> {
       } else {
         setState(() => _isLoadingMore = true);
       }
+
+      final int requestPage = loadMore ? _currentPage + 1 : 1;
 
       String? status;
       if (_selectedTradeType == 'Barter') {
@@ -363,9 +519,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       final response = await _apiService.getPosts(
-        page: _currentPage,
+        page: requestPage,
         limit: _limit,
-        category: _selectedCategory,
+        category: _selectedWishListCategory ?? _selectedCategory,
         search: _searchQuery.isNotEmpty ? _searchQuery : null,
         status: status,
         latitude: latitude,
@@ -384,6 +540,8 @@ class _HomeScreenState extends State<HomeScreen> {
             post.latitude!,
             post.longitude!,
           );
+        } else if (post.distance != null) {
+          distance = post.distance;
         }
 
         return ExtendedPost(post: post, isFavorite: false, distance: distance);
@@ -397,20 +555,29 @@ class _HomeScreenState extends State<HomeScreen> {
       });
 
       if (loadMore) {
+        final existingIds = _posts.map((post) => post.id).toSet();
+        final uniquePosts = extendedPosts
+            .where((post) => !existingIds.contains(post.id))
+            .toList();
+
         setState(() {
-          _posts.addAll(extendedPosts);
+          _posts.addAll(uniquePosts);
+          _currentPage = requestPage;
           _applyFilters();
-          _hasMore = extendedPosts.length >= _limit;
+          _hasMore = response.pagination.page < response.pagination.pages;
           _isLoadingMore = false;
         });
+        _updatePostDistancesFromGeocoding();
       } else {
         setState(() {
           _posts = extendedPosts;
+          _currentPage = requestPage;
           _applyFilters();
-          _hasMore = extendedPosts.length >= _limit;
+          _hasMore = response.pagination.page < response.pagination.pages;
           _isLoadingPosts = false;
           _isLoadingMore = false;
         });
+        _updatePostDistancesFromGeocoding();
       }
     } catch (e) {
       setState(() {
@@ -418,11 +585,88 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoadingMore = false;
       });
       debugPrint('🔴 Error fetching posts: $e');
+
+      if (e.toString().contains('Session expired')) {
+        _handleSessionExpired();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load posts: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
   Future<void> _refreshPosts() async {
     await _fetchPosts();
+  }
+
+  Future<void> _loadFilterCategories() async {
+    if (_isLoadingFilterCategories) return;
+
+    setState(() {
+      _isLoadingFilterCategories = true;
+    });
+
+    try {
+      final Map<String, Map<String, String>> mainCategoriesById = {};
+      final Map<String, List<Map<String, String>>> subCategoriesByMain = {};
+
+      for (final type in ['product', 'service']) {
+        final response = await _categoryService.getCategories(type: type);
+
+        for (final parent in response.data) {
+          mainCategoriesById[parent.id] = {
+            'id': parent.id,
+            'name': parent.name,
+          };
+
+          final subCategories = parent.children
+              .map((child) => {'id': child.id, 'name': child.name})
+              .toList();
+
+          if (subCategoriesByMain.containsKey(parent.id)) {
+            final existing = subCategoriesByMain[parent.id]!;
+            for (final sub in subCategories) {
+              if (!existing.any((e) => e['id'] == sub['id'])) {
+                existing.add(sub);
+              }
+            }
+          } else {
+            subCategoriesByMain[parent.id] = subCategories;
+          }
+        }
+      }
+
+      final mainList = mainCategoriesById.values.toList()
+        ..sort(
+          (a, b) => (a['name'] ?? '').toLowerCase().compareTo(
+            (b['name'] ?? '').toLowerCase(),
+          ),
+        );
+
+      for (final entry in subCategoriesByMain.entries) {
+        entry.value.sort(
+          (a, b) => (a['name'] ?? '').toLowerCase().compareTo(
+            (b['name'] ?? '').toLowerCase(),
+          ),
+        );
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _filterMainCategories = mainList;
+        _filterSubCategories = subCategoriesByMain;
+        _isLoadingFilterCategories = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingFilterCategories = false;
+      });
+    }
   }
 
   void _applyFilters() {
@@ -443,9 +687,19 @@ class _HomeScreenState extends State<HomeScreen> {
             return false;
         }
 
-        if (_selectedCategory != null &&
-            post.category.name != _selectedCategory)
+        if (_selectedCategory != null) {
+          final postCategory = post.category;
+          final belongsToMain =
+              postCategory.id == _selectedCategory ||
+              postCategory.parentId == _selectedCategory;
+
+          if (!belongsToMain) return false;
+        }
+
+        if (_selectedWishListCategory != null &&
+            post.category.id != _selectedWishListCategory) {
           return false;
+        }
 
         if (_searchQuery.isNotEmpty) {
           final query = _searchQuery.toLowerCase();
@@ -528,7 +782,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showFilterDialog() {
+  Future<void> _showFilterDialog() async {
+    if (_filterMainCategories.isEmpty && !_isLoadingFilterCategories) {
+      await _loadFilterCategories();
+    }
+
+    if (!mounted) return;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -541,6 +801,10 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedCategory: _selectedCategory,
         selectedWishListCategory: _selectedWishListCategory,
         selectedRadius: _selectedRadius,
+        mainCategories: _filterMainCategories,
+        subCategoriesByMain: _filterSubCategories,
+        isLoadingCategories: _isLoadingFilterCategories,
+        onRetryLoadCategories: _loadFilterCategories,
         onApply: (tradeType, postType, category, wishListCategory, radius) {
           setState(() {
             _selectedTradeType = tradeType;
@@ -553,9 +817,82 @@ class _HomeScreenState extends State<HomeScreen> {
           _applyFilters();
           Navigator.pop(context);
         },
-        onClear: _clearAllFilters,
+        onClear: () {
+          setState(() {
+            _selectedTradeType = null;
+            _selectedPostType = null;
+            _selectedCategory = null;
+            _selectedWishListCategory = null;
+            _selectedRadius = 10.0;
+          });
+          _fetchPosts();
+          _applyFilters();
+        },
       ),
     );
+  }
+
+  Future<void> _hidePost(ExtendedPost post) async {
+    try {
+      final isLoggedIn = await _tokenService.isLoggedIn();
+      if (_isGuestUser || !isLoggedIn) {
+        _showPleaseLoginMessage();
+        return;
+      }
+
+      await _postActionService.hidePost(post.id);
+
+      if (!mounted) return;
+      setState(() {
+        _posts.removeWhere((element) => element.id == post.id);
+        _filteredPosts.removeWhere((element) => element.id == post.id);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Post hidden successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to hide post: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmHidePost(ExtendedPost post) async {
+    final isLoggedIn = await _tokenService.isLoggedIn();
+    if (_isGuestUser || !isLoggedIn) {
+      _showPleaseLoginMessage();
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hide Post'),
+        content: const Text('Do you want to hide this post from your feed?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hide'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _hidePost(post);
+    }
   }
 
   String _formatDate(DateTime date) {
@@ -588,6 +925,16 @@ class _HomeScreenState extends State<HomeScreen> {
     return post.formattedPrice;
   }
 
+  void _showPleaseLoginMessage() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Please login to continue'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+  }
+
   void _navigateToHamburgerMenu() {
     Navigator.push(
       context,
@@ -595,21 +942,39 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _navigateToTradeChat() {
+  void _navigateToTradeChat() async {
+    final isLoggedIn = await _tokenService.isLoggedIn();
+    if (_isGuestUser || !isLoggedIn) {
+      _showPleaseLoginMessage();
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const TradeChatScreen()),
     );
   }
 
-  void _navigateToTradeBooth() {
+  void _navigateToTradeBooth() async {
+    final isLoggedIn = await _tokenService.isLoggedIn();
+    if (_isGuestUser || !isLoggedIn) {
+      _showPleaseLoginMessage();
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const TradeBoothScreen()),
     );
   }
 
-  void _showNotificationScreen() {
+  void _showNotificationScreen() async {
+    final isLoggedIn = await _tokenService.isLoggedIn();
+    if (_isGuestUser || !isLoggedIn) {
+      _showPleaseLoginMessage();
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1102,6 +1467,25 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.45),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.visibility_off_outlined,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      tooltip: 'Hide Post',
+                      onPressed: () => _confirmHidePost(post),
+                    ),
+                  ),
+                ),
+                Positioned(
                   bottom: 12,
                   left: 12,
                   right: 12,
@@ -1260,6 +1644,27 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
+                  if (post.distance != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 16,
+                          color: Colors.grey.shade700,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          post.formattedDistance,
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1409,6 +1814,10 @@ class FilterScreen extends StatefulWidget {
   final String? selectedCategory;
   final String? selectedWishListCategory;
   final double selectedRadius;
+  final List<Map<String, String>> mainCategories;
+  final Map<String, List<Map<String, String>>> subCategoriesByMain;
+  final bool isLoadingCategories;
+  final Future<void> Function() onRetryLoadCategories;
   final Function(String?, String?, String?, String?, double) onApply;
   final VoidCallback onClear;
 
@@ -1419,6 +1828,10 @@ class FilterScreen extends StatefulWidget {
     required this.selectedCategory,
     required this.selectedWishListCategory,
     required this.selectedRadius,
+    required this.mainCategories,
+    required this.subCategoriesByMain,
+    required this.isLoadingCategories,
+    required this.onRetryLoadCategories,
     required this.onApply,
     required this.onClear,
   }) : super(key: key);
@@ -1435,8 +1848,10 @@ class _FilterScreenState extends State<FilterScreen> {
   late double _selectedRadius;
 
   final List<String> _tradeTypes = ['Barter', 'Sales'];
-  final List<String> _postTypes = ['Looking for', 'Barter/Selling'];
-  final List<String> _categories = ['Furniture', 'Plumbing', 'Electronics'];
+  final List<String> _postTypes = [
+    'Looking for a product/service',
+    'Barter/selling a product/service',
+  ];
 
   @override
   void initState() {
@@ -1448,6 +1863,17 @@ class _FilterScreenState extends State<FilterScreen> {
     _selectedRadius = widget.selectedRadius;
   }
 
+  void _clearFilters() {
+    setState(() {
+      _selectedTradeType = null;
+      _selectedPostType = null;
+      _selectedCategory = null;
+      _selectedWishListCategory = null;
+      _selectedRadius = 10.0;
+    });
+    widget.onClear();
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -1457,7 +1883,6 @@ class _FilterScreenState extends State<FilterScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1471,10 +1896,7 @@ class _FilterScreenState extends State<FilterScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 20),
-
-            /// Filter List
             Expanded(
               child: ListView(
                 children: [
@@ -1496,18 +1918,95 @@ class _FilterScreenState extends State<FilterScreen> {
                   ),
                   _buildFilterSection(
                     title: 'Category',
-                    options: _categories,
+                    options: widget.mainCategories
+                        .map((category) => category['name'] ?? '')
+                        .where((name) => name.isNotEmpty)
+                        .toList(),
                     selectedValue: _selectedCategory,
                     onChanged: (value) {
-                      setState(() => _selectedCategory = value);
+                      final selected = widget.mainCategories.firstWhere(
+                        (category) => category['name'] == value,
+                        orElse: () => {},
+                      );
+                      setState(() {
+                        _selectedCategory = selected['id'];
+                        _selectedWishListCategory = null;
+                      });
+                    },
+                    optionLabelBuilder: (value) => value,
+                    optionSelectedByValue: (value) {
+                      final selected = widget.mainCategories.firstWhere(
+                        (category) => category['id'] == _selectedCategory,
+                        orElse: () => {},
+                      );
+                      return selected['name'] == value;
                     },
                   ),
+                  if (widget.isLoadingCategories)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 20),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  if (!widget.isLoadingCategories &&
+                      widget.mainCategories.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Unable to load categories',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: widget.onRetryLoadCategories,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (_selectedCategory != null)
+                    _buildFilterSection(
+                      title: 'Subcategory',
+                      options:
+                          (widget.subCategoriesByMain[_selectedCategory] ??
+                                  const <Map<String, String>>[])
+                              .map((subCategory) => subCategory['name'] ?? '')
+                              .where((name) => name.isNotEmpty)
+                              .toList(),
+                      selectedValue: _selectedWishListCategory,
+                      onChanged: (value) {
+                        final selectedSub =
+                            (widget.subCategoriesByMain[_selectedCategory] ??
+                                    const <Map<String, String>>[])
+                                .firstWhere(
+                                  (subCategory) => subCategory['name'] == value,
+                                  orElse: () => {},
+                                );
+                        setState(() {
+                          _selectedWishListCategory = selectedSub['id'];
+                        });
+                      },
+                      optionLabelBuilder: (value) => value,
+                      optionSelectedByValue: (value) {
+                        final selectedSub =
+                            (widget.subCategoriesByMain[_selectedCategory] ??
+                                    const <Map<String, String>>[])
+                                .firstWhere(
+                                  (subCategory) =>
+                                      subCategory['id'] ==
+                                      _selectedWishListCategory,
+                                  orElse: () => {},
+                                );
+                        return selectedSub['name'] == value;
+                      },
+                    ),
                   _buildRadiusFilter(),
                 ],
+                padding: const EdgeInsets.only(bottom: 110),
               ),
             ),
-
-            /// Bottom Buttons (Fixed)
             SafeArea(
               top: false,
               child: Padding(
@@ -1516,10 +2015,7 @@ class _FilterScreenState extends State<FilterScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () {
-                          widget.onClear();
-                          Navigator.pop(context);
-                        },
+                        onPressed: _clearFilters,
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
@@ -1560,12 +2056,13 @@ class _FilterScreenState extends State<FilterScreen> {
     );
   }
 
-  /// Filter Section
   Widget _buildFilterSection({
     required String title,
     required List<String> options,
     required String? selectedValue,
     required ValueChanged<String?> onChanged,
+    String Function(String value)? optionLabelBuilder,
+    bool Function(String value)? optionSelectedByValue,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1577,11 +2074,13 @@ class _FilterScreenState extends State<FilterScreen> {
         const SizedBox(height: 10),
         Wrap(
           spacing: 8,
+          runSpacing: 8,
           children: options.map((option) {
-            final isSelected = selectedValue == option;
+            final isSelected =
+                optionSelectedByValue?.call(option) ?? selectedValue == option;
 
             return FilterChip(
-              label: Text(option),
+              label: Text(optionLabelBuilder?.call(option) ?? option),
               selected: isSelected,
               onSelected: (selected) {
                 onChanged(selected ? option : null);
@@ -1596,7 +2095,6 @@ class _FilterScreenState extends State<FilterScreen> {
     );
   }
 
-  /// Radius Filter
   Widget _buildRadiusFilter() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1606,7 +2104,20 @@ class _FilterScreenState extends State<FilterScreen> {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 10),
-        Text('Within ${_selectedRadius.toStringAsFixed(0)} km'),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Within ${_selectedRadius.toStringAsFixed(0)} km'),
+            Text(
+              '${_selectedRadius.toStringAsFixed(0)} km',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.blue,
+              ),
+            ),
+          ],
+        ),
         Slider(
           value: _selectedRadius,
           min: 1,

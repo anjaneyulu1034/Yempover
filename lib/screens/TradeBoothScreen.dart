@@ -1,3 +1,4 @@
+// screens/TradeBoothScreen.dart
 import 'package:Yempover_app/screens/ProductDetailScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -15,6 +16,7 @@ class TradeBoothScreen extends StatefulWidget {
 
 class _TradeBoothScreenState extends State<TradeBoothScreen> {
   final MyPostsService _postsService = MyPostsService();
+  final TokenService _tokenService = TokenService();
   List<MyPost> _posts = [];
   bool _isLoading = true;
   String? _errorMessage;
@@ -33,6 +35,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    // _postsService.dispose();
     super.dispose();
   }
 
@@ -45,6 +48,30 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     }
   }
 
+  void _handleSessionExpired() {
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Session Expired'),
+          content: const Text(
+            'Your session has expired. Please login again to continue.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pushReplacementNamed(context, '/login');
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   Future<void> _fetchMyPosts() async {
     setState(() {
       _isLoading = true;
@@ -52,7 +79,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     });
 
     try {
-      final isLoggedIn = await TokenService().isLoggedIn();
+      final isLoggedIn = await _tokenService.isLoggedIn();
       if (!isLoggedIn) {
         setState(() {
           _isLoading = false;
@@ -77,19 +104,19 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     } catch (e) {
       if (!mounted) return;
 
+      final errorMessage = e.toString().replaceAll('Exception: ', '');
+
       setState(() {
         _isLoading = false;
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = errorMessage;
       });
 
-      if (_errorMessage!.contains('Session expired') ||
-          _errorMessage!.contains('Unauthorized') ||
-          _errorMessage!.contains('No authentication token')) {
-        if (mounted) {
-          _showLoginDialog();
-        }
+      if (errorMessage.contains('Session expired') ||
+          errorMessage.contains('Unauthorized') ||
+          errorMessage.contains('No authentication token')) {
+        _handleSessionExpired();
       } else {
-        _showErrorSnackBar(_errorMessage!);
+        _showErrorSnackBar(errorMessage);
       }
     }
   }
@@ -141,7 +168,13 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
       setState(() {
         _isLoadingMore = false;
       });
-      _showErrorSnackBar('Failed to load more posts');
+
+      final errorMessage = e.toString().replaceAll('Exception: ', '');
+      if (errorMessage.contains('Session expired')) {
+        _handleSessionExpired();
+      } else {
+        _showErrorSnackBar('Failed to load more posts');
+      }
     }
   }
 
@@ -157,41 +190,59 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
         _totalPages = response.data.pagination.pages;
       });
     } catch (e) {
-      _showErrorSnackBar('Failed to refresh posts');
+      final errorMessage = e.toString().replaceAll('Exception: ', '');
+      if (errorMessage.contains('Session expired')) {
+        _handleSessionExpired();
+      } else {
+        _showErrorSnackBar('Failed to refresh posts');
+      }
     }
   }
 
   void _navigateToPostDetail(MyPost post) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PostDetailScreen1(post: post, userItems: []),
-      ),
-    );
+    try {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PostDetailScreen1(post: post, userItems: []),
+        ),
+      );
 
-    // If post was deleted or updated, refresh the list
-    if (result == true) {
-      _refreshPosts();
+      // If post was deleted or updated, refresh the list
+      if (result == true) {
+        _refreshPosts();
+      }
+    } catch (e) {
+      debugPrint('🔴 Error navigating to post detail: $e');
     }
   }
 
   void _navigateToAddPost() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => AddPostScreen(
-        onPostAdded: () {
-          _refreshPosts();
-        },
-      ),
-    );
+    try {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => AddPostScreen(
+          onPostAdded: () {
+            _refreshPosts();
+          },
+        ),
+      );
+    } catch (e) {
+      debugPrint('🔴 Error opening add post screen: $e');
+      _showErrorSnackBar('Failed to open add post screen');
+    }
   }
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -218,6 +269,18 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
   String _truncateLocation(String location, {int maxLength = 25}) {
     if (location.length <= maxLength) return location;
     return '${location.substring(0, maxLength)}...';
+  }
+
+  Widget _buildPullToRefreshState({required Widget child}) {
+    return RefreshIndicator(
+      onRefresh: _refreshPosts,
+      color: const Color(0xFF2E5BFF),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [SizedBox(height: 420, child: Center(child: child))],
+      ),
+    );
   }
 
   @override
@@ -258,7 +321,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _errorMessage != null
-                ? Center(
+                ? _buildPullToRefreshState(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -276,13 +339,17 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                         const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: _fetchMyPosts,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2E5BFF),
+                            foregroundColor: Colors.white,
+                          ),
                           child: const Text('Try Again'),
                         ),
                       ],
                     ),
                   )
                 : _posts.isEmpty
-                ? Center(
+                ? _buildPullToRefreshState(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -306,8 +373,10 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                   )
                 : RefreshIndicator(
                     onRefresh: _refreshPosts,
+                    color: const Color(0xFF2E5BFF),
                     child: ListView.builder(
                       controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       itemCount: _posts.length + (_isLoadingMore ? 1 : 0),
                       itemBuilder: (context, index) {
@@ -363,6 +432,17 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                       height: 180,
                       width: double.infinity,
                       fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          height: 180,
+                          width: double.infinity,
+                          color: Colors.grey[200],
+                          child: const Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                        );
+                      },
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
                           height: 180,
@@ -626,9 +706,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        DateFormat(
-                          'MMM dd, yyyy • hh:mm a',
-                        ).format(post.postedDate),
+                        DateFormat('MMM dd, yyyy').format(post.postedDate),
                         style: const TextStyle(
                           fontSize: 11,
                           color: Colors.grey,

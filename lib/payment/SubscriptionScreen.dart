@@ -125,6 +125,26 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   bool get _isLoading => _isLoadingPlans || _isLoadingCurrentPlan;
 
+  bool _isSelectedPlanCurrent() {
+    if (_selectedPlan == null || currentPlan == null) return false;
+
+    final selectedId = _selectedPlan!.id?.trim();
+    final currentId = currentPlan?.planId?.trim();
+
+    if (selectedId != null &&
+        selectedId.isNotEmpty &&
+        currentId != null &&
+        currentId.isNotEmpty) {
+      return selectedId == currentId;
+    }
+
+    final selectedName = (_selectedPlan!.name ?? '').trim().toLowerCase();
+    final currentName = (currentPlan?.planName ?? '').trim().toLowerCase();
+
+    if (selectedName.isEmpty || currentName.isEmpty) return false;
+    return selectedName == currentName;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -228,7 +248,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         },
                       ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
                     // Yearly Savings (show if annual is selected)
                     if (_selectedPlan?.name?.toLowerCase() == 'annual')
@@ -256,8 +276,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                           ],
                         ),
                       ),
-
-                    const SizedBox(height: 32),
 
                     // Free Trial Notice
                     Container(
@@ -300,26 +318,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 32),
-
-                    // Terms and Conditions
-                    const Text(
-                      'By joining you agree to our privacy policy and terms of service',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                        height: 1.5,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 20),
 
                     // Subscribe Button
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _selectedPlan == null
+                        onPressed:
+                            _selectedPlan == null || _isSelectedPlanCurrent()
                             ? null
                             : () {
                                 Navigator.push(
@@ -343,7 +349,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                           disabledBackgroundColor: Colors.grey.shade300,
                         ),
                         child: Text(
-                          currentPlan != null
+                          _selectedPlan == null
+                              ? 'Select a Plan'
+                              : _isSelectedPlanCurrent()
+                              ? 'Current Plan Selected'
+                              : currentPlan != null
                               ? 'Upgrade Plan'
                               : 'Subscribe Now',
                           style: const TextStyle(

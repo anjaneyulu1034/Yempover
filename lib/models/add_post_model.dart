@@ -5,6 +5,8 @@ class CreateProductRequest {
   final String categoryId;
   final List<String> images;
   final String location;
+  final double? latitude;
+  final double? longitude;
   final String barterStatus;
   final double price;
 
@@ -14,6 +16,8 @@ class CreateProductRequest {
     required this.categoryId,
     required this.images,
     required this.location,
+    this.latitude,
+    this.longitude,
     required this.barterStatus,
     required this.price,
   });
@@ -25,6 +29,8 @@ class CreateProductRequest {
       'categoryId': categoryId,
       'images': images,
       'location': location,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
       'barterStatus': barterStatus,
       'price': price,
     };
@@ -36,6 +42,11 @@ class CreateServiceRequest {
   final String description;
   final String categoryId;
   final List<String> images;
+  final String? location;
+  final double? latitude;
+  final double? longitude;
+  final String? validFrom;
+  final String? validUntil;
   final String status; // PROVIDE_SERVICE
   final double price;
 
@@ -44,6 +55,11 @@ class CreateServiceRequest {
     required this.description,
     required this.categoryId,
     required this.images,
+    this.location,
+    this.latitude,
+    this.longitude,
+    this.validFrom,
+    this.validUntil,
     required this.status,
     required this.price,
   });
@@ -54,6 +70,12 @@ class CreateServiceRequest {
       'description': description,
       'categoryId': categoryId,
       'images': images,
+      if (location != null && location!.isNotEmpty) 'location': location,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (validFrom != null && validFrom!.isNotEmpty) 'validFrom': validFrom,
+      if (validUntil != null && validUntil!.isNotEmpty)
+        'validUntil': validUntil,
       'status': status,
       'price': price,
     };

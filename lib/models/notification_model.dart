@@ -110,24 +110,70 @@ class AppNotification {
     this.deepLinkPath,
   });
 
+  static String? _readString(dynamic value) {
+    if (value == null) return null;
+    final text = value.toString().trim();
+    return text.isEmpty ? null : text;
+  }
+
+  static String? _readByKeys(Map<String, dynamic> json, List<String> keys) {
+    for (final key in keys) {
+      if (!json.containsKey(key)) continue;
+      final value = _readString(json[key]);
+      if (value != null) return value;
+    }
+    return null;
+  }
+
+  static String? _readNestedId(Map<String, dynamic> json, List<String> keys) {
+    for (final key in keys) {
+      final raw = json[key];
+      if (raw is Map<String, dynamic>) {
+        final nestedId = _readByKeys(raw, ['id', '_id']);
+        if (nestedId != null) return nestedId;
+      }
+    }
+    return null;
+  }
+
   factory AppNotification.fromJson(Map<String, dynamic> json) {
+    final tradeChatId =
+        _readByKeys(json, ['tradeChatId', 'trade_chat_id', 'chatId']) ??
+        _readNestedId(json, ['tradeChat', 'chat']);
+
+    final productId =
+        _readByKeys(json, ['productId', 'product_id']) ??
+        _readNestedId(json, ['product']);
+
+    final serviceId =
+        _readByKeys(json, ['serviceId', 'service_id']) ??
+        _readNestedId(json, ['service']);
+
+    final offerId =
+        _readByKeys(json, ['offerId', 'offer_id']) ??
+        _readNestedId(json, ['offer']);
+
+    final deepLinkPath = _readByKeys(json, ['deepLinkPath', 'deep_link_path']);
+
     return AppNotification(
-      id: json['id'] ?? '',
-      userId: json['userId'] ?? '',
-      type: NotificationType.fromString(json['type'] ?? 'SYSTEM_ALERT'),
-      title: json['title'] ?? '',
-      message: json['message'] ?? '',
-      tradeChatId: json['tradeChatId'],
-      offerId: json['offerId'],
-      productId: json['productId'],
-      serviceId: json['serviceId'],
-      actorId: json['actorId'],
+      id: _readByKeys(json, ['id', '_id']) ?? '',
+      userId: _readByKeys(json, ['userId', 'user_id']) ?? '',
+      type: NotificationType.fromString(
+        _readByKeys(json, ['type', 'notificationType']) ?? 'SYSTEM_ALERT',
+      ),
+      title: _readByKeys(json, ['title']) ?? '',
+      message: _readByKeys(json, ['message', 'body']) ?? '',
+      tradeChatId: tradeChatId,
+      offerId: offerId,
+      productId: productId,
+      serviceId: serviceId,
+      actorId: _readByKeys(json, ['actorId', 'actor_id']),
       isRead: json['isRead'] ?? false,
       readAt: json['readAt'] != null ? DateTime.parse(json['readAt']) : null,
       createdAt: DateTime.parse(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
       ),
-      deepLinkPath: json['deepLinkPath'],
+      deepLinkPath: deepLinkPath,
     );
   }
 

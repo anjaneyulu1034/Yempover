@@ -1,4 +1,5 @@
 import 'package:Yempover_app/screens/PrivacyPolicyScreen.dart';
+import 'package:Yempover_app/screens/SignupPhotoVerificationScreen.dart';
 import 'package:Yempover_app/screens/TermsAndConditionsScreen.dart';
 import 'package:Yempover_app/services/notification1_service.dart';
 import 'package:flutter/gestures.dart';
@@ -129,92 +130,20 @@ class _SignupScreenState extends State<SignupScreen> {
       '📋 SignupScreen: Form data - First: ${_firstNameController.text}, Last: ${_lastNameController.text}, Phone: ${_phoneController.text}, Email: ${_emailController.text}',
     );
 
-    setState(() {
-      _isLoading = true;
-    });
+    if (!mounted) return;
 
-    try {
-      debugPrint('🔄 SignupScreen: Calling registerUser API...');
-
-      final response = await _authService.registerUser(
-        firstName: _firstNameController.text.trim(),
-        lastName: _lastNameController.text.trim(),
-        email: _emailController.text.trim(),
-        mobileNumber: _phoneController.text.trim(),
-        acceptedTerms: _agreeToTerms,
-      );
-
-      debugPrint(
-        '📨 SignupScreen: API Response - Success: ${response.isSuccess}, Message: ${response.message}',
-      );
-
-      if (response.isSuccess) {
-        debugPrint(
-          '🟢 SignupScreen: Registration successful, showing success popup and sending notification',
-        );
-
-        // Show push notification on signup success
-        await _notificationService.showSignupSuccessNotification();
-
-        // Show success dialog before navigating to OTP
-        _showSignupSuccessDialog();
-      } else {
-        debugPrint('🔴 SignupScreen: Registration failed: ${response.message}');
-
-        if (_isUserAlreadyExistsError(response.message)) {
-          debugPrint(
-            '🟡 SignupScreen: User already exists, navigating to LoginScreen',
-          );
-
-          _showUserExistsDialog(response.message);
-        } else {
-          AuthService.showErrorDialog(context, response.message);
-        }
-      }
-    } on ApiException catch (e) {
-      if (e.message.toLowerCase().contains('success') ||
-          e.message.toLowerCase().contains('verify') ||
-          e.message.toLowerCase().contains('otp')) {
-        debugPrint(
-          '🟡 SignupScreen: This appears to be a success message: ${e.message}',
-        );
-        debugPrint(
-          '🟢 SignupScreen: Showing success popup, sending notification, and navigating to OTP screen',
-        );
-
-        // Show push notification on signup success
-        await _notificationService.showSignupSuccessNotification();
-
-        _showSignupSuccessDialog();
-      } else if (_isUserAlreadyExistsError(e.message)) {
-        debugPrint(
-          '🟡 SignupScreen: User already exists (ApiException), navigating to LoginScreen',
-        );
-
-        _showUserExistsDialog(e.message);
-      } else {
-        debugPrint('🔴 SignupScreen: ApiException caught: ${e.message}');
-        AuthService.showErrorDialog(context, e.message);
-      }
-    } catch (e) {
-      debugPrint('🔴 SignupScreen: General exception caught: $e');
-
-      if (_isUserAlreadyExistsError(e.toString())) {
-        debugPrint(
-          '🟡 SignupScreen: User already exists (General exception), navigating to LoginScreen',
-        );
-        _showUserExistsDialog('User already exists. Please login instead.');
-      } else {
-        AuthService.showErrorDialog(context, ErrorMessages.unknownError);
-      }
-    } finally {
-      if (mounted) {
-        debugPrint('🔵 SignupScreen: Setting isLoading to false');
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SignupPhotoVerificationScreen(
+          firstName: _firstNameController.text.trim(),
+          lastName: _lastNameController.text.trim(),
+          email: _emailController.text.trim(),
+          mobileNumber: _phoneController.text.trim(),
+          acceptedTerms: _agreeToTerms,
+        ),
+      ),
+    );
   }
 
   void _showSignupSuccessDialog() {

@@ -963,11 +963,10 @@ class ApiService {
     double? longitude,
   }) async {
     try {
-      // Check if user is logged in first
+      // Posts feed should be visible for guests too.
       final isLoggedIn = await _tokenService.isLoggedIn();
       if (!isLoggedIn) {
-        debugPrint('🔴 ApiService: User not logged in, cannot fetch posts');
-        throw ApiException('Please login to view posts');
+        debugPrint('🟡 ApiService: Guest mode/public fetch for posts');
       }
 
       final Map<String, dynamic> queryParams = {
@@ -1036,7 +1035,7 @@ class ApiService {
 
       // Since _makePostRequest returns AuthResponse, we need to extract the data
       if (response is AuthResponse) {
-        if (response.isSuccess && response.data != null) {
+        if (response.data != null) {
           // The data should be a Map containing the response
           return UpdateProfileImageResponse.fromJson(
             response.data as Map<String, dynamic>,
@@ -1099,7 +1098,8 @@ class ApiService {
 
   // ============= CLEANUP =============
   void dispose() {
-    _client.close();
-    debugPrint('♻️ ApiService: Disposed HTTP client');
+    // ApiService is a singleton shared across the app.
+    // Closing its client from one screen breaks all later requests.
+    debugPrint('♻️ ApiService: dispose() called (singleton client kept alive)');
   }
 }

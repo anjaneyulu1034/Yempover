@@ -1,0 +1,431 @@
+import 'dart:convert';
+
+Map<String, dynamic> _asMap(dynamic value) {
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) return Map<String, dynamic>.from(value);
+  return <String, dynamic>{};
+}
+
+List<dynamic> _asList(dynamic value) {
+  if (value is List) return value;
+  return <dynamic>[];
+}
+
+String _asString(dynamic value, [String defaultValue = '']) {
+  if (value == null) return defaultValue;
+  return value.toString();
+}
+
+int _asInt(dynamic value, [int defaultValue = 0]) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? defaultValue;
+  return defaultValue;
+}
+
+double? _asNullableDouble(dynamic value) {
+  if (value == null) return null;
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value);
+  return null;
+}
+
+bool _asBool(dynamic value, [bool defaultValue = false]) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  if (value is String) {
+    final normalized = value.toLowerCase().trim();
+    if (normalized == 'true' || normalized == '1' || normalized == 'yes') {
+      return true;
+    }
+    if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+      return false;
+    }
+  }
+  return defaultValue;
+}
+
+DateTime _asDateTime(dynamic value) {
+  if (value is DateTime) return value;
+  if (value is String) return DateTime.tryParse(value) ?? DateTime(1970, 1, 1);
+  return DateTime(1970, 1, 1);
+}
+
+class TradeHistoryResponse {
+  final String status;
+  final String message;
+  final TradeStatsData data;
+
+  TradeHistoryResponse({
+    required this.status,
+    required this.message,
+    required this.data,
+  });
+
+  factory TradeHistoryResponse.fromJson(Map<String, dynamic> json) {
+    return TradeHistoryResponse(
+      status: _asString(json['status']),
+      message: _asString(json['message']),
+      data: TradeStatsData.fromJson(_asMap(json['data'])),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {'status': status, 'message': message, 'data': data.toJson()};
+  }
+}
+
+class TradeStatsData {
+  final int totalTradesCompleted;
+  final Breakdown breakdown;
+  final Trades trades;
+  final Subscription subscription;
+
+  TradeStatsData({
+    required this.totalTradesCompleted,
+    required this.breakdown,
+    required this.trades,
+    required this.subscription,
+  });
+
+  factory TradeStatsData.fromJson(Map<String, dynamic> json) {
+    return TradeStatsData(
+      totalTradesCompleted: _asInt(json['totalTradesCompleted']),
+      breakdown: Breakdown.fromJson(_asMap(json['breakdown'])),
+      trades: Trades.fromJson(_asMap(json['trades'])),
+      subscription: Subscription.fromJson(_asMap(json['subscription'])),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'totalTradesCompleted': totalTradesCompleted,
+      'breakdown': breakdown.toJson(),
+      'trades': trades.toJson(),
+      'subscription': subscription.toJson(),
+    };
+  }
+}
+
+class Breakdown {
+  final int soldProducts;
+  final int boughtProducts;
+  final int soldServices;
+  final int boughtServices;
+  final int barterExchanges;
+
+  Breakdown({
+    required this.soldProducts,
+    required this.boughtProducts,
+    required this.soldServices,
+    required this.boughtServices,
+    required this.barterExchanges,
+  });
+
+  factory Breakdown.fromJson(Map<String, dynamic> json) {
+    return Breakdown(
+      soldProducts: _asInt(json['soldProducts']),
+      boughtProducts: _asInt(json['boughtProducts']),
+      soldServices: _asInt(json['soldServices']),
+      boughtServices: _asInt(json['boughtServices']),
+      barterExchanges: _asInt(json['barterExchanges']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'soldProducts': soldProducts,
+      'boughtProducts': boughtProducts,
+      'soldServices': soldServices,
+      'boughtServices': boughtServices,
+      'barterExchanges': barterExchanges,
+    };
+  }
+}
+
+class Trades {
+  final List<TradeItem> soldProducts;
+  final List<TradeItem> boughtProducts;
+  final List<TradeItem> soldServices;
+  final List<TradeItem> boughtServices;
+  final List<TradeItem> barterExchanges;
+
+  Trades({
+    required this.soldProducts,
+    required this.boughtProducts,
+    required this.soldServices,
+    required this.boughtServices,
+    required this.barterExchanges,
+  });
+
+  factory Trades.fromJson(Map<String, dynamic> json) {
+    return Trades(
+      soldProducts: _asList(json['soldProducts'])
+          .whereType<Map>()
+          .map((e) => TradeItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      boughtProducts: _asList(json['boughtProducts'])
+          .whereType<Map>()
+          .map((e) => TradeItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      soldServices: _asList(json['soldServices'])
+          .whereType<Map>()
+          .map((e) => TradeItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      boughtServices: _asList(json['boughtServices'])
+          .whereType<Map>()
+          .map((e) => TradeItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      barterExchanges: _asList(json['barterExchanges'])
+          .whereType<Map>()
+          .map((e) => TradeItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'soldProducts': soldProducts.map((e) => e.toJson()).toList(),
+      'boughtProducts': boughtProducts.map((e) => e.toJson()).toList(),
+      'soldServices': soldServices.map((e) => e.toJson()).toList(),
+      'boughtServices': boughtServices.map((e) => e.toJson()).toList(),
+      'barterExchanges': barterExchanges.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  // Helper method to get all trades as a single list sorted by date
+  List<TradeItem> getAllTrades() {
+    final List<TradeItem> allTrades = [];
+    allTrades.addAll(soldProducts);
+    allTrades.addAll(boughtProducts);
+    allTrades.addAll(soldServices);
+    allTrades.addAll(boughtServices);
+    allTrades.addAll(barterExchanges);
+
+    // Sort by completed date (most recent first)
+    allTrades.sort((a, b) => b.completedDate.compareTo(a.completedDate));
+
+    return allTrades;
+  }
+}
+
+class TradeItem {
+  final String id;
+  final DateTime completedDate;
+  final OtherUser otherUser;
+  final double? sellingPrice;
+  final String? remarks;
+  final String? initiatorRemarks;
+  final String participantRemarks;
+  final Product product;
+
+  TradeItem({
+    required this.id,
+    required this.completedDate,
+    required this.otherUser,
+    this.sellingPrice,
+    this.remarks,
+    this.initiatorRemarks,
+    required this.participantRemarks,
+    required this.product,
+  });
+
+  factory TradeItem.fromJson(Map<String, dynamic> json) {
+    return TradeItem(
+      id: _asString(json['id']),
+      completedDate: _asDateTime(json['completedDate']),
+      otherUser: OtherUser.fromJson(_asMap(json['otherUser'])),
+      sellingPrice: _asNullableDouble(json['sellingPrice']),
+      remarks: json['remarks']?.toString(),
+      initiatorRemarks: json['initiatorRemarks']?.toString(),
+      participantRemarks: _asString(json['participantRemarks']),
+      product: Product.fromJson(_asMap(json['product'])),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'completedDate': completedDate.toIso8601String(),
+      'otherUser': otherUser.toJson(),
+      'sellingPrice': sellingPrice,
+      'remarks': remarks,
+      'initiatorRemarks': initiatorRemarks,
+      'participantRemarks': participantRemarks,
+      'product': product.toJson(),
+    };
+  }
+
+  // Determine trade type based on who posted the product
+  String getTradeType(String currentUserId) {
+    if (product.postedById == currentUserId) {
+      return 'Sold';
+    } else {
+      return 'Purchased';
+    }
+  }
+
+  // Check if it's a barter trade
+  bool get isBarter => product.barterStatus == 'BARTER';
+
+  // Get display price
+  double? get displayPrice => sellingPrice ?? product.price;
+
+  // Get trade type for display
+  String getDisplayTradeType() {
+    if (isBarter) return 'Barter';
+    return product.postedById == otherUser.id ? 'Purchased' : 'Sold';
+  }
+}
+
+class OtherUser {
+  final String id;
+  final String firstName;
+  final String lastName;
+  final String? profileImage;
+
+  OtherUser({
+    required this.id,
+    required this.firstName,
+    required this.lastName,
+    this.profileImage,
+  });
+
+  factory OtherUser.fromJson(Map<String, dynamic> json) {
+    return OtherUser(
+      id: _asString(json['id']),
+      firstName: _asString(json['firstName']),
+      lastName: _asString(json['lastName']),
+      profileImage: json['profileImage']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'firstName': firstName,
+      'lastName': lastName,
+      'profileImage': profileImage,
+    };
+  }
+
+  String get fullName => '$firstName $lastName';
+}
+
+class Product {
+  final String id;
+  final String title;
+  final String description;
+  final List<String> images;
+  final String status;
+  final String barterStatus;
+  final double? price;
+  final String categoryId;
+  final double? latitude;
+  final double? longitude;
+  final String location;
+  final String postedById;
+  final DateTime postedDate;
+  final int viewCount;
+  final bool isListed;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  Product({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.images,
+    required this.status,
+    required this.barterStatus,
+    this.price,
+    required this.categoryId,
+    this.latitude,
+    this.longitude,
+    required this.location,
+    required this.postedById,
+    required this.postedDate,
+    required this.viewCount,
+    required this.isListed,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory Product.fromJson(Map<String, dynamic> json) {
+    return Product(
+      id: _asString(json['id']),
+      title: _asString(json['title']),
+      description: _asString(json['description']),
+      images: _asList(json['images']).map((e) => e.toString()).toList(),
+      status: _asString(json['status']),
+      barterStatus: _asString(json['barterStatus']),
+      price: _asNullableDouble(json['price']),
+      categoryId: _asString(json['categoryId']),
+      latitude: _asNullableDouble(json['latitude']),
+      longitude: _asNullableDouble(json['longitude']),
+      location: _asString(json['location']),
+      postedById: _asString(json['postedById']),
+      postedDate: _asDateTime(json['postedDate']),
+      viewCount: _asInt(json['viewCount']),
+      isListed: _asBool(json['isListed']),
+      createdAt: _asDateTime(json['createdAt']),
+      updatedAt: _asDateTime(json['updatedAt']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'images': images,
+      'status': status,
+      'barterStatus': barterStatus,
+      'price': price,
+      'categoryId': categoryId,
+      'latitude': latitude,
+      'longitude': longitude,
+      'location': location,
+      'postedById': postedById,
+      'postedDate': postedDate.toIso8601String(),
+      'viewCount': viewCount,
+      'isListed': isListed,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
+
+  String get primaryImage => images.isNotEmpty ? images.first : '';
+}
+
+class Subscription {
+  final String planName;
+  final DateTime startDate;
+  final DateTime endDate;
+  final bool isValid;
+
+  Subscription({
+    required this.planName,
+    required this.startDate,
+    required this.endDate,
+    required this.isValid,
+  });
+
+  factory Subscription.fromJson(Map<String, dynamic> json) {
+    return Subscription(
+      planName: _asString(json['planName']),
+      startDate: _asDateTime(json['startDate']),
+      endDate: _asDateTime(json['endDate']),
+      isValid: _asBool(json['isValid']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'planName': planName,
+      'startDate': startDate.toIso8601String(),
+      'endDate': endDate.toIso8601String(),
+      'isValid': isValid,
+    };
+  }
+}

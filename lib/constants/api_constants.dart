@@ -13,6 +13,7 @@ class ApiConstants {
   static const String services = '$baseUrl/me/posts/services';
   static const String categories = '$baseUrl/categories';
   static const String me = '$baseUrl/me';
+  static const String logout = '$baseUrl/auth/logout';  // Add this line
 
   // Favorites
   static const String favorites = '$baseUrl/me/favorites';
@@ -84,6 +85,8 @@ class ApiConstants {
   static String postDetail(String id) => '$posts/$id';
   static String updatePostStatus(String id) => '$posts/$id/status';
   static const String uploadAvatarBase64 = '$baseUrl/me/avatar/base64';
+
+  static const String userStats = '$baseUrl/me/stats';
 
   // Headers
   static const Map<String, String> headers = {

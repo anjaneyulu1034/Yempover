@@ -1,26 +1,164 @@
-// ignore: file_names
+// // ignore: file_names
+// import 'package:flutter/material.dart';
+// import 'package:Yempover_app/screens/OnboardingScreen.dart';
+
+// class SplashScreen extends StatefulWidget {
+//   const SplashScreen({super.key});
+
+//   @override
+//   // ignore: library_private_types_in_public_api
+//   _SplashScreenState createState() => _SplashScreenState();
+// }
+
+// class _SplashScreenState extends State<SplashScreen> {
+//   @override
+//   void initState() {
+//     super.initState();
+//     // Simulate splash screen delay
+//     Future.delayed(const Duration(seconds: 2), () {
+//       Navigator.pushReplacement(
+//         context,
+//         MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+//       );
+//     });
+//   }
+
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       backgroundColor: const Color(0xFF1A73E8),
+//       body: Center(
+//         child: Column(
+//           mainAxisAlignment: MainAxisAlignment.center,
+//           children: [
+//             // App Logo/Icon
+//             Container(
+//               width: 120,
+//               height: 120,
+//               decoration: BoxDecoration(
+//                 color: Colors.white,
+//                 borderRadius: BorderRadius.circular(24),
+//                 boxShadow: [
+//                   BoxShadow(
+//                     color: Colors.black.withOpacity(0.1),
+//                     blurRadius: 20,
+//                     spreadRadius: 2,
+//                   ),
+//                 ],
+//               ),
+//               child: const Icon(
+//                 Icons.battery_charging_full,
+//                 size: 64,
+//                 color: Color(0xFF1A73E8),
+//               ),
+//             ),
+//             const SizedBox(height: 30),
+//             // App Name
+//             const Column(
+//               children: [
+//                 Text(
+//                   'Yempover',
+//                   style: TextStyle(
+//                     fontSize: 36,
+//                     fontWeight: FontWeight.bold,
+//                     color: Colors.white,
+//                     letterSpacing: 1.2,
+//                   ),
+//                 ),
+//                 SizedBox(height: 8),
+//                 Text(
+//                   'Battery System',
+//                   style: TextStyle(
+//                     fontSize: 18,
+//                     color: Colors.white70,
+//                     fontWeight: FontWeight.w500,
+//                   ),
+//                 ),
+//               ],
+//             ),
+//             const SizedBox(height: 50),
+//             // Loading Indicator
+//             const CircularProgressIndicator(
+//               valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+//               strokeWidth: 2,
+//             ),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+// }
+
+// screens/SplashScreen.dart
+
+import 'package:Yempover_app/screens/LoginScreen.dart';
+import 'package:Yempover_app/services/shared_prefs_service.dart';
 import 'package:flutter/material.dart';
 import 'package:Yempover_app/screens/OnboardingScreen.dart';
+import 'package:Yempover_app/screens/Home_screen.dart';
+import 'package:Yempover_app/services/token_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
-  _SplashScreenState createState() => _SplashScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Simulate splash screen delay
-    Future.delayed(const Duration(seconds: 2), () {
+    _checkLoginStatus();
+  }
+
+  Future<void> _checkLoginStatus() async {
+    // Small delay for splash screen visibility
+    await Future.delayed(const Duration(seconds: 2));
+
+    try {
+      // Check if user is already logged in
+      final isLoggedIn = await TokenService().isLoggedIn();
+      final isGuestUser = await TokenService().isGuestUser();
+
+      // Check if onboarding has been seen before
+      final hasSeenOnboarding = await SharedPrefsService.hasSeenOnboarding();
+
+      if (!mounted) return;
+
+      if (isLoggedIn || isGuestUser) {
+        debugPrint(
+          '🟢 SplashScreen: User is authenticated or guest, navigating to Home',
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      } else {
+        if (!hasSeenOnboarding) {
+          debugPrint('🟢 SplashScreen: First time user, showing onboarding');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+          );
+        } else {
+          debugPrint('🟢 SplashScreen: Returning user, showing login');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('🔴 SplashScreen: Error checking login status: $e');
+      if (!mounted) return;
+
+      // On error, default to onboarding for safety
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
       );
-    });
+    }
   }
 
   @override
@@ -67,7 +205,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Battery System',
+                  'Barter System',
                   style: TextStyle(
                     fontSize: 18,
                     color: Colors.white70,
