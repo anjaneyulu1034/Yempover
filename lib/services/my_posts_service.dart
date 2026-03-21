@@ -344,6 +344,66 @@ class MyPostsService {
     }
   }
 
+  Future<List<String>> uploadPostImagesBase64(List<String> images) async {
+    if (images.isEmpty) return const [];
+
+    final client = http.Client();
+
+    try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token found. Please login again.');
+      }
+
+      final endpoint = '${ApiConstants.baseUrl}/me/posts/images/base64';
+      debugPrint('🌐 MyPostsService: Uploading post images to: $endpoint');
+      debugPrint('📦 Upload image count: ${images.length}');
+
+      final response = await client
+          .post(
+            Uri.parse(endpoint),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: json.encode({'images': images}),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      debugPrint('📨 Image upload response status: ${response.statusCode}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final Map<String, dynamic> jsonResponse = json.decode(response.body);
+        final data = jsonResponse['data'];
+        final urls = (data is Map<String, dynamic> && data['urls'] is List)
+            ? (data['urls'] as List)
+                  .map((e) => e.toString().trim())
+                  .where((e) => e.isNotEmpty)
+                  .toList()
+            : <String>[];
+
+        if (urls.isEmpty) {
+          throw Exception('Image upload failed. No image URLs returned.');
+        }
+
+        return urls;
+      } else if (response.statusCode == 401) {
+        await TokenService().clearTokens();
+        throw Exception('Session expired. Please login again.');
+      } else {
+        throw Exception(
+          'Failed to upload images: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      debugPrint('🔴 MyPostsService: Error uploading images: $e');
+      rethrow;
+    } finally {
+      client.close();
+    }
+  }
+
   // FIXED: Update Post method with correct endpoint based on post type
   Future<ApiResponse> updatePost(
     String postId,

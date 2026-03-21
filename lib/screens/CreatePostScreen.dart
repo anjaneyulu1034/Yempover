@@ -49,6 +49,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     // Simulate API call delay
     await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
 
     final newItem = UserItem(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -89,7 +90,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                16 + MediaQuery.of(context).viewPadding.bottom,
+              ),
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -151,7 +157,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: _categoryController.text.isEmpty
+                      initialValue: _categoryController.text.isEmpty
                           ? null
                           : _categoryController.text,
                       decoration: InputDecoration(

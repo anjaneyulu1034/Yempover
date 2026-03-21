@@ -10,6 +10,9 @@ import 'package:Yempover_app/screens/service/ServiceAvailabilityScreen.dart';
 import 'package:Yempover_app/services/token_service.dart';
 import 'package:Yempover_app/services/location_service.dart';
 import 'package:Yempover_app/services/service_booking_service.dart';
+import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:google_places_flutter/google_places_flutter.dart';
+import 'package:google_places_flutter/model/prediction.dart';
 
 class AddPostScreen extends StatefulWidget {
   final Function()? onPostAdded;
@@ -22,6 +25,9 @@ class AddPostScreen extends StatefulWidget {
 }
 
 class _AddPostScreenState extends State<AddPostScreen> {
+  static const int _maxAllowedImages = 5;
+  static const int _minRequiredProductImages = 1;
+
   // Services
   final CategoryService _categoryService = CategoryService();
   final AddPostService _addPostService = AddPostService();
@@ -41,6 +47,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
       TextEditingController();
   final TextEditingController _validFromController = TextEditingController();
   final TextEditingController _validUntilController = TextEditingController();
+  final TextEditingController _needByController = TextEditingController();
 
   // Category data - Two level selection
   List<Map<String, dynamic>> _mainCategories = [];
@@ -50,11 +57,21 @@ class _AddPostScreenState extends State<AddPostScreen> {
   bool _isLoadingCategories = false;
   bool _isLoadingSubCategories = false;
   String? _categoryError;
+  bool _barterAllowed = false;
+  bool _canBeClubbed = true;
 
   // Image upload variables
-  List<File> _selectedImages = [];
+  final List<File> _selectedImages = [];
   final ImagePicker _picker = ImagePicker();
   bool _isSubmitting = false;
+  bool _showImageValidationError = false;
+  String? _titleValidationError;
+  String? _mainCategoryValidationError;
+  String? _subCategoryValidationError;
+  String? _descriptionValidationError;
+  String? _locationValidationError;
+  String? _needByValidationError;
+  String? _priceValidationError;
 
   // Location variables
   bool _isGettingLocation = false;
@@ -62,15 +79,23 @@ class _AddPostScreenState extends State<AddPostScreen> {
   double? _selectedLongitude;
   DateTime? _validFromDate;
   DateTime? _validUntilDate;
+  DateTime? _needByDate;
+
+  // Manual location search
+  final FocusNode _locationFocusNode = FocusNode();
+  bool _showLocationMinCharsHint = false;
+  static const String _googleApiKey = 'AIzaSyAT3wIjV73qVXPAlgkyifnns38GztnbNF4';
 
   @override
   void initState() {
     super.initState();
+    _locationController.addListener(_onLocationTextChanged);
     _checkLoginAndLoadMainCategories();
   }
 
   @override
   void dispose() {
+    _locationController.removeListener(_onLocationTextChanged);
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
@@ -78,8 +103,35 @@ class _AddPostScreenState extends State<AddPostScreen> {
     _willPayAmountController.dispose();
     _validFromController.dispose();
     _validUntilController.dispose();
+    _needByController.dispose();
+    _locationFocusNode.dispose();
     _addPostService.dispose();
     super.dispose();
+  }
+
+  void _onLocationTextChanged() {
+    final query = _locationController.text.trim();
+    final shouldShowHint = query.isNotEmpty && query.length < 4;
+
+    if (shouldShowHint != _showLocationMinCharsHint) {
+      setState(() {
+        _showLocationMinCharsHint = shouldShowHint;
+      });
+    }
+
+    if (query.length < 4 &&
+        (_selectedLatitude != null || _selectedLongitude != null)) {
+      setState(() {
+        _selectedLatitude = null;
+        _selectedLongitude = null;
+      });
+    }
+
+    if (_locationValidationError != null && query.isNotEmpty) {
+      setState(() {
+        _locationValidationError = null;
+      });
+    }
   }
 
   Future<void> _checkLoginAndLoadMainCategories() async {
@@ -237,6 +289,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
           _selectedLatitude = position.latitude;
           _selectedLongitude = position.longitude;
           _locationController.text = address;
+          _showLocationMinCharsHint = false;
         });
         _showSuccessSnackBar('Location updated successfully');
       } else {
@@ -245,6 +298,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
           _selectedLongitude = position.longitude;
           _locationController.text =
               '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+          _showLocationMinCharsHint = false;
         });
       }
     } catch (e) {
@@ -285,6 +339,38 @@ class _AddPostScreenState extends State<AddPostScreen> {
   // Image picker with compression
   Future<void> _pickImage(ImageSource source) async {
     try {
+      final remainingSlots = _maxAllowedImages - _selectedImages.length;
+      if (remainingSlots <= 0) {
+        _showErrorSnackBar('Maximum $_maxAllowedImages photos are allowed');
+        return;
+      }
+
+      if (source == ImageSource.gallery) {
+        final List<XFile> pickedImages = await _picker.pickMultiImage(
+          maxWidth: 1024,
+          maxHeight: 1024,
+          imageQuality: 70,
+        );
+
+        if (pickedImages.isEmpty) return;
+
+        final imagesToAdd = pickedImages.take(remainingSlots).toList();
+
+        setState(() {
+          _selectedImages.addAll(
+            imagesToAdd.map((image) => File(image.path)).toList(),
+          );
+          _showImageValidationError = false;
+        });
+
+        if (pickedImages.length > remainingSlots) {
+          _showErrorSnackBar(
+            'Only $remainingSlots image(s) added. Maximum $_maxAllowedImages photos are allowed.',
+          );
+        }
+        return;
+      }
+
       final XFile? image = await _picker.pickImage(
         source: source,
         maxWidth: 1024,
@@ -295,6 +381,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
       if (image != null) {
         setState(() {
           _selectedImages.add(File(image.path));
+          _showImageValidationError = false;
         });
         debugPrint('✅ Image selected: ${image.path}');
       }
@@ -337,7 +424,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.photo_library, color: Colors.blue),
-              title: const Text('Choose from Gallery'),
+              title: const Text('Choose from Gallery (max 5 total)'),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(ImageSource.gallery);
@@ -380,6 +467,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 color:
                     _postType == 'Product' &&
                         _selectedOption == 1 &&
+                        _showImageValidationError &&
                         _selectedImages.isEmpty
                     ? Colors.red
                     : Colors.black,
@@ -460,12 +548,14 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 color:
                     _postType == 'Product' &&
                         _selectedOption == 1 &&
+                        _showImageValidationError &&
                         _selectedImages.isEmpty
                     ? Colors.red
                     : Colors.grey.shade300,
                 width:
                     _postType == 'Product' &&
                         _selectedOption == 1 &&
+                        _showImageValidationError &&
                         _selectedImages.isEmpty
                     ? 2
                     : 1.5,
@@ -484,20 +574,21 @@ class _AddPostScreenState extends State<AddPostScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Tap to upload',
+                  Text(
+                    'Tap to upload (max $_maxAllowedImages)',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   if (_postType == 'Product' && _selectedOption == 1)
                     Text(
-                      _selectedImages.isEmpty
-                          ? '*At least 1 image required'
+                      _showImageValidationError && _selectedImages.isEmpty
+                          ? '*At least $_minRequiredProductImages image required'
                           : 'Add more images (optional)',
                       style: TextStyle(
                         fontSize: 11,
-                        color: _selectedImages.isEmpty
+                        color:
+                            _showImageValidationError && _selectedImages.isEmpty
                             ? Colors.red
                             : Colors.grey,
                       ),
@@ -594,8 +685,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 ),
                 if (_selectedImages.isEmpty) ...[
                   const SizedBox(height: 4),
-                  const Text(
-                    'Tap to upload',
+                  Text(
+                    'Tap to upload (max $_maxAllowedImages)',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],
@@ -695,7 +786,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: DropdownButtonFormField<Map<String, dynamic>>(
-                  value: _selectedMainCategoryId != null
+                  initialValue: _selectedMainCategoryId != null
                       ? _mainCategories.firstWhere(
                           (cat) => cat['id'] == _selectedMainCategoryId,
                           orElse: () => _mainCategories.first,
@@ -724,12 +815,23 @@ class _AddPostScreenState extends State<AddPostScreen> {
                       setState(() {
                         _selectedMainCategoryId = value['id'];
                         _selectedSubCategoryId = null;
+                        _mainCategoryValidationError = null;
+                        _subCategoryValidationError = null;
                       });
                       _loadSubCategories(value['id']);
                     }
                   },
                 ),
               ),
+
+              if (_mainCategoryValidationError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, left: 4),
+                  child: Text(
+                    _mainCategoryValidationError!,
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                ),
 
               const SizedBox(height: 16),
 
@@ -769,7 +871,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: DropdownButtonFormField<Map<String, dynamic>>(
-                      value: _selectedSubCategoryId != null
+                      initialValue: _selectedSubCategoryId != null
                           ? _subCategories.firstWhere(
                               (cat) => cat['id'] == _selectedSubCategoryId,
                               orElse: () => _subCategories.first,
@@ -804,9 +906,19 @@ class _AddPostScreenState extends State<AddPostScreen> {
                         if (value != null) {
                           setState(() {
                             _selectedSubCategoryId = value['id'];
+                            _subCategoryValidationError = null;
                           });
                         }
                       },
+                    ),
+                  ),
+
+                if (_subCategoryValidationError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, left: 4),
+                    child: Text(
+                      _subCategoryValidationError!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
                     ),
                   ),
               ],
@@ -840,36 +952,77 @@ class _AddPostScreenState extends State<AddPostScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        TextField(
-          controller: _locationController,
-          readOnly: true,
-          decoration: InputDecoration(
-            hintText: 'Tap location icon to get current location',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            prefixIcon: const Icon(Icons.location_on, color: Colors.blue),
-            suffixIcon: _isGettingLocation
-                ? const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: GooglePlaceAutoCompleteTextField(
+            textEditingController: _locationController,
+            focusNode: _locationFocusNode,
+            googleAPIKey: _googleApiKey,
+            debounceTime: 400,
+            countries: const ['us', 'in', 'ca', 'gb', 'au'],
+            isLatLngRequired: true,
+            inputDecoration: InputDecoration(
+              hintText: 'Type location (min 4 characters) or use GPS icon',
+              border: InputBorder.none,
+              errorText: _locationValidationError,
+              prefixIcon: const Icon(Icons.location_on, color: Colors.blue),
+              suffixIcon: _isGettingLocation
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.my_location, color: Colors.blue),
+                      onPressed: _getCurrentLocation,
+                      tooltip: 'Get current location',
                     ),
-                  )
-                : IconButton(
-                    icon: const Icon(Icons.my_location, color: Colors.blue),
-                    onPressed: _getCurrentLocation,
-                    tooltip: 'Get current location',
-                  ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
             ),
+            getPlaceDetailWithLatLng: (Prediction prediction) {
+              final lat = prediction.lat;
+              final lng = prediction.lng;
+              if (lat != null && lng != null) {
+                setState(() {
+                  _selectedLatitude = double.tryParse(lat);
+                  _selectedLongitude = double.tryParse(lng);
+                });
+              }
+            },
+            itemClick: (Prediction prediction) {
+              _locationController.text = prediction.description ?? '';
+              _locationController.selection = TextSelection.fromPosition(
+                TextPosition(offset: _locationController.text.length),
+              );
+              setState(() {
+                _showLocationMinCharsHint = false;
+              });
+              _locationFocusNode.unfocus();
+            },
+            seperatedBuilder: const Divider(height: 1),
+            containerHorizontalPadding: 0,
           ),
         ),
+        if (_showLocationMinCharsHint)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              'Enter at least 4 characters to see suggestions',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
         const SizedBox(height: 4),
         Text(
-          'Your current location will be used to find nearby items',
+          'Type location manually and select suggestion (after 4+ chars), or use current location',
           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
       ],
@@ -912,6 +1065,75 @@ class _AddPostScreenState extends State<AddPostScreen> {
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
     return '$year-$month-$day';
+  }
+
+  void _onOptionSelected(int option) {
+    setState(() {
+      _selectedOption = option;
+
+      // Option 1: add Product/Service
+      // Option 2: looking for Service only
+      if (option == 2) {
+        _postType = 'Service';
+      } else if (_postType != 'Product' && _postType != 'Service') {
+        _postType = 'Product';
+      }
+
+      _selectedMainCategoryId = null;
+      _selectedSubCategoryId = null;
+      _subCategories = [];
+
+      if (_postType == 'Product') {
+        _validFromDate = null;
+        _validUntilDate = null;
+        _validFromController.clear();
+        _validUntilController.clear();
+      }
+
+      if (option != 2) {
+        _needByDate = null;
+        _needByController.clear();
+      }
+
+      _titleValidationError = null;
+      _mainCategoryValidationError = null;
+      _subCategoryValidationError = null;
+      _descriptionValidationError = null;
+      _locationValidationError = null;
+      _needByValidationError = null;
+      _priceValidationError = null;
+    });
+
+    _loadMainCategories();
+  }
+
+  void _onCreatePostTypeChanged(String type) {
+    if (_selectedOption != 1) return;
+    if (_postType == type) return;
+
+    setState(() {
+      _postType = type;
+      _selectedMainCategoryId = null;
+      _selectedSubCategoryId = null;
+      _subCategories = [];
+
+      if (type == 'Product') {
+        _validFromDate = null;
+        _validUntilDate = null;
+        _validFromController.clear();
+        _validUntilController.clear();
+      }
+
+      if (type != 'Service') {
+        _needByDate = null;
+        _needByController.clear();
+      }
+
+      _mainCategoryValidationError = null;
+      _subCategoryValidationError = null;
+    });
+
+    _loadMainCategories();
   }
 
   Widget _buildValidityFields() {
@@ -966,6 +1188,65 @@ class _AddPostScreenState extends State<AddPostScreen> {
     );
   }
 
+  Future<void> _pickNeedByDate() async {
+    final now = DateTime.now();
+    final initial = _needByDate ?? now;
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year + 5),
+    );
+
+    if (picked == null) return;
+
+    setState(() {
+      _needByDate = picked;
+      _needByController.text = _formatDateOnly(picked);
+      _needByValidationError = null;
+    });
+  }
+
+  Widget _buildNeedByField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Text(
+              'Need Service By',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            Text(
+              ' *',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.red,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _needByController,
+          readOnly: true,
+          onTap: _pickNeedByDate,
+          decoration: InputDecoration(
+            hintText: 'Select required by date',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            errorText: _needByValidationError,
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.calendar_today),
+              onPressed: _pickNeedByDate,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   // Price field
   Widget _buildPriceField() {
     return Column(
@@ -992,6 +1273,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
           controller: _selectedOption == 1
               ? _priceController
               : _willPayAmountController,
+          onChanged: (_) {
+            if (_priceValidationError != null) {
+              setState(() {
+                _priceValidationError = null;
+              });
+            }
+          },
           decoration: InputDecoration(
             hintText: _selectedOption == 1
                 ? _postType == 'Product'
@@ -1000,12 +1288,89 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 : 'Enter amount you are willing to pay',
             prefixText: '\$ ',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            errorText: _priceValidationError,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 12,
             ),
           ),
           keyboardType: TextInputType.number,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBarterStatusField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Barter Status',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: ChoiceChip(
+                label: const Text('Not Allowed'),
+                selected: !_barterAllowed,
+                onSelected: (_) {
+                  setState(() {
+                    _barterAllowed = false;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ChoiceChip(
+                label: const Text('Allowed'),
+                selected: _barterAllowed,
+                onSelected: (_) {
+                  setState(() {
+                    _barterAllowed = true;
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildClubbingOptionField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Clubbing Option',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: SwitchListTile(
+            value: _canBeClubbed,
+            onChanged: (value) {
+              setState(() {
+                _canBeClubbed = value;
+              });
+            },
+            title: const Text(
+              'Can be clubbed with other seller items',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+            subtitle: const Text(
+              'If enabled, buyers can add your other items to a bundle offer.',
+              style: TextStyle(fontSize: 12),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          ),
         ),
       ],
     );
@@ -1068,12 +1433,12 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
                       _buildOptionCard(
                         1,
-                        'You want to add your product/service to barter/sell in Marketplace.',
+                        'Add your post in Marketplace (Product or Service).',
                       ),
                       const SizedBox(height: 12),
                       _buildOptionCard(
                         2,
-                        'You need (or are you looking for) a specific product or service in the Marketplace.',
+                        'Looking for a service in Marketplace.',
                       ),
                       const SizedBox(height: 24),
 
@@ -1100,7 +1465,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                     color: Colors.white,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withOpacity(0.2),
+                        color: Colors.grey.withValues(alpha: 0.2),
                         blurRadius: 10,
                         offset: const Offset(0, -3),
                       ),
@@ -1170,7 +1535,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
         ),
       ),
       child: InkWell(
-        onTap: () => setState(() => _selectedOption = option),
+        onTap: () => _onOptionSelected(option),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -1217,41 +1582,27 @@ class _AddPostScreenState extends State<AddPostScreen> {
         ),
         const SizedBox(height: 24),
 
-        // Post Type
         const Text(
           'Post Type',
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
         ),
-        const SizedBox(height: 8),
+
+        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
               child: ChoiceChip(
                 label: const Text('Product'),
                 selected: _postType == 'Product',
-                onSelected: (selected) {
-                  setState(() {
-                    _postType = 'Product';
-                    _selectedMainCategoryId = null;
-                    _selectedSubCategoryId = null;
-                  });
-                  _loadMainCategories();
-                },
+                onSelected: (_) => _onCreatePostTypeChanged('Product'),
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 10),
             Expanded(
               child: ChoiceChip(
                 label: const Text('Service'),
                 selected: _postType == 'Service',
-                onSelected: (selected) {
-                  setState(() {
-                    _postType = 'Service';
-                    _selectedMainCategoryId = null;
-                    _selectedSubCategoryId = null;
-                  });
-                  _loadMainCategories();
-                },
+                onSelected: (_) => _onCreatePostTypeChanged('Service'),
               ),
             ),
           ],
@@ -1279,11 +1630,19 @@ class _AddPostScreenState extends State<AddPostScreen> {
         const SizedBox(height: 8),
         TextField(
           controller: _titleController,
+          onChanged: (_) {
+            if (_titleValidationError != null) {
+              setState(() {
+                _titleValidationError = null;
+              });
+            }
+          },
           decoration: InputDecoration(
             hintText: _postType == 'Product'
                 ? 'Enter product title'
                 : 'Enter service title',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            errorText: _titleValidationError,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 12,
@@ -1319,11 +1678,19 @@ class _AddPostScreenState extends State<AddPostScreen> {
         TextField(
           controller: _descriptionController,
           maxLines: 4,
+          onChanged: (_) {
+            if (_descriptionValidationError != null) {
+              setState(() {
+                _descriptionValidationError = null;
+              });
+            }
+          },
           decoration: InputDecoration(
             hintText: _postType == 'Product'
                 ? 'Describe your product'
                 : 'Describe your service',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            errorText: _descriptionValidationError,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 12,
@@ -1352,6 +1719,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
         // Price
         _buildPriceField(),
+
+        const SizedBox(height: 24),
+
+        // Barter status
+        _buildBarterStatusField(),
+
+        if (_selectedOption == 1 && _postType == 'Product') ...[
+          const SizedBox(height: 24),
+          _buildClubbingOptionField(),
+        ],
       ],
     );
   }
@@ -1366,44 +1743,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
         ),
         const SizedBox(height: 24),
 
-        // Post Type
         const Text(
-          'Post Type',
+          'Post Type: Service',
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: ChoiceChip(
-                label: const Text('Product'),
-                selected: _postType == 'Product',
-                onSelected: (selected) {
-                  setState(() {
-                    _postType = 'Product';
-                    _selectedMainCategoryId = null;
-                    _selectedSubCategoryId = null;
-                  });
-                  _loadMainCategories();
-                },
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: ChoiceChip(
-                label: const Text('Service'),
-                selected: _postType == 'Service',
-                onSelected: (selected) {
-                  setState(() {
-                    _postType = 'Service';
-                    _selectedMainCategoryId = null;
-                    _selectedSubCategoryId = null;
-                  });
-                  _loadMainCategories();
-                },
-              ),
-            ),
-          ],
         ),
 
         const SizedBox(height: 24),
@@ -1428,9 +1770,17 @@ class _AddPostScreenState extends State<AddPostScreen> {
         const SizedBox(height: 8),
         TextField(
           controller: _titleController,
+          onChanged: (_) {
+            if (_titleValidationError != null) {
+              setState(() {
+                _titleValidationError = null;
+              });
+            }
+          },
           decoration: InputDecoration(
             hintText: 'What are you looking for?',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            errorText: _titleValidationError,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 12,
@@ -1466,9 +1816,17 @@ class _AddPostScreenState extends State<AddPostScreen> {
         TextField(
           controller: _descriptionController,
           maxLines: 4,
+          onChanged: (_) {
+            if (_descriptionValidationError != null) {
+              setState(() {
+                _descriptionValidationError = null;
+              });
+            }
+          },
           decoration: InputDecoration(
             hintText: 'Describe what you are looking for',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            errorText: _descriptionValidationError,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 12,
@@ -1490,42 +1848,108 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
         // Will Pay Amount
         _buildPriceField(),
+
+        const SizedBox(height: 24),
+
+        // Barter status
+        _buildBarterStatusField(),
+
+        const SizedBox(height: 24),
+
+        // Need by date (required)
+        _buildNeedByField(),
       ],
     );
   }
 
   void _validateAndSubmit() {
+    final title = _titleController.text.trim();
+    final description = _descriptionController.text.trim();
+    final location = _locationController.text.trim();
+    final amountText = _selectedOption == 1
+        ? _priceController.text.trim()
+        : _willPayAmountController.text.trim();
+
+    setState(() {
+      _titleValidationError = null;
+      _mainCategoryValidationError = null;
+      _subCategoryValidationError = null;
+      _descriptionValidationError = null;
+      _locationValidationError = null;
+      _needByValidationError = null;
+      _priceValidationError = null;
+    });
+
     // Validate required fields
-    if (_titleController.text.isEmpty) {
+    if (title.isEmpty) {
+      setState(() {
+        _titleValidationError = 'Title is required';
+      });
       _showError('Please enter a title');
       return;
     }
 
     if (_selectedMainCategoryId == null) {
-      _showError('Please select a main category');
+      setState(() {
+        _mainCategoryValidationError = 'Please select a category';
+      });
+      _showError('Please select a category');
       return;
     }
 
     if (_selectedSubCategoryId == null) {
+      setState(() {
+        _subCategoryValidationError = 'Please select a sub category';
+      });
       _showError('Please select a sub category');
       return;
     }
 
-    if (_descriptionController.text.isEmpty) {
+    if (description.isEmpty) {
+      setState(() {
+        _descriptionValidationError = 'Description is required';
+      });
       _showError('Please enter a description');
       return;
     }
 
     // For product posts (selling), require at least one image
     if (_postType == 'Product' && _selectedOption == 1) {
-      if (_selectedImages.isEmpty) {
-        _showError('Please upload at least one image for products');
+      if (_selectedImages.length < _minRequiredProductImages) {
+        setState(() {
+          _showImageValidationError = true;
+        });
+        _showError(
+          'Please upload at least $_minRequiredProductImages image for products',
+        );
         return;
+      }
+
+      if (_showImageValidationError) {
+        setState(() {
+          _showImageValidationError = false;
+        });
       }
     }
 
-    if (_selectedOption == 1 && _locationController.text.isEmpty) {
+    if (_selectedImages.length > _maxAllowedImages) {
+      _showError('Maximum $_maxAllowedImages photos are allowed');
+      return;
+    }
+
+    if (_selectedOption == 1 && location.isEmpty) {
+      setState(() {
+        _locationValidationError = 'Location is required';
+      });
       _showError('Please enter a location');
+      return;
+    }
+
+    if (_selectedOption == 2 && _needByDate == null) {
+      setState(() {
+        _needByValidationError = 'Need by date is required';
+      });
+      _showError('Please select by when you need the service');
       return;
     }
 
@@ -1540,20 +1964,32 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
     // Price validation
     if (_selectedOption == 1) {
-      if (_priceController.text.isEmpty) {
+      if (amountText.isEmpty) {
+        setState(() {
+          _priceValidationError = 'Price is required';
+        });
         _showError('Please enter a price');
         return;
       }
-      if (double.tryParse(_priceController.text) == null) {
+      if (double.tryParse(amountText) == null) {
+        setState(() {
+          _priceValidationError = 'Enter a valid price';
+        });
         _showError('Please enter a valid price');
         return;
       }
     } else {
-      if (_willPayAmountController.text.isEmpty) {
+      if (amountText.isEmpty) {
+        setState(() {
+          _priceValidationError = 'Amount is required';
+        });
         _showError('Please enter the amount you are willing to pay');
         return;
       }
-      if (double.tryParse(_willPayAmountController.text) == null) {
+      if (double.tryParse(amountText) == null) {
+        setState(() {
+          _priceValidationError = 'Enter a valid amount';
+        });
         _showError('Please enter a valid amount');
         return;
       }
@@ -1564,34 +2000,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    SnackbarUtils.showError(context, message);
   }
 
   void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    SnackbarUtils.showSuccess(context, message);
   }
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    SnackbarUtils.showError(context, message);
   }
 
   Future<void> _submitPost() async {
@@ -1638,155 +2056,94 @@ class _AddPostScreenState extends State<AddPostScreen> {
             location: _locationController.text.trim(),
             latitude: _selectedLatitude,
             longitude: _selectedLongitude,
-            barterStatus: 'NO_BARTER', // Default value
+            barterStatus: _barterAllowed ? 'OPEN_FOR_BARTER' : 'NO_BARTER',
+            canClubItems: _canBeClubbed,
             price: price,
           );
 
           debugPrint(
             '📦 Creating product post with ${imageUrls.length} images',
           );
-          final response = await _addPostService.createProductPost(request);
+          await _addPostService.createProductPost(request);
           debugPrint('✅ Product created successfully');
         } else {
           debugPrint(
             '📦 Creating provider service with ${imageUrls.length} images via /api/services',
           );
-          try {
-            final response = await _serviceBookingService.createService(
-              title: _titleController.text.trim(),
-              description: _descriptionController.text.trim(),
-              category: _selectedSubCategoryId!,
-              price: price,
-              location: _locationController.text.trim(),
-              images: imageUrls,
-              validFrom: _validFromController.text.trim().isEmpty
-                  ? null
-                  : _validFromController.text.trim(),
-              validUntil: _validUntilController.text.trim().isEmpty
-                  ? null
-                  : _validUntilController.text.trim(),
-            );
+          final response = await _serviceBookingService.createService(
+            title: _titleController.text.trim(),
+            description: _descriptionController.text.trim(),
+            categoryId: _selectedSubCategoryId!,
+            price: price,
+            location: _locationController.text.trim(),
+            images: imageUrls,
+            barterStatus: _barterAllowed ? 'OPEN_FOR_BARTER' : 'NO_BARTER',
+            status: 'PROVIDE_SERVICE',
+            validFrom: _validFromController.text.trim().isEmpty
+                ? null
+                : _validFromController.text.trim(),
+            validUntil: _validUntilController.text.trim().isEmpty
+                ? null
+                : _validUntilController.text.trim(),
+          );
 
-            final data = response['data'];
-            String? serviceId;
-            if (data is Map<String, dynamic>) {
-              if (data['service'] is Map<String, dynamic>) {
-                serviceId = data['service']['id']?.toString();
-              }
-              serviceId ??= data['id']?.toString();
-              serviceId ??= data['serviceId']?.toString();
+          final data = response['data'];
+          String? serviceId;
+          if (data is Map<String, dynamic>) {
+            if (data['service'] is Map<String, dynamic>) {
+              serviceId = data['service']['id']?.toString();
             }
-
-            if (serviceId == null || serviceId.isEmpty) {
-              throw Exception(
-                'Service created but ID was not returned by server',
-              );
-            }
-
-            if (!mounted) return;
-
-            widget.onPostAdded?.call();
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ServiceAvailabilityScreen(
-                  serviceId: serviceId!,
-                  isInitialSetup: true,
-                ),
-              ),
-            );
-            return;
-          } catch (serviceError) {
-            final message = serviceError.toString().toLowerCase();
-            final shouldFallback =
-                message.contains('something went very wrong') ||
-                message.contains('500') ||
-                message.contains('req.user') ||
-                message.contains('internal');
-
-            if (!shouldFallback) rethrow;
-
-            debugPrint(
-              '⚠️ /api/services failed, falling back to legacy /me/posts/services endpoint: $serviceError',
-            );
-
-            final request = CreateServiceRequest(
-              title: _titleController.text.trim(),
-              description: _descriptionController.text.trim(),
-              categoryId: _selectedSubCategoryId!,
-              images: imageUrls,
-              location: _locationController.text.trim(),
-              latitude: _selectedLatitude,
-              longitude: _selectedLongitude,
-              validFrom: _validFromController.text.trim().isEmpty
-                  ? null
-                  : _validFromController.text.trim(),
-              validUntil: _validUntilController.text.trim().isEmpty
-                  ? null
-                  : _validUntilController.text.trim(),
-              status: 'PROVIDE_SERVICE',
-              price: price,
-            );
-
-            await _addPostService.createServicePost(request);
-
-            if (!mounted) return;
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Service posted successfully (fallback mode). Availability setup will open once /api/services is fixed on backend.',
-                ),
-                backgroundColor: Colors.orange,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-            widget.onPostAdded?.call();
-            return;
+            serviceId ??= data['id']?.toString();
+            serviceId ??= data['serviceId']?.toString();
           }
+
+          if (serviceId == null || serviceId.isEmpty) {
+            throw Exception(
+              'Service created but ID was not returned by server',
+            );
+          }
+
+          if (!mounted) return;
+
+          widget.onPostAdded?.call();
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ServiceAvailabilityScreen(
+                serviceId: serviceId!,
+                isInitialSetup: true,
+              ),
+            ),
+          );
+          return;
         }
       } else {
-        // Handle "Looking For" posts
-        if (_postType == 'Product') {
-          final request = CreateProductRequest(
-            title: _titleController.text.trim(),
-            description: _descriptionController.text.trim(),
-            categoryId: _selectedSubCategoryId!,
-            images: imageUrls,
-            location: _locationController.text.trim(),
-            latitude: _selectedLatitude,
-            longitude: _selectedLongitude,
-            barterStatus: 'LOOKING_FOR',
-            price: price,
-          );
+        // Handle "Looking For" (service only)
+        final request = CreateServiceRequest(
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          categoryId: _selectedSubCategoryId!,
+          images: imageUrls,
+          location: _locationController.text.trim(),
+          latitude: _selectedLatitude,
+          longitude: _selectedLongitude,
+          barterStatus: _barterAllowed ? 'OPEN_FOR_BARTER' : 'NO_BARTER',
+          validUntil: _needByController.text.trim().isEmpty
+              ? null
+              : _needByController.text.trim(),
+          status: 'LOOKING_FOR_SERVICE',
+          price: price,
+        );
 
-          debugPrint(
-            '📦 Creating looking for product post with ${imageUrls.length} images',
-          );
-          final response = await _addPostService.createProductPost(request);
-          debugPrint('✅ Looking for product created');
-        } else {
-          final request = CreateServiceRequest(
-            title: _titleController.text.trim(),
-            description: _descriptionController.text.trim(),
-            categoryId: _selectedSubCategoryId!,
-            images: imageUrls,
-            location: _locationController.text.trim(),
-            latitude: _selectedLatitude,
-            longitude: _selectedLongitude,
-            status: 'LOOKING_FOR_SERVICE',
-            price: price,
-          );
-
-          debugPrint(
-            '📦 Creating looking for service post with ${imageUrls.length} images',
-          );
-          final response = await _addPostService.createServicePost(request);
-          debugPrint('✅ Looking for service created');
-        }
+        debugPrint(
+          '📦 Creating looking for service post with ${imageUrls.length} images (need by ${request.validUntil ?? 'not set'})',
+        );
+        await _addPostService.createServicePost(request);
+        debugPrint('✅ Looking for service created');
       }
 
       // Close add post screen
+      if (!mounted) return;
       Navigator.pop(context);
 
       // Show success message

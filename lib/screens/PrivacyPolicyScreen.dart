@@ -98,7 +98,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: Colors.white.withOpacity(0.2), height: 1),
+          child: Container(color: Colors.white.withValues(alpha: 0.2), height: 1),
         ),
       ),
       body: _isLoading
@@ -208,13 +208,13 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  AppConstants.primaryColor.withOpacity(0.1),
-                  AppConstants.primaryColor.withOpacity(0.05),
+                  AppConstants.primaryColor.withValues(alpha: 0.1),
+                  AppConstants.primaryColor.withValues(alpha: 0.05),
                 ],
               ),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: AppConstants.primaryColor.withOpacity(0.2),
+                color: AppConstants.primaryColor.withValues(alpha: 0.2),
               ),
             ),
             child: Column(
@@ -262,7 +262,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
+                  color: Colors.grey.withValues(alpha: 0.1),
                   blurRadius: 10,
                   offset: const Offset(0, 2),
                 ),
@@ -284,10 +284,10 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppConstants.primaryColor.withOpacity(0.05),
+              color: AppConstants.primaryColor.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: AppConstants.primaryColor.withOpacity(0.2),
+                color: AppConstants.primaryColor.withValues(alpha: 0.2),
               ),
             ),
             child: Column(

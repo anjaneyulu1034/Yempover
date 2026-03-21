@@ -30,8 +30,7 @@ class _LocationScreenState extends State<LocationScreen> {
   String? _locationError;
 
   // Search results
-  List<Prediction> _searchPredictions = [];
-  bool _isLoadingPredictions = false;
+  final List<Prediction> _searchPredictions = [];
 
   // Google Places API Key
   static const String _googleApiKey = "AIzaSyAT3wIjV73qVXPAlgkyifnns38GztnbNF4";
@@ -119,8 +118,10 @@ class _LocationScreenState extends State<LocationScreen> {
 
     try {
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 15),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
       );
 
       _currentLatitude = position.latitude;
@@ -181,10 +182,6 @@ class _LocationScreenState extends State<LocationScreen> {
     }
   }
 
-  Future<void> _openAppSettings() async {
-    await openAppSettings();
-  }
-
   void _selectLocation(String address, double lat, double lng) {
     if (widget.onLocationSelected != null) {
       widget.onLocationSelected!(address, lat, lng);
@@ -199,34 +196,6 @@ class _LocationScreenState extends State<LocationScreen> {
         MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
     }
-  }
-
-  void _showLocationServiceDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Location Services Disabled'),
-          content: const Text(
-            'Please enable location services to use this feature.',
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            ElevatedButton(
-              child: const Text('Open Settings'),
-              onPressed: () async {
-                Navigator.of(context).pop();
-                await Geolocator.openLocationSettings();
-              },
-            ),
-          ],
-        );
-      },
-    );
   }
 
   void _showPermissionDialog() {
@@ -366,7 +335,7 @@ class _LocationScreenState extends State<LocationScreen> {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1A73E8).withOpacity(0.1),
+                  color: const Color(0xFF1A73E8).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -454,7 +423,7 @@ class _LocationScreenState extends State<LocationScreen> {
             border: Border.all(color: Colors.grey.shade300, width: 1),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -524,7 +493,7 @@ class _LocationScreenState extends State<LocationScreen> {
         //     border: Border.all(color: Colors.grey.shade300, width: 1),
         //     boxShadow: [
         //       BoxShadow(
-        //         color: Colors.black.withOpacity(0.05),
+        //         color: Colors.black.withValues(alpha: 0.05),
         //         blurRadius: 10,
         //         offset: const Offset(0, 4),
         //       ),
@@ -604,7 +573,7 @@ class _LocationScreenState extends State<LocationScreen> {
               border: Border.all(color: Colors.grey.shade300),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),

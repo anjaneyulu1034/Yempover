@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:Yempover_app/constants/api_constants.dart';
 
 // Post Types
 enum PostType { product, service }
@@ -37,7 +38,12 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] ?? '',
+      id:
+          (json['id']?.toString() ??
+                  json['_id']?.toString() ??
+                  json['userId']?.toString() ??
+                  '')
+              .trim(),
       firstName: json['firstName'] ?? '',
       lastName: json['lastName'] ?? '',
       profileImage: json['profileImage'],
@@ -185,12 +191,25 @@ class Post {
     this.barterDetails,
     required this.type,
     this.distance,
-    this.canClubItems = true,
+    this.canClubItems = false,
     this.isFavorite = false,
     this.isHidden = false,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
+    final postedByJson = json['postedBy'] is Map<String, dynamic>
+        ? json['postedBy'] as Map<String, dynamic>
+        : <String, dynamic>{};
+
+    final resolvedPostedById =
+        (json['postedById']?.toString() ??
+                json['userId']?.toString() ??
+                postedByJson['id']?.toString() ??
+                postedByJson['_id']?.toString() ??
+                postedByJson['userId']?.toString() ??
+                '')
+            .trim();
+
     return Post(
       id: json['id'] ?? '',
       title: json['title'] ?? '',
@@ -208,7 +227,7 @@ class Post {
       latitude: _parseCoordinate(json, ['latitude', 'lat']),
       longitude: _parseCoordinate(json, ['longitude', 'lng', 'lon']),
       location: json['location'] ?? '',
-      postedById: json['postedById'] ?? '',
+      postedById: resolvedPostedById,
       postedDate: DateTime.parse(
         json['postedDate'] ?? DateTime.now().toIso8601String(),
       ),
@@ -221,16 +240,42 @@ class Post {
         json['updatedAt'] ?? DateTime.now().toIso8601String(),
       ),
       category: Category.fromJson(json['category'] ?? {}),
-      postedBy: User.fromJson(json['postedBy'] ?? {}),
+      postedBy: User.fromJson(postedByJson),
       barterDetails: json['barterDetails'] != null
           ? BarterDetails.fromJson(json['barterDetails'])
           : null,
       type: json['type'] == 'service' ? PostType.service : PostType.product,
       distance: _parseDistance(json),
-      canClubItems: json['canClubItems'] == null
-          ? (json['isClubbable'] ?? true)
-          : json['canClubItems'],
+      canClubItems: _parseFlexibleBool(json, const [
+        'canClubItems',
+        'isClubbable',
+        'canBeClubbed',
+      ], defaultValue: false),
     );
+  }
+
+  static bool _parseFlexibleBool(
+    Map<String, dynamic> json,
+    List<String> keys, {
+    required bool defaultValue,
+  }) {
+    for (final key in keys) {
+      if (!json.containsKey(key)) continue;
+      final value = json[key];
+      if (value == null) continue;
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        final normalized = value.trim().toLowerCase();
+        if (normalized == 'true' || normalized == '1' || normalized == 'yes') {
+          return true;
+        }
+        if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+          return false;
+        }
+      }
+    }
+    return defaultValue;
   }
 
   static double? _parseCoordinate(
@@ -324,18 +369,28 @@ class Post {
 
   List<String> get processedImages {
     if (images.isEmpty) {
-      return [getDefaultImageUrl()];
+      return [];
     }
-    return images.map((image) {
-      if (image.startsWith('http')) {
-        return image;
+
+    final baseUri = Uri.parse(ApiConstants.baseUrl);
+    final origin =
+        '${baseUri.scheme}://${baseUri.host}${baseUri.hasPort ? ':${baseUri.port}' : ''}';
+
+    final validImages = <String>[];
+    for (final rawImage in images) {
+      final image = rawImage.trim();
+      if (image.isEmpty) continue;
+
+      if (image.startsWith('http') || image.startsWith('data:image/')) {
+        validImages.add(image);
+      } else if (image.startsWith('/')) {
+        validImages.add('$origin$image');
       } else if (image.contains('.')) {
-        // If it has an extension but no full URL, construct a proper URL
-        return 'https://lionlike-flavourlessly-neida.ngrok-free.dev/uploads/$image';
-      } else {
-        return getDefaultImageUrl();
+        validImages.add('$origin/${image.replaceFirst(RegExp(r'^/+'), '')}');
       }
-    }).toList();
+    }
+
+    return validImages;
   }
 
   String getDefaultImageUrl() {

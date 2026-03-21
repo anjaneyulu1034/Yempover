@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:Yempover_app/constants/api_constants.dart';
 import 'package:Yempover_app/services/token_service.dart';
+import 'package:Yempover_app/utils/error_message_utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -78,10 +79,12 @@ class ServiceBookingService {
   Future<Map<String, dynamic>> createService({
     required String title,
     required String description,
-    required String category,
+    required String categoryId,
     required double price,
     required String location,
     List<String> images = const [],
+    String? barterStatus,
+    String? status,
     String? validFrom,
     String? validUntil,
   }) async {
@@ -92,10 +95,15 @@ class ServiceBookingService {
           body: jsonEncode({
             'title': title,
             'description': description,
-            'category': category,
+            'categoryId': categoryId,
+            // Backward compatibility for older backend parsing.
+            'category': categoryId,
             'price': price,
             'location': location,
             'images': images,
+            if (barterStatus != null && barterStatus.isNotEmpty)
+              'barterStatus': barterStatus,
+            if (status != null && status.isNotEmpty) 'status': status,
             if (validFrom != null && validFrom.isNotEmpty)
               'validFrom': validFrom,
             if (validUntil != null && validUntil.isNotEmpty)
@@ -173,6 +181,7 @@ class ServiceBookingService {
     required String appointmentDate,
     required int duration,
     required String location,
+    double? proposedPrice,
     String? notes,
   }) async {
     final response = await http
@@ -183,6 +192,7 @@ class ServiceBookingService {
             'appointmentDate': appointmentDate,
             'duration': duration,
             'location': location,
+            if (proposedPrice != null) 'proposedPrice': proposedPrice,
             if (notes != null && notes.isNotEmpty) 'notes': notes,
           }),
         )
@@ -290,8 +300,7 @@ class ServiceBookingService {
   }
 
   String extractMessage(Object error) {
-    final raw = error.toString();
-    return raw.replaceFirst('Exception: ', '').trim();
+    return ErrorMessageUtils.sanitize(error);
   }
 
   void log(String message) {

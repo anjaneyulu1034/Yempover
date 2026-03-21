@@ -169,7 +169,7 @@
 //             width: 140,
 //             height: 140,
 //             decoration: BoxDecoration(
-//               color: const Color(0xFF1A73E8).withOpacity(0.1),
+//               color: const Color(0xFF1A73E8).withValues(alpha: 0.1),
 //               shape: BoxShape.circle,
 //             ),
 //             child: Icon(page.icon, size: 64, color: const Color(0xFF1A73E8)),
@@ -375,7 +375,7 @@ class OnboardingPageWidget extends StatelessWidget {
             width: 140,
             height: 140,
             decoration: BoxDecoration(
-              color: const Color(0xFF1A73E8).withOpacity(0.1),
+              color: const Color(0xFF1A73E8).withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(page.icon, size: 64, color: const Color(0xFF1A73E8)),

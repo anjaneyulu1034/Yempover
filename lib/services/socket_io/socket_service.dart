@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:Yempover_app/constants/api_constants.dart';
+import 'package:Yempover_app/services/token_service.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:http/http.dart' as http;
 import 'dart:io';
@@ -15,6 +16,7 @@ class SocketService {
   final String _baseUrl = ApiConstants.baseUrl.replaceAll('/api/mobile', '');
   final Map<String, List<Function(dynamic)>> _listeners = {};
   final Set<String> _joinedChatIds = <String>{};
+  final TokenService _tokenService = TokenService();
   bool _isConnected = false;
 
   // Connection status getter
@@ -119,6 +121,11 @@ class SocketService {
       _notifyListeners('offer_rejected', data);
     });
 
+    _socket!.on('offer:withdrawn', (data) {
+      print('↩️ Offer withdrawn: $data');
+      _notifyListeners('offer_withdrawn', data);
+    });
+
     // Chat status events
     _socket!.on('chat:user_online', (data) {
       print('🟢 Chat user online: $data');
@@ -147,6 +154,15 @@ class SocketService {
     _socket!.on('deal:completed', (data) {
       print('🎉 Deal completed: $data');
       _notifyListeners('deal_completed', data);
+    });
+
+    _socket!.on('deal:cancelled', (data) {
+      print('🚫 Deal cancelled: $data');
+      _notifyListeners('deal_cancelled', data);
+    });
+
+    _socket!.on('messages_read', (data) {
+      _notifyListeners('messages_read', data);
     });
 
     // User presence
@@ -201,6 +217,18 @@ class SocketService {
       {'chatId': chatId},
       ack: (response) {
         print('✅ Joined chat room ack for $chatId: $response');
+
+        if (response is Map<String, dynamic>) {
+          final otherUserId = response['otherUserId'];
+          final otherUserOnline = response['otherUserOnline'];
+          if (otherUserId != null && otherUserOnline != null) {
+            _notifyListeners('user_presence', {
+              'chatId': chatId,
+              'userId': otherUserId,
+              'isOnline': otherUserOnline == true,
+            });
+          }
+        }
       },
     );
   }
@@ -219,6 +247,18 @@ class SocketService {
         {'chatId': chatId},
         ack: (response) {
           print('🔁 Rejoined chat room ack for $chatId: $response');
+
+          if (response is Map<String, dynamic>) {
+            final otherUserId = response['otherUserId'];
+            final otherUserOnline = response['otherUserOnline'];
+            if (otherUserId != null && otherUserOnline != null) {
+              _notifyListeners('user_presence', {
+                'chatId': chatId,
+                'userId': otherUserId,
+                'isOnline': otherUserOnline == true,
+              });
+            }
+          }
         },
       );
     }
@@ -246,8 +286,7 @@ class SocketService {
     String? imageUrl,
     Duration timeout = const Duration(seconds: 10),
   }) async {
-    if (!isConnected) {
-      _socket?.connect();
+    if (!await _ensureConnected()) {
       throw Exception('Socket not connected');
     }
 
@@ -289,6 +328,31 @@ class SocketService {
     );
   }
 
+  Future<bool> _ensureConnected({
+    Duration timeout = const Duration(seconds: 6),
+  }) async {
+    if (isConnected) return true;
+
+    final latestToken = await _tokenService.getToken();
+    if (latestToken == null || latestToken.isEmpty) {
+      return false;
+    }
+
+    if (_token != latestToken || _socket == null) {
+      init(token: latestToken);
+    } else if (!_socket!.connected) {
+      _socket!.connect();
+    }
+
+    final start = DateTime.now();
+    while (DateTime.now().difference(start) < timeout) {
+      if (isConnected) return true;
+      await Future.delayed(const Duration(milliseconds: 120));
+    }
+
+    return isConnected;
+  }
+
   // Send typing indicator
   void sendTyping(String chatId, bool isTyping) {
     if (!_isConnected) return;
@@ -303,11 +367,15 @@ class SocketService {
   void markMessagesRead(String chatId, List<String> messageIds) {
     if (!_isConnected) return;
 
-    _notifyListeners('messages_read', {
-      'chatId': chatId,
-      'messageIds': messageIds,
-      'timestamp': DateTime.now().toIso8601String(),
-    });
+    _socket?.emitWithAck(
+      'messages:read',
+      {'chatId': chatId, 'messageIds': messageIds},
+      ack: (response) {
+        if (response is Map<String, dynamic> && response['success'] != true) {
+          print('⚠️ messages:read ack error: ${response['error']}');
+        }
+      },
+    );
   }
 
   // Create an offer (emit event)

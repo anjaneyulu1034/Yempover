@@ -3,16 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:Yempover_app/models/ProductPostmain.dart';
 import 'package:Yempover_app/services/token_service.dart';
 import 'package:Yempover_app/services/my_posts_service.dart';
+import 'package:Yempover_app/services/api_service.dart';
 import 'package:Yempover_app/screens/OfferDescriptionScreen.dart';
+import 'package:Yempover_app/screens/AddPostScreen.dart';
+import 'package:Yempover_app/utils/snackbar_utils.dart';
 
 class OfferDeckScreen extends StatefulWidget {
   final Post post;
   final String currentUserId;
+  final OfferSubmissionMode offerMode;
 
   const OfferDeckScreen({
     super.key,
     required this.post,
     required this.currentUserId,
+    required this.offerMode,
   });
 
   @override
@@ -21,11 +26,14 @@ class OfferDeckScreen extends StatefulWidget {
 
 class _OfferDeckScreenState extends State<OfferDeckScreen> {
   final MyPostsService _postsService = MyPostsService();
-  final TokenService _tokenService = TokenService();
+  final ApiService _apiService = ApiService();
 
   List<UserItem> _userItems = [];
-  List<UserItem> _selectedItems = [];
+  final List<UserItem> _selectedItems = [];
+  List<UserItem> _ownerClubItems = [];
+  final List<UserItem> _selectedOwnerClubItems = [];
   bool _isLoading = false;
+  bool _isLoadingOwnerClubItems = false;
   String? _errorMessage;
   int _currentPage = 1;
   int _totalPages = 1;
@@ -36,7 +44,103 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   void initState() {
     super.initState();
     _fetchMyPosts();
+    if (_supportsClubbing) {
+      _fetchOwnerClubItems();
+    }
     _scrollController.addListener(_onScroll);
+  }
+
+  bool get _supportsClubbing => widget.post.canClubItems;
+
+  Widget _buildMetaChip({
+    required IconData icon,
+    required String label,
+    required Color fg,
+    required Color bg,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: fg,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTargetPostMetaTags() {
+    final List<Widget> chips = [];
+
+    if (widget.post.isListed) {
+      chips.add(
+        _buildMetaChip(
+          icon: Icons.check_circle_outline,
+          label: 'Open',
+          fg: const Color(0xFF2E7D32),
+          bg: const Color(0xFFEAF7ED),
+        ),
+      );
+    }
+
+    if (widget.post.isForBarter) {
+      chips.add(
+        _buildMetaChip(
+          icon: Icons.sync_alt,
+          label: 'Open for Barter',
+          fg: const Color(0xFF3F51B5),
+          bg: const Color(0xFFE8EAF6),
+        ),
+      );
+    }
+
+    if (widget.post.canClubItems) {
+      chips.add(
+        _buildMetaChip(
+          icon: Icons.all_inclusive,
+          label: 'Can be Clubbed',
+          fg: const Color(0xFF00695C),
+          bg: const Color(0xFFE0F2F1),
+        ),
+      );
+    }
+
+    chips.add(
+      _buildMetaChip(
+        icon: widget.post.type == PostType.service
+            ? Icons.handyman_outlined
+            : Icons.inventory_2_outlined,
+        label: widget.post.type == PostType.service ? 'Service' : 'Product',
+        fg: const Color(0xFF37474F),
+        bg: const Color(0xFFECEFF1),
+      ),
+    );
+
+    if (widget.post.price > 0) {
+      chips.add(
+        _buildMetaChip(
+          icon: Icons.attach_money,
+          label: widget.post.formattedPrice,
+          fg: const Color(0xFF1565C0),
+          bg: const Color(0xFFE3F2FD),
+        ),
+      );
+    }
+
+    return Wrap(spacing: 8, runSpacing: 8, children: chips);
   }
 
   @override
@@ -84,9 +188,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
             id: myPost.id,
             name: myPost.title,
             description: myPost.description,
-            imageUrl: myPost.images.isNotEmpty
-                ? (myPost.images.first ?? '')
-                : '',
+            imageUrl: myPost.images.isNotEmpty ? myPost.images.first : '',
             category: myPost.category.name,
             price: myPost.price ?? 0.0,
             value: myPost.price ?? 0.0,
@@ -137,9 +239,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
             id: myPost.id,
             name: myPost.title,
             description: myPost.description,
-            imageUrl: myPost.images.isNotEmpty
-                ? (myPost.images.first ?? '')
-                : '',
+            imageUrl: myPost.images.isNotEmpty ? myPost.images.first : '',
             category: myPost.category.name,
             price: myPost.price ?? 0.0,
             value: myPost.price ?? 0.0,
@@ -172,9 +272,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
             id: myPost.id,
             name: myPost.title,
             description: myPost.description,
-            imageUrl: myPost.images.isNotEmpty
-                ? (myPost.images.first ?? '')
-                : '',
+            imageUrl: myPost.images.isNotEmpty ? myPost.images.first : '',
             category: myPost.category.name,
             price: myPost.price ?? 0.0,
             value: myPost.price ?? 0.0,
@@ -185,6 +283,55 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       });
     } catch (e) {
       _showErrorSnackBar('Failed to refresh items');
+    }
+  }
+
+  Future<void> _fetchOwnerClubItems() async {
+    if (!_supportsClubbing) return;
+
+    setState(() {
+      _isLoadingOwnerClubItems = true;
+    });
+
+    try {
+      final response = await _apiService.getPosts(page: 1, limit: 100);
+
+      if (!mounted) return;
+
+      final ownerItems = response.posts
+          .where((post) => post.postedById == widget.post.postedById)
+          .where((post) => post.id != widget.post.id)
+          .where((post) => post.isListed)
+          .where(
+            (post) =>
+                post.status != PostStatus.SOLD &&
+                post.status != PostStatus.ARCHIVED &&
+                post.status != PostStatus.DELETED,
+          )
+          .map(
+            (post) => UserItem(
+              id: post.id,
+              name: post.title,
+              description: post.description,
+              imageUrl: post.processedImages.isNotEmpty
+                  ? post.processedImages.first
+                  : '',
+              category: post.category.name,
+              price: post.price,
+              value: post.price,
+            ),
+          )
+          .toList();
+
+      setState(() {
+        _ownerClubItems = ownerItems;
+        _isLoadingOwnerClubItems = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingOwnerClubItems = false;
+      });
     }
   }
 
@@ -215,19 +362,14 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 3),
-      ),
-    );
+    SnackbarUtils.showError(context, message);
   }
 
   void _toggleItemSelection(UserItem item) {
     setState(() {
-      if (_selectedItems.contains(item)) {
-        _selectedItems.remove(item);
+      final existingIndex = _selectedItems.indexWhere((i) => i.id == item.id);
+      if (existingIndex != -1) {
+        _selectedItems.removeAt(existingIndex);
       } else {
         _selectedItems.add(item);
       }
@@ -236,8 +378,37 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
   void _removeSelectedItem(UserItem item) {
     setState(() {
-      _selectedItems.remove(item);
+      _selectedItems.removeWhere((i) => i.id == item.id);
     });
+  }
+
+  void _toggleOwnerClubItemSelection(UserItem item) {
+    setState(() {
+      final existingIndex = _selectedOwnerClubItems.indexWhere(
+        (i) => i.id == item.id,
+      );
+      if (existingIndex != -1) {
+        _selectedOwnerClubItems.removeAt(existingIndex);
+      } else {
+        _selectedOwnerClubItems.add(item);
+      }
+    });
+  }
+
+  Future<void> _openAddPostAndRefresh() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddPostScreen(
+          onPostAdded: () {
+            _refreshPosts();
+          },
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    await _refreshPosts();
   }
 
   void _showItemsSelectionDialog() {
@@ -298,12 +469,11 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                           borderRadius: BorderRadius.circular(8),
                           color: Colors.grey.shade200,
                         ),
-                        child:
-                            item.imageUrl != null && item.imageUrl!.isNotEmpty
+                        child: item.imageUrl.isNotEmpty
                             ? ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
                                 child: Image.network(
-                                  item.imageUrl!,
+                                  item.imageUrl,
                                   width: 50,
                                   height: 50,
                                   fit: BoxFit.cover,
@@ -323,11 +493,101 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                               ),
                       ),
                       title: Text(
-                        item.name ?? 'Untitled',
+                        item.name,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       subtitle: Text(
-                        item.category ?? 'Uncategorized',
+                        item.category,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showOwnerClubSelectionDialog() {
+    if (!_supportsClubbing) {
+      SnackbarUtils.showInfo(context, 'This post is not enabled for clubbing.');
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Seller Items to Bundle'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: _isLoadingOwnerClubItems
+              ? const Center(child: CircularProgressIndicator())
+              : _ownerClubItems.isEmpty
+              ? Center(
+                  child: Text(
+                    'No additional items available from this seller.',
+                    style: TextStyle(color: Colors.grey.shade600),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: _ownerClubItems.length,
+                  itemBuilder: (context, index) {
+                    final item = _ownerClubItems[index];
+                    final isSelected = _selectedOwnerClubItems.any(
+                      (selected) => selected.id == item.id,
+                    );
+
+                    return CheckboxListTile(
+                      value: isSelected,
+                      onChanged: (selected) {
+                        _toggleOwnerClubItemSelection(item);
+                        Navigator.pop(context);
+                        _showOwnerClubSelectionDialog();
+                      },
+                      secondary: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color: Colors.grey.shade200,
+                        ),
+                        child: item.imageUrl.isNotEmpty
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  item.imageUrl,
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Icon(
+                                      Icons.image,
+                                      size: 30,
+                                      color: Colors.grey,
+                                    );
+                                  },
+                                ),
+                              )
+                            : const Icon(
+                                Icons.image,
+                                size: 30,
+                                color: Colors.grey,
+                              ),
+                      ),
+                      title: Text(
+                        item.name,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        item.category,
                         style: const TextStyle(fontSize: 12),
                       ),
                     );
@@ -345,12 +605,24 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   }
 
   void _navigateToDescriptionScreen() {
+    if ((widget.offerMode == OfferSubmissionMode.barter ||
+            widget.offerMode == OfferSubmissionMode.both) &&
+        _selectedItems.isEmpty) {
+      SnackbarUtils.showInfo(
+        context,
+        'Please select at least one item to continue.',
+      );
+      return;
+    }
+
     // Determine if the post is a service
     final bool isService = widget.post.type == PostType.service;
 
-    print('📱 Navigating to OfferDescriptionScreen - isService: $isService');
-    print('📱 Post ID: ${widget.post.id}');
-    print('📱 Post Type: ${widget.post.type}');
+    debugPrint(
+      '📱 Navigating to OfferDescriptionScreen - isService: $isService',
+    );
+    debugPrint('📱 Post ID: ${widget.post.id}');
+    debugPrint('📱 Post Type: ${widget.post.type}');
 
     Navigator.push(
       context,
@@ -358,33 +630,13 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         builder: (context) => OfferDescriptionScreen(
           post: widget.post,
           selectedItems: _selectedItems,
+          selectedBundleItems: _selectedOwnerClubItems,
           currentUserId: widget.currentUserId,
           isService: isService, // Pass the correct type
+          offerMode: widget.offerMode,
         ),
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${_getMonth(date.month)} ${date.day}, ${date.year}';
-  }
-
-  String _getMonth(int month) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return months[month - 1];
   }
 
   @override
@@ -455,6 +707,16 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
             ),
           ),
 
+          const SizedBox(height: 10),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: _buildTargetPostMetaTags(),
+            ),
+          ),
+
           const SizedBox(height: 12),
 
           // -------- OFFER DECK ROW ----------
@@ -495,31 +757,139 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                 // ADD CARD
                 Expanded(
                   child: InkWell(
-                    onTap: _showItemsSelectionDialog,
+                    onTap: _showOwnerClubSelectionDialog,
                     child: Container(
                       height: 140,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: Colors.blue.shade200),
-                        color: Colors.white,
+                        color: _supportsClubbing
+                            ? Colors.white
+                            : Colors.grey.shade100,
                       ),
-                      child: Center(
-                        child: Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.add, size: 28),
-                        ),
-                      ),
+                      child: _supportsClubbing
+                          ? Center(
+                              child: _selectedOwnerClubItems.isEmpty
+                                  ? Container(
+                                      width: 46,
+                                      height: 46,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade100,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.add, size: 28),
+                                    )
+                                  : Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          child:
+                                              _selectedOwnerClubItems
+                                                  .first
+                                                  .imageUrl
+                                                  .isNotEmpty
+                                              ? Image.network(
+                                                  _selectedOwnerClubItems
+                                                      .first
+                                                      .imageUrl,
+                                                  width: 70,
+                                                  height: 70,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder:
+                                                      (
+                                                        context,
+                                                        error,
+                                                        stackTrace,
+                                                      ) {
+                                                        return Container(
+                                                          width: 70,
+                                                          height: 70,
+                                                          color: Colors
+                                                              .grey
+                                                              .shade200,
+                                                          child: const Icon(
+                                                            Icons.image,
+                                                          ),
+                                                        );
+                                                      },
+                                                )
+                                              : Container(
+                                                  width: 70,
+                                                  height: 70,
+                                                  color: Colors.grey.shade200,
+                                                  child: const Icon(
+                                                    Icons.image,
+                                                  ),
+                                                ),
+                                        ),
+                                        Positioned(
+                                          top: -8,
+                                          right: -8,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(6),
+                                            decoration: const BoxDecoration(
+                                              color: Colors.blue,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Text(
+                                              '${_selectedOwnerClubItems.length}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                            )
+                          : Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.lock_outline,
+                                    size: 26,
+                                    color: Colors.grey.shade500,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Clubbing\nOff',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                     ),
                   ),
                 ),
               ],
             ),
           ),
+
+          const SizedBox(height: 8),
+          if (_supportsClubbing)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  _selectedOwnerClubItems.isEmpty
+                      ? 'Tap + to add seller items (bundle)'
+                      : '${_selectedOwnerClubItems.length} seller item(s) added to bundle',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ),
+            ),
 
           const SizedBox(height: 14),
 
@@ -559,11 +929,9 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child:
-                                item.imageUrl != null &&
-                                    item.imageUrl!.isNotEmpty
+                            child: item.imageUrl.isNotEmpty
                                 ? Image.network(
-                                    item.imageUrl!,
+                                    item.imageUrl,
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) {
                                       return Container(
@@ -699,9 +1067,49 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                       controller: _scrollController,
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _userItems.length + (_isLoadingMore ? 1 : 0),
+                      itemCount:
+                          1 + _userItems.length + (_isLoadingMore ? 1 : 0),
                       itemBuilder: (context, index) {
-                        if (index == _userItems.length) {
+                        if (index == 0) {
+                          return GestureDetector(
+                            onTap: _openAddPostAndRefresh,
+                            child: Container(
+                              width: 110,
+                              margin: const EdgeInsets.only(right: 12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: Colors.blue.shade200,
+                                  width: 1.2,
+                                ),
+                                color: Colors.blue.shade50,
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: const [
+                                  Icon(
+                                    Icons.add_circle_outline,
+                                    color: Colors.blue,
+                                    size: 28,
+                                  ),
+                                  SizedBox(height: 6),
+                                  Text(
+                                    'Add New',
+                                    style: TextStyle(
+                                      color: Colors.blue,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        final itemIndex = index - 1;
+
+                        if (itemIndex == _userItems.length) {
                           return Container(
                             width: 80,
                             margin: const EdgeInsets.only(right: 12),
@@ -711,8 +1119,10 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                           );
                         }
 
-                        final item = _userItems[index];
-                        final selected = _selectedItems.contains(item);
+                        final item = _userItems[itemIndex];
+                        final selected = _selectedItems.any(
+                          (selectedItem) => selectedItem.id == item.id,
+                        );
 
                         return GestureDetector(
                           onTap: () => _toggleItemSelection(item),
@@ -733,11 +1143,9 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                                   ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(14),
-                                    child:
-                                        item.imageUrl != null &&
-                                            item.imageUrl!.isNotEmpty
+                                    child: item.imageUrl.isNotEmpty
                                         ? Image.network(
-                                            item.imageUrl!,
+                                            item.imageUrl,
                                             fit: BoxFit.cover,
                                             errorBuilder:
                                                 (context, error, stackTrace) {
@@ -796,10 +1204,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                                         bottomLeft: Radius.circular(14),
                                         bottomRight: Radius.circular(14),
                                       ),
-                                      color: Colors.black.withOpacity(0.5),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.5,
+                                      ),
                                     ),
                                     child: Text(
-                                      item.name ?? 'Untitled',
+                                      item.name,
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 11,
@@ -835,7 +1245,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.grey.withOpacity(0.15),
+                color: Colors.grey.withValues(alpha: 0.15),
                 blurRadius: 12,
                 offset: const Offset(0, -4),
               ),

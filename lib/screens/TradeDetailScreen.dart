@@ -17,6 +17,13 @@ class TradeDetailScreen extends StatelessWidget {
     final isBarter = trade.isBarter;
     final price = trade.displayPrice;
     final actualPrice = trade.product.price;
+    final difference = (price != null && actualPrice != null)
+        ? _calculatePriceDifference(
+            tradeType: tradeType,
+            actualPrice: actualPrice,
+            finalPrice: price,
+          )
+        : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -205,8 +212,8 @@ class TradeDetailScreen extends StatelessWidget {
                           const SizedBox(height: 12),
                           _buildPriceRow(
                             'Price Difference',
-                            '\$${(actualPrice - price).abs().toStringAsFixed(2)}',
-                            actualPrice > price ? Colors.red : Colors.green,
+                            _formatPriceDifference(difference),
+                            _priceDifferenceColor(difference),
                           ),
                         ],
                       ),
@@ -345,6 +352,32 @@ class TradeDetailScreen extends StatelessWidget {
     );
   }
 
+  double _calculatePriceDifference({
+    required String tradeType,
+    required double actualPrice,
+    required double finalPrice,
+  }) {
+    if (tradeType == 'Purchased') {
+      // Positive means user saved money compared to listed price.
+      return actualPrice - finalPrice;
+    }
+
+    // For sold trades, positive means profit over listed price.
+    return finalPrice - actualPrice;
+  }
+
+  String _formatPriceDifference(double? difference) {
+    if (difference == null) return '--';
+    if (difference == 0) return '\$0.00';
+    final sign = difference > 0 ? '+' : '-';
+    return '$sign\$${difference.abs().toStringAsFixed(2)}';
+  }
+
+  Color _priceDifferenceColor(double? difference) {
+    if (difference == null || difference == 0) return Colors.grey;
+    return difference > 0 ? Colors.green : Colors.red;
+  }
+
   Widget _buildUserSection({
     required String title,
     required String imageUrl,
@@ -360,7 +393,8 @@ class TradeDetailScreen extends StatelessWidget {
             CircleAvatar(
               radius: 24,
               backgroundImage: NetworkImage(imageUrl),
-              onBackgroundImageError: (_, __) => const Icon(Icons.person),
+              onBackgroundImageError: (exception, stackTrace) =>
+                  const Icon(Icons.person),
               child: imageUrl.contains('placeholder')
                   ? const Icon(Icons.person, size: 24)
                   : null,
@@ -485,7 +519,7 @@ class TradeDetailScreen extends StatelessWidget {
       suffix = 'rd';
     }
 
-    return '${day}$suffix ${DateFormat('MMM yyyy').format(date)}';
+    return '$day$suffix ${DateFormat('MMM yyyy').format(date)}';
   }
 
   Color _getTradeTypeColor(String tradeType) {

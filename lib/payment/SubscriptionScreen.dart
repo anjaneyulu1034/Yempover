@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:Yempover_app/models/get_current_subscription_plan_response.dart';
 import 'package:Yempover_app/models/get_subscription_plans_response.dart';
-import 'package:Yempover_app/payment/PaymentScreen.dart';
 import 'package:Yempover_app/services/subscription_plan_service.dart';
 import 'package:Yempover_app/services/token_service.dart';
 import 'package:Yempover_app/utils/snackbar_utils.dart';
@@ -19,6 +18,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   CurrentPlan? currentPlan;
   bool _isLoadingPlans = true;
   bool _isLoadingCurrentPlan = true;
+  bool _isSubscribing = false;
   String? _errorMessage;
   List<Plans> plans = [];
   bool _isLoggedIn = false;
@@ -145,6 +145,46 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     return selectedName == currentName;
   }
 
+  Future<void> _subscribeToSelectedPlan() async {
+    if (_selectedPlan == null || _isSubscribing) return;
+
+    final planId = _selectedPlan!.id?.trim() ?? '';
+    if (planId.isEmpty) {
+      SnackbarUtils.showError(
+        context,
+        'Invalid plan selected. Please try again.',
+      );
+      return;
+    }
+
+    setState(() => _isSubscribing = true);
+
+    try {
+      final response = await SubscriptionPlanService().subscribe(planId);
+      final message =
+          (response['message']?.toString().trim().isNotEmpty ?? false)
+          ? response['message'].toString().trim()
+          : 'Subscription activated successfully.';
+
+      await _fetchCurrentSubscriptionPlan();
+      if (!mounted) return;
+
+      SnackbarUtils.showSuccess(context, message);
+    } catch (e) {
+      if (!mounted) return;
+      if (e.toString().contains('Session expired') ||
+          e.toString().contains('Unauthorized')) {
+        SnackbarUtils.showLoginDialog(context);
+      } else {
+        SnackbarUtils.showError(context, e);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubscribing = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -193,7 +233,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               onRefresh: _fetchData,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  20,
+                  20,
+                  20 + MediaQuery.of(context).viewPadding.bottom,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -325,20 +370,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed:
-                            _selectedPlan == null || _isSelectedPlanCurrent()
+                            _selectedPlan == null ||
+                                _isSelectedPlanCurrent() ||
+                                _isSubscribing
                             ? null
-                            : () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => PaymentScreen(
-                                      plan: _selectedPlan!.name ?? '',
-                                      planId: _selectedPlan!.id ?? '',
-                                      amount: _selectedPlan!.amount ?? 0,
-                                    ),
-                                  ),
-                                );
-                              },
+                            : _subscribeToSelectedPlan,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2E5BFF),
                           foregroundColor: Colors.white,
@@ -424,20 +460,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: Colors.green.shade200),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.check_circle, size: 14, color: Colors.green),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Active',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.green,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    isTrialing ? 'TRIAL' : planStatus.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.green.shade700,
+                    ),
                   ),
                 ),
               ],
@@ -535,13 +564,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 boxShadow: [
                   if (isSelected)
                     BoxShadow(
-                      color: Colors.blue.withOpacity(0.35),
+                      color: Colors.blue.withValues(alpha: 0.35),
                       blurRadius: 18,
                       offset: const Offset(0, 6),
                     )
                   else
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 6,
                     ),
                 ],

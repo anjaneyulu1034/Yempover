@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:Yempover_app/services/content_service.dart';
 import 'package:Yempover_app/utils/snackbar_utils.dart';
 
@@ -92,7 +92,12 @@ class _TermsScreenState extends State<TermsScreen> {
               ),
             )
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                20,
+                20,
+                20 + MediaQuery.of(context).viewPadding.bottom,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -180,9 +185,6 @@ class _TermsScreenState extends State<TermsScreen> {
   }
 
   // Remove dispose method
-  // @override
-  // void dispose() {
   //   _contentService.dispose();
   //   super.dispose();
-  // }
 }

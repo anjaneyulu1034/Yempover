@@ -278,7 +278,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
         print('Profile image uploaded: ${imageResponse.data.url}');
 
-        // The profile session is automatically updated in the service
+        ProfileSessionManager.instance.updateProfile(
+          profileImage: imageResponse.data.url,
+        );
+        if (mounted) {
+          setState(() {
+            _profile = ProfileSessionManager.instance.profile;
+          });
+        }
       }
 
       // Then update the rest of the profile data
@@ -289,15 +296,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         homeAddress: _homeAddressController.text.trim().isEmpty
             ? null
             : _homeAddressController.text.trim(),
-        shareEmail: _shareEmail,
-        sharePhone: _sharePhone,
-        notificationEnabled: _notificationEnabled,
         // Note: You don't need to send base64 here as it's already uploaded
         // profileImage: _base64Image, // Remove this
         // profileImageMimeType: _imageMimeType, // Remove this
       );
 
-      final updatedProfile = await _profileService.updateProfile(request);
+      await _profileService.updateProfile(request);
+      await _profileService.updatePrivacySettings(
+        shareEmail: _shareEmail,
+        sharePhone: _sharePhone,
+        notificationEnabled: _notificationEnabled,
+      );
+      final updatedProfile = await _profileService.fetchProfile();
 
       if (mounted) {
         // Clear the selected image after successful update
@@ -388,7 +398,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ],
         ),
         body: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            20 + MediaQuery.of(context).viewPadding.bottom,
+          ),
           child: Form(
             key: _formKey,
             child: Column(
@@ -568,7 +583,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
                 // Address Section
                 const Text(
@@ -606,6 +621,77 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                   ),
                 ),
+
+                const SizedBox(height: 24),
+
+                // Privacy & Preferences Section
+                const Text(
+                  'Privacy & Preferences',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+
+                const SizedBox(height: 12),
+
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade200),
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.white,
+                  ),
+                  child: Column(
+                    children: [
+                      SwitchListTile.adaptive(
+                        value: _shareEmail,
+                        onChanged: _isBusy
+                            ? null
+                            : (value) {
+                                setState(() => _shareEmail = value);
+                              },
+                        title: const Text('Share my email'),
+                        subtitle: const Text(
+                          'Visible to users you have completed a deal with',
+                        ),
+                        activeColor: AppConstants.primaryColor,
+                      ),
+                      Divider(height: 1, color: Colors.grey.shade200),
+                      SwitchListTile.adaptive(
+                        value: _sharePhone,
+                        onChanged: _isBusy
+                            ? null
+                            : (value) {
+                                setState(() => _sharePhone = value);
+                              },
+                        title: const Text('Share my phone number'),
+                        subtitle: const Text(
+                          'Visible to users you have completed a deal with',
+                        ),
+                        activeColor: AppConstants.primaryColor,
+                      ),
+                      Divider(height: 1, color: Colors.grey.shade200),
+                      SwitchListTile.adaptive(
+                        value: _notificationEnabled,
+                        onChanged: _isBusy
+                            ? null
+                            : (value) {
+                                setState(() => _notificationEnabled = value);
+                              },
+                        title: const Text('Enable notifications'),
+                        subtitle: const Text(
+                          'Receive trade and booking updates',
+                        ),
+                        activeColor: AppConstants.primaryColor,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+                Text(
+                  'Your contact details are only shown when your sharing preference is ON.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+
+                const SizedBox(height: 24),
 
                 // Save Button
                 SizedBox(

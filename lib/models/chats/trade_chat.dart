@@ -1,8 +1,7 @@
-import 'package:intl/intl.dart';
+﻿import 'package:intl/intl.dart';
 
 // ==================== ENUMS ====================
 
-// Enum for Chat Status
 enum ChatStatus { ACTIVE, COMPLETED, CANCELLED, ARCHIVED, INACTIVE, ACCEPTED }
 
 extension ChatStatusExtension on ChatStatus {
@@ -19,8 +18,7 @@ extension ChatStatusExtension on ChatStatus {
       case ChatStatus.INACTIVE:
         return 'INACTIVE';
       case ChatStatus.ACCEPTED:
-        // TODO: Handle this case.
-        throw UnimplementedError();
+        return 'ACCEPTED';
     }
   }
 
@@ -36,14 +34,15 @@ extension ChatStatusExtension on ChatStatus {
         return ChatStatus.ARCHIVED;
       case 'INACTIVE':
         return ChatStatus.INACTIVE;
+      case 'ACCEPTED':
+        return ChatStatus.ACCEPTED;
       default:
         return ChatStatus.ACTIVE;
     }
   }
 }
 
-// Enum for Offer Type
-enum OfferType { PRICE, BARTER, SERVICE }
+enum OfferType { PRICE, BARTER, BOTH, SERVICE }
 
 extension OfferTypeExtension on OfferType {
   String get value {
@@ -52,6 +51,8 @@ extension OfferTypeExtension on OfferType {
         return 'PRICE';
       case OfferType.BARTER:
         return 'BARTER';
+      case OfferType.BOTH:
+        return 'BOTH';
       case OfferType.SERVICE:
         return 'SERVICE';
     }
@@ -63,6 +64,8 @@ extension OfferTypeExtension on OfferType {
         return OfferType.PRICE;
       case 'BARTER':
         return OfferType.BARTER;
+      case 'BOTH':
+        return OfferType.BOTH;
       case 'SERVICE':
         return OfferType.SERVICE;
       default:
@@ -71,7 +74,6 @@ extension OfferTypeExtension on OfferType {
   }
 }
 
-// Enum for Offer Status
 enum OfferStatus { PENDING, ACCEPTED, REJECTED, COUNTERED, WITHDRAWN }
 
 extension OfferStatusExtension on OfferStatus {
@@ -108,7 +110,6 @@ extension OfferStatusExtension on OfferStatus {
   }
 }
 
-// Enum for Message Type
 enum MessageType { TEXT, IMAGE, OFFER, SYSTEM }
 
 extension MessageTypeExtension on MessageType {
@@ -444,17 +445,66 @@ class TradeOffer {
 
   bool get isPriceOffer => offerType == OfferType.PRICE;
   bool get isBarterOffer => offerType == OfferType.BARTER;
+  bool get isBothOffer => offerType == OfferType.BOTH;
   bool get isServiceOffer => offerType == OfferType.SERVICE;
 
   String get offerSummary {
     if (isPriceOffer && price != null) {
       return 'Price: ${currency ?? '\$'} ${price!.toStringAsFixed(2)}';
-    } else if (isBarterOffer) {
+    } else if (isBarterOffer || isBothOffer) {
       return 'Barter: ${barterItemTitle ?? 'Item'}';
     } else if (isServiceOffer) {
       return 'Service Offer';
     }
     return 'Unknown Offer';
+  }
+}
+
+class DealCompletionInfo {
+  final bool initiatorCompleted;
+  final DateTime? initiatorCompletedAt;
+  final bool responderCompleted;
+  final DateTime? responderCompletedAt;
+  final DateTime? dealCompletedAt;
+
+  DealCompletionInfo({
+    required this.initiatorCompleted,
+    this.initiatorCompletedAt,
+    required this.responderCompleted,
+    this.responderCompletedAt,
+    this.dealCompletedAt,
+  });
+
+  factory DealCompletionInfo.fromJson(Map<String, dynamic> json) {
+    return DealCompletionInfo(
+      initiatorCompleted: json['initiatorCompleted'] == true,
+      initiatorCompletedAt: json['initiatorCompletedAt'] != null
+          ? DateTime.tryParse(json['initiatorCompletedAt'].toString())
+          : null,
+      responderCompleted: json['responderCompleted'] == true,
+      responderCompletedAt: json['responderCompletedAt'] != null
+          ? DateTime.tryParse(json['responderCompletedAt'].toString())
+          : null,
+      dealCompletedAt: json['dealCompletedAt'] != null
+          ? DateTime.tryParse(json['dealCompletedAt'].toString())
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'initiatorCompleted': initiatorCompleted,
+      'initiatorCompletedAt': initiatorCompletedAt?.toIso8601String(),
+      'responderCompleted': responderCompleted,
+      'responderCompletedAt': responderCompletedAt?.toIso8601String(),
+      'dealCompletedAt': dealCompletedAt?.toIso8601String(),
+    };
+  }
+
+  bool hasUserCompleted(String userId, String initiatorId, String responderId) {
+    if (userId == initiatorId) return initiatorCompleted;
+    if (userId == responderId) return responderCompleted;
+    return false;
   }
 }
 
@@ -474,6 +524,7 @@ class TradeChat {
   final UserInfo responder;
   final ProductInfo? product;
   final ServiceInfo? service;
+  final DealCompletionInfo? dealCompletion;
   final List<ChatMessage> messages;
   final List<TradeOffer> offers;
 
@@ -491,6 +542,7 @@ class TradeChat {
     required this.responder,
     this.product,
     this.service,
+    this.dealCompletion,
     required this.messages,
     required this.offers,
   });
@@ -520,6 +572,9 @@ class TradeChat {
       service: json['service'] != null
           ? ServiceInfo.fromJson(json['service'])
           : null,
+      dealCompletion: json['dealCompletion'] != null
+          ? DealCompletionInfo.fromJson(json['dealCompletion'])
+          : null,
       messages: (json['messages'] as List? ?? [])
           .map((msg) => ChatMessage.fromJson(msg))
           .toList(),
@@ -544,6 +599,7 @@ class TradeChat {
       'responder': responder.toJson(),
       'product': product?.toJson(),
       'service': service?.toJson(),
+      'dealCompletion': dealCompletion?.toJson(),
       'messages': messages.map((msg) => msg.toJson()).toList(),
       'offers': offers.map((offer) => offer.toJson()).toList(),
     };
@@ -646,18 +702,20 @@ class TradeChat {
 
   // Check if deal can be completed
   bool canCompleteDeal(String currentUserId) {
+    if (!isActive) return false;
     if (!hasAcceptedOffer) return false;
 
-    final acceptedOffer = latestAcceptedOffer;
-    if (acceptedOffer == null) return false;
-
-    // For price offers, only the post owner can complete
-    if (acceptedOffer.isPriceOffer) {
-      return isPostOwner(currentUserId);
+    if (dealCompletion?.hasUserCompleted(
+          currentUserId,
+          initiatorId,
+          responderId,
+        ) ==
+        true) {
+      return false;
     }
 
-    // For barter offers, both users can complete
-    return true;
+    // After acceptance, both users can provide completion consent.
+    return currentUserId == initiatorId || currentUserId == responderId;
   }
 
   // Check if both users have completed the deal

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:Yempover_app/constants/api_constants.dart';
 import 'package:Yempover_app/models/auth_models.dart';
 import 'package:Yempover_app/services/api_service.dart';
+import 'package:Yempover_app/utils/error_message_utils.dart';
+import 'package:Yempover_app/utils/snackbar_utils.dart';
 
 class AuthService extends ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -51,28 +53,48 @@ class AuthService extends ChangeNotifier {
     return await _apiService.verifyOtp(request);
   }
 
-  static void showErrorDialog(BuildContext context, String message) {
-    debugPrint('🚨 AuthService: Showing error dialog: $message');
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Error',
-          style: TextStyle(color: AppConstants.errorColor),
-        ),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () {
-              debugPrint('🚨 AuthService: Error dialog closed');
-              Navigator.pop(context);
-            },
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+  static bool isNotRegisteredError(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains('user not found') ||
+        lower.contains('register first') ||
+        lower.contains('not registered') ||
+        lower.contains('no account') ||
+        lower.contains('requested information was not found') ||
+        lower.contains('some details are invalid');
+  }
+
+  static String normalizeAuthErrorMessage(String message) {
+    if (isNotRegisteredError(message)) {
+      return 'This mobile number is not registered. Please sign up first.';
+    }
+
+    final rawLower = message.toLowerCase();
+    if (rawLower.contains('invalid otp') || rawLower.contains('expired otp')) {
+      return 'Invalid OTP. Please try again or resend OTP.';
+    }
+
+    final normalized = ErrorMessageUtils.sanitize(
+      message,
+      fallback: ErrorMessages.unknownError,
     );
+    final lower = normalized.toLowerCase();
+
+    if (lower.contains('invalid otp') || lower.contains('expired otp')) {
+      return 'Invalid OTP. Please try again or resend OTP.';
+    }
+
+    if (lower.contains('requested information was not found') ||
+        lower.contains('some details are invalid')) {
+      return 'This mobile number is not registered. Please sign up first.';
+    }
+
+    return normalized;
+  }
+
+  static void showErrorDialog(BuildContext context, String message) {
+    final displayMessage = normalizeAuthErrorMessage(message);
+    debugPrint('🚨 AuthService: Showing error dialog: $displayMessage');
+    SnackbarUtils.showError(context, displayMessage, title: 'Error');
   }
 
   static void showSuccessDialog(BuildContext context, String message) {

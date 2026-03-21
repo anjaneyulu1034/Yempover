@@ -10,6 +10,7 @@ import 'package:Yempover_app/utils/CustomErrorWidget.dart';
 import 'package:Yempover_app/utils/loading_widget.dart';
 import 'package:Yempover_app/utils/notification_provider.dart';
 import 'package:Yempover_app/utils/notification_tile.dart';
+import 'package:Yempover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
@@ -110,58 +111,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        actions: [
-          Consumer<NotificationProvider>(
-            builder: (context, provider, child) {
-              if (provider.notifications.isEmpty) return const SizedBox();
-
-              return PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert),
-                onSelected: (value) {
-                  if (value == 'mark_all_read') {
-                    _markAllAsRead(context);
-                  } else if (value == 'clear_all') {
-                    _clearAllNotifications(context);
-                  } else if (value == 'preferences') {
-                    _navigateToPreferences(context);
-                  }
-                },
-                itemBuilder: (context) => [
-                  // const PopupMenuItem(
-                  //   value: 'mark_all_read',
-                  //   child: Row(
-                  //     // children: [
-                  //     //   Icon(Icons.done_all, size: 20),
-                  //     //   SizedBox(width: 8),
-                  //     //   Text('Mark all as read'),
-                  //     // ],
-                  //   ),
-                  // ),
-                  // const PopupMenuItem(
-                  //   value: 'clear_all',
-                  //   child: Row(
-                  //     children: [
-                  //       Icon(Icons.delete_sweep, size: 20, color: Colors.red),
-                  //       SizedBox(width: 8),
-                  //       Text('Clear all', style: TextStyle(color: Colors.red)),
-                  //     ],
-                  //   ),
-                  // ),
-                  // const PopupMenuItem(
-                  //   value: 'preferences',
-                  //   child: Row(
-                  //     children: [
-                  //       Icon(Icons.settings, size: 20),
-                  //       SizedBox(width: 8),
-                  //       Text('Preferences'),
-                  //     ],
-                  //   ),
-                  // ),
-                ],
-              );
-            },
-          ),
-        ],
+        actions: const [],
       ),
       backgroundColor: Colors.white,
       body: Consumer<NotificationProvider>(
@@ -313,7 +263,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
 
       if (_isTradeNotification(notification)) {
-        if (!mounted) return;
+        if (!context.mounted) return;
         await Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const TradeChatScreen()),
@@ -321,25 +271,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return;
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Unable to open notification: $e'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      if (!context.mounted) return;
+      SnackbarUtils.showError(context, 'Unable to open notification: $e');
       return;
     }
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(notification.message),
-        backgroundColor: Colors.grey,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    if (!context.mounted) return;
+    SnackbarUtils.showInfo(context, notification.message);
   }
 
   String? _extractIdFromRoute(String? route, List<String> prefixes) {
@@ -478,21 +416,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     NotificationProvider provider,
   ) async {
     final success = await provider.deleteNotification(notification.id);
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Notification dismissed'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-          action: SnackBarAction(
-            label: 'UNDO',
-            textColor: Colors.white,
-            onPressed: () {
-              // Implement undo if needed
-            },
-          ),
-        ),
-      );
+    if (success && context.mounted) {
+      SnackbarUtils.showSuccess(context, 'Notification dismissed');
     }
   }
 
@@ -500,13 +425,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final provider = Provider.of<NotificationProvider>(context, listen: false);
     final success = await provider.markAllAsRead();
 
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('All notifications marked as read'),
-          backgroundColor: Colors.green,
-        ),
-      );
+    if (success && context.mounted) {
+      SnackbarUtils.showSuccess(context, 'All notifications marked as read');
     }
   }
 
@@ -533,7 +453,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               );
               final success = await provider.clearAllNotifications();
 
-              if (success && mounted) {
+              if (success && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('All notifications cleared'),

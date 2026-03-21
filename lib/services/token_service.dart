@@ -81,6 +81,18 @@ class TokenService {
   Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(_tokenKey);
+
+    if (token == null || token.isEmpty) {
+      return null;
+    }
+
+    // Auto-refresh when token is expired/near expiry so callers don't need
+    // to manually handle session renewal.
+    if (isTokenExpired(token)) {
+      debugPrint('🔄 TokenService: Stored token is expired, refreshing...');
+      return await refreshToken();
+    }
+
     return token;
   }
 
@@ -137,8 +149,15 @@ class TokenService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final isGuest = prefs.getBool(_isGuestKey) ?? false;
-      final token = prefs.getString(_tokenKey);
+      String? token = prefs.getString(_tokenKey);
       final userId = prefs.getString(_userIdKey);
+
+      if (token != null && token.isNotEmpty && isTokenExpired(token)) {
+        debugPrint(
+          '🔄 TokenService: isLoggedIn detected expired token, refreshing...',
+        );
+        token = await refreshToken();
+      }
 
       final isLoggedIn =
           !isGuest &&
@@ -174,7 +193,7 @@ class TokenService {
 
       if (refreshToken == null || refreshToken.isEmpty) {
         debugPrint('🔴 TokenService: No refresh token available');
-        await _handleRefreshFailure();
+        await _handleRefreshFailure(clearStoredTokens: true);
         return null;
       }
 
@@ -217,23 +236,23 @@ class TokenService {
           return newToken;
         } else {
           debugPrint('🔴 TokenService: Invalid response format');
-          await _handleRefreshFailure();
+          await _handleRefreshFailure(clearStoredTokens: false);
           return null;
         }
       } else if (response.statusCode == 401) {
         debugPrint('🔴 TokenService: Refresh token expired or invalid');
-        await _handleRefreshFailure();
+        await _handleRefreshFailure(clearStoredTokens: true);
         return null;
       } else {
         debugPrint(
           '🔴 TokenService: Refresh failed with status ${response.statusCode}',
         );
-        await _handleRefreshFailure();
+        await _handleRefreshFailure(clearStoredTokens: false);
         return null;
       }
     } catch (e) {
       debugPrint('🔴 TokenService: Error refreshing token: $e');
-      await _handleRefreshFailure();
+      await _handleRefreshFailure(clearStoredTokens: false);
       return null;
     } finally {
       _isRefreshing = false;
@@ -241,8 +260,10 @@ class TokenService {
   }
 
   /// Handle refresh failure - clear tokens and notify all waiting requests
-  Future<void> _handleRefreshFailure() async {
-    await clearTokens();
+  Future<void> _handleRefreshFailure({required bool clearStoredTokens}) async {
+    if (clearStoredTokens) {
+      await clearTokens();
+    }
     _resolveAllCompleters(null);
   }
 
@@ -283,15 +304,7 @@ class TokenService {
 
   /// Helper method to get a valid token (refreshes if expired)
   Future<String?> getValidToken() async {
-    final token = await getToken();
-
-    if (token == null) return null;
-
-    if (isTokenExpired(token)) {
-      debugPrint('🔄 TokenService: Token expired, attempting refresh...');
-      return await refreshToken();
-    }
-
-    return token;
+    // getToken() already auto-refreshes when needed.
+    return await getToken();
   }
 }

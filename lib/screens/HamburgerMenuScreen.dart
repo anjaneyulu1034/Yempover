@@ -1,15 +1,14 @@
-import 'package:Yempover_app/models/logout_response.dart';
 import 'package:Yempover_app/utils/notification_provider.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:Yempover_app/payment/SubscriptionScreen.dart';
-import 'package:Yempover_app/screens/EditProfileScreen.dart';
 import 'package:Yempover_app/screens/FavoritesScreen.dart';
 import 'package:Yempover_app/screens/HelpSupportScreen.dart';
 import 'package:Yempover_app/screens/HiddenPostsScreen.dart';
+import 'package:Yempover_app/screens/MyProfileScreen.dart';
 import 'package:Yempover_app/screens/NotificationsScreen.dart';
 import 'package:Yempover_app/screens/PrivacyScreen.dart';
+import 'package:Yempover_app/screens/service/AppointmentsDashboardScreen.dart';
 import 'package:Yempover_app/screens/TermsScreen.dart';
 import 'package:Yempover_app/screens/TradeHistoryScreen.dart';
 import 'package:Yempover_app/services/account_service.dart';
@@ -20,6 +19,7 @@ import 'package:Yempover_app/screens/LoginScreen.dart';
 import 'package:Yempover_app/screens/Home_screen.dart';
 import 'package:Yempover_app/services/subscription_plan_service.dart';
 import 'package:Yempover_app/models/get_current_subscription_plan_response.dart';
+import 'package:Yempover_app/utils/snackbar_utils.dart';
 
 class HamburgerMenuScreen extends StatefulWidget {
   const HamburgerMenuScreen({super.key});
@@ -156,7 +156,7 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
     final sessionManager = ProfileSessionManager.instance;
     final hasHomeLocation =
         profile?.homeAddress != null &&
-        profile!.homeAddress.toString().trim().isNotEmpty;
+        profile?.homeAddress.toString().trim().isNotEmpty == true;
     final displayName = _isGuestUser
         ? 'Guest User'
         : (sessionManager.fullName.isNotEmpty
@@ -165,260 +165,88 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
     final displayLocation = _isGuestUser
         ? 'Guest Mode'
         : (hasHomeLocation
-              ? profile!.homeAddress.toString()
+              ? profile?.homeAddress.toString() ?? 'Home Location not set'
               : 'Home Location not set');
 
     return Container(
-      padding: const EdgeInsets.all(20),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      child: Row(
         children: [
-          // Profile Image with edit button
-          Stack(
-            children: [
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.blue, width: 3),
-                ),
-                child: CircleAvatar(
-                  radius: 48,
-                  backgroundColor: Colors.blue.shade100,
-                  backgroundImage:
-                      !_isGuestUser && profile?.profileImage != null
-                      ? NetworkImage(profile!.profileImage!)
-                      : null,
-                  child: (_isGuestUser || profile?.profileImage == null)
-                      ? Text(
-                          _isGuestUser
-                              ? 'G'
-                              : (sessionManager.initials.isNotEmpty
-                                    ? sessionManager.initials
-                                    : '?'),
-                          style: const TextStyle(
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue,
-                          ),
-                        )
-                      : null,
-                ),
-              ),
-              if (!_isGuestUser)
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: const BoxDecoration(
+          CircleAvatar(
+            radius: 28,
+            backgroundColor: Colors.blue.shade100,
+            backgroundImage: !_isGuestUser && profile?.profileImage != null
+                ? NetworkImage(profile!.profileImage!)
+                : null,
+            child: (_isGuestUser || profile?.profileImage == null)
+                ? Text(
+                    _isGuestUser
+                        ? 'G'
+                        : (sessionManager.initials.isNotEmpty
+                              ? sessionManager.initials
+                              : '?'),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                       color: Colors.blue,
-                      shape: BoxShape.circle,
                     ),
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.edit,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                      onPressed: () async {
-                        // Navigate to Edit Profile Screen
-                        final result = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const EditProfileScreen(),
-                          ),
-                        );
-
-                        // If profile was updated, refresh the UI
-                        if (result != null && mounted) {
-                          setState(() {});
-                        }
-                      },
-                    ),
-                  ),
-                ),
-            ],
+                  )
+                : null,
           ),
-
-          const SizedBox(height: 16),
-
-          // Name
-          Text(
-            displayName,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          // Location
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.location_on, size: 16, color: Colors.grey),
-              const SizedBox(width: 4),
-              Text(
-                displayLocation,
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: hasHomeLocation
-                      ? Colors.green.shade50
-                      : (_isGuestUser
-                            ? Colors.blue.shade50
-                            : Colors.red.shade50),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: hasHomeLocation
-                        ? Colors.green.shade200
-                        : (_isGuestUser
-                              ? Colors.blue.shade200
-                              : Colors.red.shade200),
-                  ),
-                ),
-                child: Text(
-                  _isGuestUser
-                      ? 'Guest'
-                      : (hasHomeLocation ? 'Verified' : 'Not Verified'),
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: _isGuestUser
-                        ? Colors.blue
-                        : (hasHomeLocation ? Colors.green : Colors.red),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // Stats Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildStatItem(
-                'Joined',
-                _isGuestUser
-                    ? '-'
-                    : formatJoinedDate(profile?.registrationDate),
-                Icons.calendar_today,
-              ),
-              _buildStatItem(
-                'Trades',
-                _isGuestUser
-                    ? '0'
-                    : (profile?.totalTradesCompleted?.toString() ?? '0'),
-                Icons.swap_horiz,
-              ),
-              _buildStatItem(
-                'Subscription',
-                _getSubscriptionStatus(),
-                Icons.verified_user,
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 20),
-
-          // Subscription Status
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.blue.shade100),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Current Plan',
-                        style: TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _getCurrentPlanName(),
+                Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on, size: 14, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        displayLocation,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _getSubscriptionExpiryDate(),
-                        style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 13,
                           color: Colors.grey,
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (_isGuestUser) {
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const LoginScreen(),
-                        ),
-                        (route) => false,
-                      );
-                      return;
-                    }
-
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SubscriptionScreen(),
-                      ),
-                    );
-                    // Refresh subscription data when returning
-                    _loadCurrentSubscription();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
                     ),
-                  ),
-                  child: Text(_isGuestUser ? 'Login' : 'Manage'),
+                  ],
                 ),
               ],
             ),
           ),
+          if (!_isGuestUser)
+            OutlinedButton(
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MyProfileScreen(),
+                  ),
+                );
+                if (mounted) {
+                  setState(() {});
+                }
+              },
+              child: const Text('My Profile'),
+            ),
         ],
       ),
     );
-  }
-
-  String _getCurrentPlanName() {
-    if (_isGuestUser) {
-      return 'Guest Account';
-    }
-    if (_isLoadingSubscription) {
-      return 'Loading...';
-    }
-    if (_currentSubscription != null) {
-      return _currentSubscription!.planName ?? 'Active Plan';
-    }
-    return 'Free Trial';
   }
 
   String _getSubscriptionStatus() {
@@ -434,64 +262,10 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
     return 'Inactive';
   }
 
-  String _getSubscriptionExpiryDate() {
-    if (_isGuestUser) {
-      return 'Login to manage subscription';
-    }
-    if (_isLoadingSubscription) {
-      return 'Loading...';
-    }
-    if (_currentSubscription?.endDate != null) {
-      try {
-        final date = DateTime.parse(_currentSubscription!.endDate!);
-        return 'Until ${DateFormat('dd MMM yyyy').format(date)}';
-      } catch (e) {
-        return 'No expiry';
-      }
-    }
-    return '90 days free trial';
-  }
-
-  Widget _buildStatItem(String label, String value, IconData icon) {
-    return Column(
-      children: [
-        Icon(icon, size: 24, color: Colors.blue),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-        ),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-      ],
-    );
-  }
-
   Widget _buildMenuItems(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(0),
       children: [
-        // Edit Profile Menu Item
-        if (!_isGuestUser)
-          _buildMenuItem(
-            icon: Icons.person_outline,
-            title: 'Edit Profile',
-            onTap: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const EditProfileScreen(),
-                ),
-              );
-              if (result != null && mounted) {
-                setState(() {});
-              }
-            },
-          ),
-
         if (_isGuestUser)
           _buildMenuItem(
             icon: Icons.login,
@@ -530,6 +304,21 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => const TradeHistoryScreen(),
+                ),
+              );
+            },
+          ),
+
+        // Service Appointments Dashboard
+        if (!_isGuestUser)
+          _buildMenuItem(
+            icon: Icons.calendar_month_outlined,
+            title: 'Appointments',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AppointmentsDashboardScreen(),
                 ),
               );
             },
@@ -728,16 +517,6 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
     );
   }
 
-  void _showComingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$feature feature coming soon!'),
-        backgroundColor: Colors.blue,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   // Updated logout method with API call - FIXED
   Future<void> _logout() async {
     try {
@@ -800,13 +579,7 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
       );
 
       // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Logged out successfully'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      SnackbarUtils.showSuccess(context, 'Logged out successfully');
     } catch (e) {
       debugPrint('🔴 Error during logout: $e');
 
@@ -821,6 +594,7 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
       try {
         await TokenService()
             .clearTokens(); // FIXED: Using clearTokens() here too
+        if (!mounted) return;
         ProfileSessionManager.instance.clearSession();
 
         Navigator.pushAndRemoveUntil(
@@ -829,21 +603,11 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
           (route) => false,
         );
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Logged out successfully'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        SnackbarUtils.showSuccess(context, 'Logged out successfully');
       } catch (cleanupError) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Error during logout: ${e.toString().replaceFirst('Exception: ', '')}',
-            ),
-            backgroundColor: Colors.red,
-          ),
+        SnackbarUtils.showError(
+          context,
+          'Error during logout: ${e.toString().replaceFirst('Exception: ', '')}',
         );
       }
     }
@@ -892,13 +656,7 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
       if (!mounted) return;
 
       // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(response.message),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      SnackbarUtils.showSuccess(context, response.message);
 
       // Navigate to login screen and remove all previous routes
       Navigator.pushAndRemoveUntil(
@@ -916,14 +674,9 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to delete account: ${e.toString().replaceFirst('Exception: ', '')}',
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
+      SnackbarUtils.showError(
+        context,
+        'Failed to delete account: ${e.toString().replaceFirst('Exception: ', '')}',
       );
     }
   }
@@ -1005,17 +758,6 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
         );
       },
     );
-  }
-
-  String formatJoinedDate(String? isoDate) {
-    if (isoDate == null || isoDate.isEmpty) return "-";
-
-    try {
-      final parsed = DateTime.parse(isoDate).toLocal();
-      return DateFormat('dd MMM yyyy').format(parsed);
-    } catch (e) {
-      return "-";
-    }
   }
 
   Widget _buildMenuItem({

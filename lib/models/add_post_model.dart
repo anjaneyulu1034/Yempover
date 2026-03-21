@@ -8,6 +8,7 @@ class CreateProductRequest {
   final double? latitude;
   final double? longitude;
   final String barterStatus;
+  final bool canClubItems;
   final double price;
 
   CreateProductRequest({
@@ -19,6 +20,7 @@ class CreateProductRequest {
     this.latitude,
     this.longitude,
     required this.barterStatus,
+    this.canClubItems = true,
     required this.price,
   });
 
@@ -32,6 +34,7 @@ class CreateProductRequest {
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
       'barterStatus': barterStatus,
+      'canClubItems': canClubItems,
       'price': price,
     };
   }
@@ -47,6 +50,7 @@ class CreateServiceRequest {
   final double? longitude;
   final String? validFrom;
   final String? validUntil;
+  final String? barterStatus;
   final String status; // PROVIDE_SERVICE
   final double price;
 
@@ -60,6 +64,7 @@ class CreateServiceRequest {
     this.longitude,
     this.validFrom,
     this.validUntil,
+    this.barterStatus,
     required this.status,
     required this.price,
   });
@@ -76,6 +81,8 @@ class CreateServiceRequest {
       if (validFrom != null && validFrom!.isNotEmpty) 'validFrom': validFrom,
       if (validUntil != null && validUntil!.isNotEmpty)
         'validUntil': validUntil,
+      if (barterStatus != null && barterStatus!.isNotEmpty)
+        'barterStatus': barterStatus,
       'status': status,
       'price': price,
     };

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:Yempover_app/models/ProductPostmain.dart';
 import 'package:Yempover_app/screens/OfferDeckScreen.dart';
+import 'package:Yempover_app/screens/OfferDescriptionScreen.dart';
 import 'package:Yempover_app/screens/service/ServiceDetailBookingScreen.dart';
 import 'package:Yempover_app/services/api_service.dart';
 import 'package:Yempover_app/services/post_action_service.dart';
 import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:Yempover_app/utils/loading_widget.dart';
 import 'package:Yempover_app/utils/snackbar_utils.dart';
 
@@ -25,15 +25,17 @@ class PostDetailScreen extends StatefulWidget {
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final ApiService _apiService = ApiService();
-  final TradeChatService _chatService = TradeChatService();
   final TokenService _tokenService = TokenService();
   final PostActionService _postActionService = PostActionService();
 
   late Post _post;
   bool _isLoading = false;
   bool _isFavorite = false;
-  String? _favoriteId; // Store favorite ID for removal
+  bool _isFavoriteUpdating = false;
   String? _currentUserId;
+  Map<String, dynamic>? _otherUserProfile;
+  int _currentImageIndex = 0;
+  final PageController _imagePageController = PageController();
 
   @override
   void initState() {
@@ -47,9 +49,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Future<void> _loadCurrentUser() async {
     try {
       _currentUserId = await _tokenService.getUserId();
-      print('👤 Current user ID: $_currentUserId');
+      debugPrint('👤 Current user ID: $_currentUserId');
     } catch (e) {
-      print('❌ Error loading current user: $e');
+      debugPrint('❌ Error loading current user: $e');
     }
   }
 
@@ -60,11 +62,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         postId: _post.id,
         type: _post.type,
       );
+      if (!mounted) return;
       setState(() {
         _post = response.post;
+        _currentImageIndex = 0;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -75,16 +80,36 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _imagePageController.dispose();
+    super.dispose();
+  }
+
   // Check if post is in user's favorites
   Future<void> _checkIfFavorite() async {
     try {
       final isLoggedIn = await _tokenService.isLoggedIn();
-      if (!isLoggedIn) return;
+      if (!isLoggedIn) {
+        if (!mounted) return;
+        setState(() {
+          _isFavorite = false;
+        });
+        return;
+      }
 
-      // You might want to fetch user's favorites list from API here
-      // For now, we initialize to false and rely on toggleFavorite for updates
+      final favoritesResponse = await _postActionService.getFavorites(
+        page: 1,
+        limit: 100,
+      );
+
+      final isFavorited = favoritesResponse.data.favorites.any(
+        (favorite) => favorite.actualPostId == _post.id,
+      );
+
+      if (!mounted) return;
       setState(() {
-        _isFavorite = false;
+        _isFavorite = isFavorited;
       });
     } catch (e) {
       debugPrint('🔴 Error checking favorite status: $e');
@@ -94,8 +119,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   // Navigate to Offer Deck
   Future<void> _navigateToOfferDeck() async {
     final isLoggedIn = await _tokenService.isLoggedIn();
+    if (!mounted) return;
     if (!isLoggedIn || _currentUserId == null) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please login to make an offer'),
@@ -126,17 +151,109 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       return;
     }
 
+    final allowsBarter =
+        _post.barterStatus == BarterStatus.OPEN_FOR_BARTER ||
+        _post.status == PostStatus.FOR_BARTER;
+
+    if (!allowsBarter) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OfferDescriptionScreen(
+            post: _post,
+            selectedItems: const [],
+            currentUserId: _currentUserId!,
+            offerMode: OfferSubmissionMode.price,
+          ),
+        ),
+      );
+      return;
+    }
+
+    final selectedMode = await _showOfferTypeSelector();
+    if (!mounted || selectedMode == null) return;
+
+    if (selectedMode == OfferSubmissionMode.price) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OfferDescriptionScreen(
+            post: _post,
+            selectedItems: const [],
+            currentUserId: _currentUserId!,
+            offerMode: OfferSubmissionMode.price,
+          ),
+        ),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            OfferDeckScreen(post: _post, currentUserId: _currentUserId!),
+        builder: (context) => OfferDeckScreen(
+          post: _post,
+          currentUserId: _currentUserId!,
+          offerMode: selectedMode,
+        ),
+      ),
+    );
+  }
+
+  Future<OfferSubmissionMode?> _showOfferTypeSelector() async {
+    return showModalBottomSheet<OfferSubmissionMode>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Choose Offer Type',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'How do you want to make this offer?',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 14),
+              ListTile(
+                leading: const Icon(Icons.attach_money, color: Colors.green),
+                title: const Text('Pure Price'),
+                subtitle: const Text('Quote a cash price only'),
+                onTap: () => Navigator.pop(context, OfferSubmissionMode.price),
+              ),
+              ListTile(
+                leading: const Icon(Icons.swap_horiz, color: Colors.orange),
+                title: const Text('Pure Barter'),
+                subtitle: const Text('Offer items only'),
+                onTap: () => Navigator.pop(context, OfferSubmissionMode.barter),
+              ),
+              ListTile(
+                leading: const Icon(Icons.tune, color: Colors.blue),
+                title: const Text('Both'),
+                subtitle: const Text('Offer items and quote a price'),
+                onTap: () => Navigator.pop(context, OfferSubmissionMode.both),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   // Toggle favorite status
   Future<void> _toggleFavorite() async {
+    if (_isFavoriteUpdating) return;
+
+    final previousFavoriteState = _isFavorite;
+
     try {
       // Check if user is logged in
       final isLoggedIn = await _tokenService.isLoggedIn();
@@ -151,6 +268,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
       // Optimistic update
       setState(() {
+        _isFavoriteUpdating = true;
         _isFavorite = !_isFavorite;
       });
 
@@ -163,7 +281,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
         if (mounted) {
           setState(() {
-            _favoriteId = response.data.favorite.id;
+            _isFavoriteUpdating = false;
           });
           SnackbarUtils.showSuccess(context, response.message);
         }
@@ -176,28 +294,48 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
         if (mounted) {
           setState(() {
-            _favoriteId = null;
+            _isFavoriteUpdating = false;
           });
           SnackbarUtils.showSuccess(context, response.message);
         }
       }
     } catch (e) {
-      // Revert optimistic update on error
+      final errorText = e.toString().toLowerCase();
+
+      if (!mounted) return;
+
       setState(() {
-        _isFavorite = !_isFavorite;
+        _isFavoriteUpdating = false;
       });
 
-      if (mounted) {
-        // Don't show error for "Already favorited" as it's not really an error
-        if (e.toString().contains('Already favorited')) {
-          SnackbarUtils.showInfo(context, 'Already in favorites');
-        } else {
-          SnackbarUtils.showError(
-            context,
-            e.toString().replaceAll('Exception: ', ''),
-          );
-        }
+      // Keep heart selected if backend says it's already favorited.
+      if (errorText.contains('already favorited') ||
+          errorText.contains('already in favorites')) {
+        setState(() {
+          _isFavorite = true;
+        });
+        SnackbarUtils.showInfo(context, 'Already in favorites');
+        return;
       }
+
+      // Keep heart unselected if backend says favorite does not exist.
+      if (errorText.contains('not in favorites') ||
+          errorText.contains('favorite not found')) {
+        setState(() {
+          _isFavorite = false;
+        });
+        return;
+      }
+
+      // Revert optimistic state for all other errors.
+      setState(() {
+        _isFavorite = previousFavoriteState;
+      });
+
+      SnackbarUtils.showError(
+        context,
+        e.toString().replaceAll('Exception: ', ''),
+      );
     }
   }
 
@@ -249,7 +387,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             const Text('Select reason for reporting this post:'),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
-              value: selectedReason,
+              initialValue: selectedReason,
               items: const [
                 DropdownMenuItem(value: 'Spam', child: Text('Spam')),
                 DropdownMenuItem(
@@ -323,10 +461,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               title: Text(
                 _isFavorite ? 'Remove from Favorites' : 'Add to Favorites',
               ),
-              onTap: () {
-                _toggleFavorite();
-                Navigator.pop(context);
-              },
+              onTap: _isFavoriteUpdating
+                  ? null
+                  : () {
+                      _toggleFavorite();
+                      Navigator.pop(context);
+                    },
             ),
             const Divider(height: 1),
             ListTile(
@@ -362,78 +502,191 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
       ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        height: MediaQuery.of(context).size.height * 0.6,
-        child: Column(
-          children: [
-            CircleAvatar(
-              radius: 50,
-              backgroundColor: Colors.grey.shade200,
-              child: _post.postedBy.profileImage != null
-                  ? ClipOval(
-                      child: Image.network(
-                        _post.postedBy.profileImage!,
-                        width: 100,
-                        height: 100,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  : Text(
-                      _post.postedBy.firstName.isNotEmpty
-                          ? _post.postedBy.firstName[0]
-                          : 'U',
-                      style: const TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
+      builder: (context) => FutureBuilder<Map<String, dynamic>>(
+        future: _loadOtherUserProfile(forceRefresh: true),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return SizedBox(
+              height: MediaQuery.of(context).size.height * 0.45,
+              child: const Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          final data = snapshot.data ?? _fallbackOtherUserProfile();
+          final firstName = (data['firstName']?.toString() ?? '').trim();
+          final lastName = (data['lastName']?.toString() ?? '').trim();
+          final fullName = '$firstName $lastName'.trim().isNotEmpty
+              ? '$firstName $lastName'.trim()
+              : _post.postedBy.fullName;
+          final profileImage = data['profileImage']?.toString();
+          final registrationRaw = data['registrationDate']?.toString();
+          final registrationDate = registrationRaw != null
+              ? DateTime.tryParse(registrationRaw)?.toLocal()
+              : null;
+          final trades = data['totalTradesCompleted'] is num
+              ? (data['totalTradesCompleted'] as num).toInt()
+              : int.tryParse(data['totalTradesCompleted']?.toString() ?? '0') ??
+                    0;
+          final posts = data['totalPosts'] is num
+              ? (data['totalPosts'] as num).toInt()
+              : int.tryParse(data['totalPosts']?.toString() ?? '0') ?? 0;
+          final shareEmail = data['shareEmail'] == true;
+          final sharePhone = data['sharePhone'] == true;
+          final location =
+              (data['homeAddress']?.toString() ?? '').trim().isNotEmpty
+              ? data['homeAddress'].toString()
+              : _post.location;
+          final email = data['email']?.toString();
+          final mobileNumber = data['mobileNumber']?.toString();
+
+          return SingleChildScrollView(
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              constraints: BoxConstraints(
+                minHeight: MediaQuery.of(context).size.height * 0.5,
+              ),
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 50,
+                    backgroundColor: Colors.grey.shade200,
+                    child: (profileImage != null && profileImage.isNotEmpty)
+                        ? ClipOval(
+                            child: Image.network(
+                              profileImage,
+                              width: 100,
+                              height: 100,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : Text(
+                            fullName.isNotEmpty
+                                ? fullName[0].toUpperCase()
+                                : 'U',
+                            style: const TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    fullName,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    registrationDate != null
+                        ? 'Member since ${_formatDate(registrationDate)}'
+                        : 'Member information unavailable',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 20),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildStatItem('Posts', '$posts'),
+                      _buildStatItem('Rating', '-'),
+                      _buildStatItem('Trades', '$trades'),
+                    ],
+                  ),
+
+                  const SizedBox(height: 30),
+                  const Divider(),
+                  const SizedBox(height: 20),
+
+                  ListTile(
+                    leading: const Icon(
+                      Icons.location_on_outlined,
+                      color: Colors.blue,
+                    ),
+                    title: const Text(
+                      'Location',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(location),
+                  ),
+
+                  if (shareEmail && (email ?? '').isNotEmpty)
+                    ListTile(
+                      leading: const Icon(
+                        Icons.email_outlined,
                         color: Colors.blue,
                       ),
+                      title: const Text(
+                        'Email',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(email!),
                     ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _post.postedBy.fullName,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Member since ${_formatDate(_post.postedDate.subtract(const Duration(days: 365)))}',
-              style: const TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 20),
 
-            // User Stats
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildStatItem('Posts', '24'),
-                _buildStatItem('Rating', '4.8'),
-                _buildStatItem('Trades', '18'),
-              ],
-            ),
+                  if (sharePhone && (mobileNumber ?? '').isNotEmpty)
+                    ListTile(
+                      leading: const Icon(
+                        Icons.phone_outlined,
+                        color: Colors.blue,
+                      ),
+                      title: const Text(
+                        'Phone',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(mobileNumber!),
+                    ),
 
-            const SizedBox(height: 30),
-            const Divider(),
-            const SizedBox(height: 20),
+                  if (snapshot.hasError)
+                    Padding(padding: const EdgeInsets.only(top: 12)),
 
-            // Location
-            ListTile(
-              leading: const Icon(
-                Icons.location_on_outlined,
-                color: Colors.blue,
+                  const SizedBox(height: 20),
+                ],
               ),
-              title: const Text(
-                'Location',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(_post.location),
             ),
-
-            const SizedBox(height: 20),
-          ],
-        ),
+          );
+        },
       ),
     );
+  }
+
+  Map<String, dynamic> _fallbackOtherUserProfile() {
+    return {
+      'firstName': _post.postedBy.firstName,
+      'lastName': _post.postedBy.lastName,
+      'profileImage': _post.postedBy.profileImage,
+      'homeAddress': _post.postedBy.homeAddress ?? _post.location,
+      'registrationDate': _post.postedDate.toIso8601String(),
+      'totalPosts': 0,
+      'totalTradesCompleted': 0,
+      'shareEmail': false,
+      'sharePhone': false,
+    };
+  }
+
+  Future<Map<String, dynamic>> _loadOtherUserProfile({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _otherUserProfile != null) {
+      return _otherUserProfile!;
+    }
+
+    final targetUserId = _post.postedById.trim().isNotEmpty
+        ? _post.postedById.trim()
+        : _post.postedBy.id.trim();
+
+    if (targetUserId.isEmpty) {
+      throw Exception('Unable to resolve post owner id for profile lookup');
+    }
+
+    debugPrint(
+      '👤 PostDetailScreen: Loading profile for userId: $targetUserId',
+    );
+
+    final profile = await _apiService.getOtherUserProfile(targetUserId);
+    _otherUserProfile = profile;
+    return profile;
   }
 
   Widget _buildStatItem(String label, String value) {
@@ -450,25 +703,49 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   Widget _buildImageCarousel() {
+    final images = _post.processedImages;
+
+    if (images.isEmpty) {
+      return Container(
+        height: 300,
+        width: double.infinity,
+        color: Colors.grey.shade200,
+        child: const Center(
+          child: Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+        ),
+      );
+    }
+
     return SizedBox(
       height: 300,
       child: Stack(
         children: [
           PageView.builder(
-            itemCount: _post.images.length,
+            controller: _imagePageController,
+            itemCount: images.length,
+            onPageChanged: (index) {
+              setState(() {
+                _currentImageIndex = index;
+              });
+            },
             itemBuilder: (context, index) {
               return Image.network(
-                _post.processedImages[index],
+                images[index],
                 width: double.infinity,
                 fit: BoxFit.cover,
                 loadingBuilder: (context, child, loadingProgress) {
                   if (loadingProgress == null) return child;
-                  return Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                          : null,
+                  return Container(
+                    width: double.infinity,
+                    height: double.infinity,
+                    color: Colors.grey.shade200,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                            : null,
+                      ),
                     ),
                   );
                 },
@@ -484,7 +761,31 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             },
           ),
           // Image indicator
-          if (_post.images.length > 1)
+          if (images.length > 1)
+            Positioned(
+              bottom: 20,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(images.length, (index) {
+                  final isActive = index == _currentImageIndex;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: isActive ? 10 : 8,
+                    height: isActive ? 10 : 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(
+                        alpha: isActive ? 1.0 : 0.45,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          if (images.length > 1)
             Positioned(
               bottom: 20,
               right: 20,
@@ -494,11 +795,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
+                  color: Colors.black.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  '1/${_post.images.length}',
+                  '${_currentImageIndex + 1}/${images.length}',
                   style: const TextStyle(color: Colors.white, fontSize: 12),
                 ),
               ),
@@ -573,6 +874,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   Widget _buildServiceSection() {
+    final categoryName = _post.category.name.trim().isNotEmpty
+        ? _post.category.name.trim()
+        : 'Uncategorized';
+    final serviceLocation = _post.location.trim().isNotEmpty
+        ? _post.location
+        : 'Location not specified';
+    final providerArea = (_post.postedBy.homeAddress ?? '').trim();
+    final hasCoordinates = _post.latitude != null && _post.longitude != null;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       padding: const EdgeInsets.all(16),
@@ -609,9 +919,189 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             _post.description,
             style: const TextStyle(fontSize: 14, color: Colors.black87),
           ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildInfoPill(Icons.category_outlined, categoryName),
+              _buildInfoPill(
+                Icons.visibility_outlined,
+                '${_post.viewCount} views',
+              ),
+              _buildInfoPill(
+                Icons.sell_outlined,
+                _post.price > 0 ? _post.formattedPrice : 'Price on request',
+              ),
+              _buildInfoPill(
+                _post.isListed
+                    ? Icons.check_circle_outline
+                    : Icons.block_outlined,
+                _post.isListed ? 'Listed' : 'Unlisted',
+              ),
+              if (hasCoordinates)
+                _buildInfoPill(Icons.my_location_outlined, 'Geo-tagged'),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildServiceMetaRow(
+            icon: Icons.location_on_outlined,
+            label: 'Service location',
+            value: serviceLocation,
+          ),
+          if (providerArea.isNotEmpty)
+            _buildServiceMetaRow(
+              icon: Icons.home_work_outlined,
+              label: 'Provider area',
+              value: providerArea,
+            ),
+          if (hasCoordinates)
+            _buildServiceMetaRow(
+              icon: Icons.pin_drop_outlined,
+              label: 'Coordinates',
+              value:
+                  '${_post.latitude!.toStringAsFixed(5)}, ${_post.longitude!.toStringAsFixed(5)}',
+            ),
+          _buildServiceMetaRow(
+            icon: Icons.event_outlined,
+            label: 'Posted on',
+            value: _formatDate(_post.postedDate),
+          ),
         ],
       ),
     );
+  }
+
+  Widget _buildInfoPill(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.blue.shade100),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.blue.shade700),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.blue.shade900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceMetaRow({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: Colors.blue.shade700),
+          const SizedBox(width: 8),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: const TextStyle(fontSize: 13, color: Colors.black87),
+                children: [
+                  TextSpan(
+                    text: '$label: ',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(text: value),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusTag({
+    required IconData icon,
+    required String label,
+    required Color fg,
+    required Color bg,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: fg,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPostStatusTags() {
+    final tags = <Widget>[
+      _buildStatusTag(
+        icon: _post.isListed
+            ? Icons.check_circle_outline
+            : Icons.block_outlined,
+        label: _post.isListed ? 'Open' : 'Unlisted',
+        fg: _post.isListed ? const Color(0xFF2E7D32) : const Color(0xFF616161),
+        bg: _post.isListed ? const Color(0xFFEAF7ED) : const Color(0xFFEEEEEE),
+      ),
+      _buildStatusTag(
+        icon: _post.type == PostType.service
+            ? Icons.handyman_outlined
+            : Icons.inventory_2_outlined,
+        label: _post.type == PostType.service ? 'Service' : 'Product',
+        fg: const Color(0xFF37474F),
+        bg: const Color(0xFFECEFF1),
+      ),
+    ];
+
+    if (_post.isForBarter) {
+      tags.add(
+        _buildStatusTag(
+          icon: Icons.sync_alt,
+          label: 'Open for Barter',
+          fg: const Color(0xFF3F51B5),
+          bg: const Color(0xFFE8EAF6),
+        ),
+      );
+    }
+
+    if (_post.canClubItems) {
+      tags.add(
+        _buildStatusTag(
+          icon: Icons.all_inclusive,
+          label: 'Can be Clubbed',
+          fg: const Color(0xFF00695C),
+          bg: const Color(0xFFE0F2F1),
+        ),
+      );
+    }
+
+    return Wrap(spacing: 8, runSpacing: 8, children: tags);
   }
 
   @override
@@ -631,7 +1121,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               _isFavorite ? Icons.favorite : Icons.favorite_border,
               color: _isFavorite ? Colors.red : Colors.black,
             ),
-            onPressed: _toggleFavorite,
+            onPressed: _isFavoriteUpdating ? null : _toggleFavorite,
           ),
           IconButton(
             icon: const Icon(Icons.more_vert, color: Colors.black),
@@ -641,7 +1131,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       ),
 
       body: _isLoading
-          ? const LoadingWidget()
+          ? const Center(child: LoadingWidget())
           : SingleChildScrollView(
               padding: const EdgeInsets.only(bottom: 120),
               child: Column(
@@ -733,6 +1223,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               color: Colors.green,
                             ),
                           ),
+
+                        const SizedBox(height: 12),
+                        _buildPostStatusTags(),
                       ],
                     ),
                   ),
@@ -805,7 +1298,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+              ),
             ],
           ),
           child: SizedBox(

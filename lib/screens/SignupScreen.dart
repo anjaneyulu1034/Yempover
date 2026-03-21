@@ -5,11 +5,7 @@ import 'package:Yempover_app/services/notification1_service.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:Yempover_app/constants/api_constants.dart';
-import 'package:Yempover_app/screens/LocationScreen.dart';
-import 'package:Yempover_app/screens/OTPVerificationScreen.dart';
 import 'package:Yempover_app/screens/LoginScreen.dart';
-import 'package:Yempover_app/services/api_service.dart';
-import 'package:Yempover_app/services/auth_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -26,10 +22,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _agreeToTerms = false;
-  bool _isLoading = false;
-  final AuthService _authService = AuthService();
-  final NotificationService1 _notificationService =
-      NotificationService1(); // Add this
+  final bool _isLoading = false;
 
   @override
   void initState() {
@@ -146,147 +139,6 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  void _showSignupSuccessDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.check_circle,
-                  color: Colors.green.shade600,
-                  size: 60,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Registration Successful!',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          content: const Text(
-            'Your account has been created successfully. Please verify your phone number to continue.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16),
-          ),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pop(); // Close the dialog
-                  _navigateToOTPScreen();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppConstants.primaryColor,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Verify Now',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _navigateToOTPScreen() {
-    debugPrint('🟢 SignupScreen: Navigating to OTP screen');
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => OTPVerificationScreen(
-          phoneNumber: _phoneController.text.trim(),
-          onVerificationSuccess: (user) {
-            debugPrint(
-              '🟢 SignupScreen: OTP verification successful, navigating to LocationScreen',
-            );
-
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const LocationScreen()),
-            );
-          },
-          isSignupFlow: true,
-        ),
-      ),
-    );
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Please verify your phone number'),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  bool _isUserAlreadyExistsError(String errorMessage) {
-    final lowerCaseMessage = errorMessage.toLowerCase();
-    return lowerCaseMessage.contains('already exists') ||
-        lowerCaseMessage.contains('already registered') ||
-        lowerCaseMessage.contains('user exists') ||
-        lowerCaseMessage.contains('already have an account') ||
-        lowerCaseMessage.contains('duplicate') ||
-        lowerCaseMessage.contains('already taken') ||
-        lowerCaseMessage.contains('exist');
-  }
-
-  void _showUserExistsDialog(String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Account Already Exists'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _navigateToLoginScreen();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppConstants.primaryColor,
-            ),
-            child: const Text(
-              'Go to Login',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _navigateToLoginScreen() {
     debugPrint('🟢 SignupScreen: Navigating to LoginScreen');
 
@@ -312,7 +164,12 @@ class _SignupScreenState extends State<SignupScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.fromLTRB(
+            24,
+            24,
+            24,
+            24 + MediaQuery.of(context).viewPadding.bottom,
+          ),
           child: Form(
             key: _formKey,
             child: Column(
@@ -326,11 +183,13 @@ class _SignupScreenState extends State<SignupScreen> {
                     color: AppConstants.primaryColor,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.battery_charging_full,
-                      size: 40,
-                      color: Colors.white,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Image.asset(
+                        'assets/YemPover_applogo.png',
+                        fit: BoxFit.contain,
+                      ),
                     ),
                   ),
                 ),
@@ -389,7 +248,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 // Phone
                 _buildField(
-                  hint: 'Phone Number (e.g., +1234567890)',
+                  hint: 'Phone Number',
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
                   validator: _validatePhone,
@@ -466,7 +325,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           onPressed: null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppConstants.primaryColor
-                                .withOpacity(0.7),
+                                .withValues(alpha: 0.7),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(28),
                             ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:Yempover_app/models/ProductPostmain.dart';
 import 'package:Yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
 import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:Yempover_app/utils/error_message_utils.dart';
 
 class PurchaseOfferScreen extends StatefulWidget {
   final Post post;
@@ -22,8 +23,8 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
   void initState() {
     super.initState();
     // Pre-fill with post price if available
-    if (widget.post.price != null && widget.post.price! > 0) {
-      _priceController.text = widget.post.price!.toString();
+    if (widget.post.price > 0) {
+      _priceController.text = widget.post.price.toString();
     }
   }
 
@@ -59,6 +60,49 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
         productId: widget.post.type == PostType.product ? widget.post.id : null,
         serviceId: widget.post.type == PostType.service ? widget.post.id : null,
       );
+
+      final chatProductStatus = chat.product?.status.toUpperCase();
+      final chatServiceStatus = chat.service?.status.toUpperCase();
+      final isChatItemSold =
+          chatProductStatus == 'SOLD' || chatServiceStatus == 'SOLD';
+      final isMismatchedProductChat =
+          widget.post.type == PostType.product &&
+          chat.productId != null &&
+          chat.productId != widget.post.id;
+      final isMismatchedServiceChat =
+          widget.post.type == PostType.service &&
+          chat.serviceId != null &&
+          chat.serviceId != widget.post.id;
+
+      if (chat.hasAcceptedOffer ||
+          chat.isArchived ||
+          chat.isCompleted ||
+          chat.isCancelled ||
+          isChatItemSold ||
+          isMismatchedProductChat ||
+          isMismatchedServiceChat) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'A deal is already active for this chat or the item is no longer available. Please complete/cancel the current deal from Trade Chat.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+
+        await Future.delayed(const Duration(milliseconds: 800));
+        if (!mounted) return;
+
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const TradeChatScreen()),
+          (route) => false,
+        );
+        return;
+      }
 
       await _chatService.createPriceOffer(
         chatId: chat.id,
@@ -118,9 +162,35 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
+
+      final readableError = ErrorMessageUtils.sanitize(e);
+      final lowerError = readableError.toLowerCase();
+
+      if (lowerError.contains('offer already accepted') ||
+          lowerError.contains('complete or cancel the current deal first')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'An offer is already accepted for this chat. Please complete or cancel the current deal from Trade Chat first.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+
+        await Future.delayed(const Duration(milliseconds: 800));
+        if (!mounted) return;
+
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const TradeChatScreen()),
+          (route) => false,
+        );
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to submit purchase offer: $e'),
+          content: Text('Failed to submit purchase offer: $readableError'),
           backgroundColor: Colors.red,
         ),
       );
@@ -149,7 +219,12 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
         centerTitle: true,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          16 + MediaQuery.of(context).viewPadding.bottom,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -197,10 +272,9 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
                                 fontSize: 12,
                               ),
                             ),
-                            if (widget.post.price != null &&
-                                widget.post.price! > 0)
+                            if (widget.post.price > 0)
                               Text(
-                                'Original Price: \$${widget.post.price!.toStringAsFixed(2)}',
+                                'Original Price: \$${widget.post.price.toStringAsFixed(2)}',
                                 style: const TextStyle(
                                   fontSize: 14,
                                   color: Colors.green,

@@ -5,6 +5,20 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ErrorHandler {
+  static String _serverMessageOrDefault(String message, String fallback) {
+    final trimmed = message.trim();
+    if (trimmed.isEmpty) return fallback;
+
+    final lower = trimmed.toLowerCase();
+    if (lower == 'server error occurred.' ||
+        lower == 'internal server error' ||
+        lower == 'something went very wrong!') {
+      return fallback;
+    }
+
+    return trimmed;
+  }
+
   static Exception handleError(dynamic error) {
     if (error is SocketException) {
       return Exception('Network error. Please check your internet connection.');
@@ -36,7 +50,7 @@ class ErrorHandler {
       case 401:
         return Exception('Unauthorized. Please login again.');
       case 403:
-        return Exception('Forbidden. You don\'t have permission.');
+        return Exception('Forbidden: $message');
       case 404:
         return Exception('Resource not found.');
       case 409:
@@ -46,11 +60,26 @@ class ErrorHandler {
       case 429:
         return Exception('Too many requests. Please try again later.');
       case 500:
-        return Exception('Internal server error. Please try again later.');
+        return Exception(
+          _serverMessageOrDefault(
+            message,
+            'Internal server error. Please try again later.',
+          ),
+        );
       case 502:
-        return Exception('Bad gateway. Please try again later.');
+        return Exception(
+          _serverMessageOrDefault(
+            message,
+            'Bad gateway. Please try again later.',
+          ),
+        );
       case 503:
-        return Exception('Service unavailable. Please try again later.');
+        return Exception(
+          _serverMessageOrDefault(
+            message,
+            'Service unavailable. Please try again later.',
+          ),
+        );
       default:
         return Exception('Error ${response.statusCode}: $message');
     }

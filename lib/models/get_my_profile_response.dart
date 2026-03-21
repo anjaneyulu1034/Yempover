@@ -40,6 +40,7 @@ class ProfileData {
   dynamic deletedAt;
   dynamic termsAcceptedAt;
   int? totalTradesCompleted;
+  int? totalPosts;
   dynamic subscriptionPlan;
   String? subscriptionPlanId;
   String? subscriptionStartDate;
@@ -67,6 +68,7 @@ class ProfileData {
     this.deletedAt,
     this.termsAcceptedAt,
     this.totalTradesCompleted,
+    this.totalPosts,
     this.subscriptionPlan,
     this.subscriptionPlanId,
     this.subscriptionStartDate,
@@ -95,6 +97,7 @@ class ProfileData {
     deletedAt = json['deletedAt'];
     termsAcceptedAt = json['termsAcceptedAt'];
     totalTradesCompleted = json['totalTradesCompleted'];
+    totalPosts = json['totalPosts'] ?? json['totalPost'] ?? json['postsCount'];
     subscriptionPlan = json['subscriptionPlan'];
     subscriptionPlanId = json['subscriptionPlanId'];
     subscriptionStartDate = json['subscriptionStartDate'];
@@ -124,6 +127,7 @@ class ProfileData {
     data['deletedAt'] = deletedAt;
     data['termsAcceptedAt'] = termsAcceptedAt;
     data['totalTradesCompleted'] = totalTradesCompleted;
+    data['totalPosts'] = totalPosts;
     data['subscriptionPlan'] = subscriptionPlan;
     data['subscriptionPlanId'] = subscriptionPlanId;
     data['subscriptionStartDate'] = subscriptionStartDate;

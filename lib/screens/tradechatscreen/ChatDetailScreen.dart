@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:Yempover_app/models/chats/trade_chat.dart';
+import 'package:Yempover_app/services/token_service.dart';
 import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:Yempover_app/utils/loading_widget.dart';
 
@@ -28,6 +29,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     with WidgetsBindingObserver {
   final TradeChatService _chatService = TradeChatService();
   final SocketService _socketService = SocketService();
+  final TokenService _tokenService = TokenService();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
@@ -37,8 +39,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   List<ChatMessage> _messages = [];
   bool _isLoading = false;
   bool _isSendingImage = false;
+  bool _isOfferActionInProgress = false;
+  String? _processingOfferId;
   bool _isShowingDealCompletionDialog = false;
   bool _isTyping = false;
+  bool _isOtherUserOnline = false;
   Timer? _typingTimer;
 
   @override
@@ -46,10 +51,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     super.initState();
     _currentChat = widget.chat;
     _messages = List.from(_currentChat.messages);
-    _markMessagesAsRead();
+    Future.microtask(_refreshChat);
     _scrollToBottom();
     _initializeSocketListeners();
-    _joinChatRoom();
+    Future.microtask(_initializeSocketAndJoin);
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -71,6 +76,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     _socketService.off('deal_cancelled', _handleDealCancelled);
     _socketService.off('messages_read', _handleMessagesRead);
     _socketService.off('typing', _handleTypingIndicator);
+    _socketService.off('user_presence', _handleUserPresence);
     WidgetsBinding.instance.removeObserver(this);
     _chatService.dispose();
     super.dispose();
@@ -78,9 +84,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _initializeSocketAndJoin();
+      _refreshChat();
+      _markMessagesAsRead();
+      return;
+    }
+
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       _sendTypingStatus(false);
+      _leaveChatRoom();
     }
   }
 
@@ -108,6 +122,43 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     // Listen for typing indicators
     _socketService.on('typing', _handleTypingIndicator);
+
+    // Listen for user online/offline updates
+    _socketService.on('user_presence', _handleUserPresence);
+  }
+
+  Future<void> _initializeSocketAndJoin() async {
+    try {
+      final token = await _tokenService.getToken();
+      if (token == null || token.isEmpty) {
+        return;
+      }
+
+      _socketService.init(token: token);
+
+      final connected = await _waitForSocketConnection();
+      if (!connected) {
+        return;
+      }
+
+      _joinChatRoom();
+      await _markMessagesAsRead();
+    } catch (e) {
+      print('Error initializing socket: $e');
+    }
+  }
+
+  Future<bool> _waitForSocketConnection({
+    Duration timeout = const Duration(seconds: 6),
+  }) async {
+    final start = DateTime.now();
+    while (DateTime.now().difference(start) < timeout) {
+      if (_socketService.isConnected) {
+        return true;
+      }
+      await Future.delayed(const Duration(milliseconds: 120));
+    }
+    return _socketService.isConnected;
   }
 
   void _handleSocketConnected(dynamic _) {
@@ -120,6 +171,26 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   void _leaveChatRoom() {
     _socketService.leaveChat(_currentChat.id);
+  }
+
+  void _handleUserPresence(dynamic data) {
+    if (!mounted || data == null) return;
+
+    try {
+      final chatId = data['chatId'];
+      final userId = data['userId'];
+      final isOnline = data['isOnline'] == true;
+      final otherUser = _getOtherUser();
+
+      if (chatId != null && chatId != _currentChat.id) return;
+      if (userId != otherUser.id) return;
+
+      setState(() {
+        _isOtherUserOnline = isOnline;
+      });
+    } catch (e) {
+      print('Error handling user presence: $e');
+    }
   }
 
   void _handleNewMessage(dynamic data) {
@@ -224,7 +295,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           responderId: _currentChat.responderId,
           productId: _currentChat.productId,
           serviceId: _currentChat.serviceId,
-          status: ChatStatus.ACCEPTED,
+          status: _currentChat.status,
           lastMessageAt: _currentChat.lastMessageAt,
           createdAt: _currentChat.createdAt,
           updatedAt: DateTime.now(),
@@ -414,6 +485,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
       if (chatId != _currentChat.id) return;
 
+      // Some socket translations emit only chatId without a full chat object.
+      if (chatData is! Map<String, dynamic>) {
+        _refreshChat();
+        return;
+      }
+
       final updatedChat = TradeChat.fromJson(chatData);
 
       setState(() {
@@ -454,18 +531,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           messages: _messages,
           offers: _currentChat.offers,
         );
-
-        final systemMessage = ChatMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          tradeChatId: _currentChat.id,
-          sentById: 'system',
-          messageText: 'Deal completed successfully',
-          messageType: MessageType.SYSTEM,
-          isRead: true,
-          createdAt: DateTime.now(),
-        );
-
-        _messages.add(systemMessage);
+        _appendSystemMessageIfNotDuplicate('Deal completed successfully');
       });
 
       _scrollToBottom();
@@ -508,18 +574,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           messages: _messages,
           offers: _currentChat.offers,
         );
-
-        final systemMessage = ChatMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          tradeChatId: _currentChat.id,
-          sentById: 'system',
-          messageText: 'Trade cancelled',
-          messageType: MessageType.SYSTEM,
-          isRead: true,
-          createdAt: DateTime.now(),
-        );
-
-        _messages.add(systemMessage);
+        _appendSystemMessageIfNotDuplicate('Trade cancelled');
       });
 
       _scrollToBottom();
@@ -638,6 +693,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
+
+    if (!_socketService.isConnected) {
+      await _initializeSocketAndJoin();
+    }
+
+    if (!_socketService.isConnected) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Connection lost. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
     final content = _messageController.text.trim();
     _messageController.clear();
@@ -762,9 +833,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         imageFile: imageFile,
       );
 
-      // Emit via socket
-      _socketService.sendMessage(_currentChat.id, sentMessage.toJson());
-
       setState(() {
         final index = _messages.indexWhere((m) => m.id == tempMessage.id);
         if (index != -1) {
@@ -772,6 +840,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         }
         _isSendingImage = false;
       });
+
+      _updateChatLastMessage();
+      widget.onChatUpdated(_currentChat);
 
       _scrollToBottom();
     } catch (e) {
@@ -793,21 +864,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   // Updated accept offer method with socket emit and full refresh
   Future<void> _acceptOffer(TradeOffer offer) async {
+    if (_isOfferActionInProgress) return;
+
     setState(() {
       _isLoading = true;
+      _isOfferActionInProgress = true;
+      _processingOfferId = offer.id;
     });
 
     try {
-      final acceptedOffer = await _chatService.acceptOfferWithDetails(
-        chatId: _currentChat.id,
-        offerId: offer.id,
-        offerType: offer.offerType.value,
-        price: offer.price,
-        currency: offer.currency,
-        barterItemTitle: offer.barterItemTitle,
-        barterItemDescription: offer.barterItemDescription,
-        barterItemImages: offer.barterItemImages,
-        barterWishCategories: offer.barterWishCategories,
+      final acceptedOffer = await _chatService.acceptOffer(
+        _currentChat.id,
+        offer.id,
       );
 
       // Emit socket event
@@ -837,7 +905,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           responderId: _currentChat.responderId,
           productId: _currentChat.productId,
           serviceId: _currentChat.serviceId,
-          status: ChatStatus.ACCEPTED,
+          status: _currentChat.status,
           lastMessageAt: _currentChat.lastMessageAt,
           createdAt: _currentChat.createdAt,
           updatedAt: DateTime.now(),
@@ -848,7 +916,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           messages: _messages,
           offers: _currentChat.offers,
         );
-        _isLoading = false;
       });
 
       // Refresh entire chat to get latest state
@@ -867,10 +934,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         );
       }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -879,26 +942,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           ),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isOfferActionInProgress = false;
+          _processingOfferId = null;
+        });
+      }
     }
   }
 
   // Updated reject offer method with socket emit and full refresh
   Future<void> _rejectOffer(TradeOffer offer) async {
+    if (_isOfferActionInProgress) return;
+
     setState(() {
       _isLoading = true;
+      _isOfferActionInProgress = true;
+      _processingOfferId = offer.id;
     });
 
     try {
-      final rejectedOffer = await _chatService.rejectOfferWithDetails(
-        chatId: _currentChat.id,
-        offerId: offer.id,
-        offerType: offer.offerType.value,
-        price: offer.price,
-        currency: offer.currency,
-        barterItemTitle: offer.barterItemTitle,
-        barterItemDescription: offer.barterItemDescription,
-        barterItemImages: offer.barterItemImages,
-        barterWishCategories: offer.barterWishCategories,
+      final rejectedOffer = await _chatService.rejectOffer(
+        _currentChat.id,
+        offer.id,
       );
 
       // Emit socket event
@@ -922,7 +990,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           _currentChat.offers[index] = rejectedOffer;
         }
         _messages.add(systemMessage);
-        _isLoading = false;
       });
 
       // Refresh entire chat to get latest state
@@ -931,10 +998,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       _scrollToBottom();
       widget.onChatUpdated(_currentChat);
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -943,10 +1006,30 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           ),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isOfferActionInProgress = false;
+          _processingOfferId = null;
+        });
+      }
     }
   }
 
   Future<void> _showMakeOfferDialog() async {
+    if (!_currentChat.isActive || _currentChat.hasAcceptedOffer) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Offers are no longer available for this chat.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1091,10 +1174,218 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
   }
 
+  Future<void> _showCounterOfferDialog(TradeOffer originalOffer) async {
+    if (!_currentChat.isActive || _currentChat.hasAcceptedOffer) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Counter offers are not available for this chat anymore.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!originalOffer.isPending ||
+        originalOffer.madeById == widget.currentUserId) {
+      return;
+    }
+
+    if (originalOffer.isPriceOffer) {
+      await _showCounterPriceOfferDialog(originalOffer);
+      return;
+    }
+
+    await _showCounterBarterOfferDialog(originalOffer);
+  }
+
+  Future<void> _showCounterPriceOfferDialog(TradeOffer originalOffer) async {
+    final priceController = TextEditingController(
+      text: originalOffer.price?.toStringAsFixed(2) ?? '',
+    );
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Counter Price Offer'),
+        content: TextField(
+          controller: priceController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Your Counter Price',
+            prefixText: '\$ ',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (priceController.text.trim().isNotEmpty) {
+                Navigator.pop(context, true);
+              }
+            },
+            child: const Text('Send Counter'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != true || priceController.text.trim().isEmpty) return;
+
+    await _createCounterOffer(
+      originalOffer: originalOffer,
+      offerType: 'PRICE',
+      price: double.tryParse(priceController.text.trim()),
+    );
+  }
+
+  Future<void> _showCounterBarterOfferDialog(TradeOffer originalOffer) async {
+    final titleController = TextEditingController(
+      text: originalOffer.barterItemTitle ?? '',
+    );
+    final descriptionController = TextEditingController(
+      text: originalOffer.barterItemDescription ?? '',
+    );
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Counter Barter Offer'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(
+                labelText: 'Item Title',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: descriptionController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Your Thoughts / Description',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (titleController.text.trim().isNotEmpty) {
+                Navigator.pop(context, true);
+              }
+            },
+            child: const Text('Send Counter'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != true || titleController.text.trim().isEmpty) return;
+
+    await _createCounterOffer(
+      originalOffer: originalOffer,
+      offerType: 'BARTER',
+      barterItemTitle: titleController.text.trim(),
+      barterItemDescription: descriptionController.text.trim().isNotEmpty
+          ? descriptionController.text.trim()
+          : null,
+    );
+  }
+
+  Future<void> _createCounterOffer({
+    required TradeOffer originalOffer,
+    required String offerType,
+    double? price,
+    String? barterItemTitle,
+    String? barterItemDescription,
+  }) async {
+    if (!_currentChat.isActive ||
+        _currentChat.hasAcceptedOffer ||
+        !originalOffer.isPending ||
+        originalOffer.madeById == widget.currentUserId) {
+      return;
+    }
+
+    setState(() {
+      _isOfferActionInProgress = true;
+      _processingOfferId = originalOffer.id;
+    });
+
+    try {
+      final counterOffer = await _chatService.createCounterOffer(
+        chatId: _currentChat.id,
+        offerId: originalOffer.id,
+        offerType: offerType,
+        price: price,
+        barterItemTitle: barterItemTitle,
+        barterItemDescription: barterItemDescription,
+      );
+
+      _socketService.emitOfferCreated(_currentChat.id, counterOffer.toJson());
+
+      setState(() {
+        _currentChat.offers.add(counterOffer);
+        _messages.add(
+          ChatMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            tradeChatId: _currentChat.id,
+            sentById: 'system',
+            messageText: offerType == 'PRICE'
+                ? 'Counter offer sent: \$${(price ?? 0).toStringAsFixed(2)}'
+                : 'Counter offer sent: ${barterItemTitle ?? 'Barter item'}',
+            messageType: MessageType.SYSTEM,
+            isRead: true,
+            createdAt: DateTime.now(),
+            offerId: counterOffer.id,
+          ),
+        );
+      });
+
+      _scrollToBottom();
+      widget.onChatUpdated(_currentChat);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to send counter offer: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isOfferActionInProgress = false;
+          _processingOfferId = null;
+        });
+      }
+    }
+  }
+
   Future<void> _createPriceOffer({
     required double price,
     required String currency,
   }) async {
+    if (!_currentChat.isActive || _currentChat.hasAcceptedOffer) {
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
@@ -1149,6 +1440,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     required String title,
     String? description,
   }) async {
+    if (!_currentChat.isActive || _currentChat.hasAcceptedOffer) {
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
@@ -1296,28 +1591,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             )
           : await _chatService.cancelTrade(_currentChat.id);
 
-      // Emit socket event
-      if (isCompleted) {
-        _socketService.emitDealCompleted(_currentChat.id, result);
-      } else {
-        _socketService.emitDealCancelled(_currentChat.id);
-      }
-
-      final systemMessage = ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        tradeChatId: _currentChat.id,
-        sentById: 'system',
-        messageText: result['isCompleted'] == true
-            ? 'Deal completed successfully'
-            : 'Deal marked as not completed',
-        messageType: MessageType.SYSTEM,
-        isRead: true,
-        createdAt: DateTime.now(),
-      );
+      // Deal completion/cancel state is authoritative from REST response.
+      // Do not emit legacy socket events here because they bypass consent flow.
 
       setState(() {
         _currentChat = updatedChat;
-        _messages.add(systemMessage);
+        _appendSystemMessageIfNotDuplicate(
+          result['isCompleted'] == true
+              ? (updatedChat.isActive
+                    ? 'Completion consent sent. Waiting for other user.'
+                    : 'Deal completed successfully')
+              : 'Deal marked as not completed',
+        );
         _isLoading = false;
       });
 
@@ -1368,22 +1653,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     try {
       final cancelledChat = await _chatService.cancelTrade(_currentChat.id);
 
-      // Emit socket event
-      _socketService.emitDealCancelled(_currentChat.id);
-
-      final systemMessage = ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        tradeChatId: _currentChat.id,
-        sentById: 'system',
-        messageText: 'Trade cancelled',
-        messageType: MessageType.SYSTEM,
-        isRead: true,
-        createdAt: DateTime.now(),
-      );
-
       setState(() {
         _currentChat = cancelledChat;
-        _messages.add(systemMessage);
+        _appendSystemMessageIfNotDuplicate('Trade cancelled');
         _isLoading = false;
       });
 
@@ -1588,6 +1860,47 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
   }
 
+  bool _hasRecentSystemMessage(
+    String messageText, {
+    Duration within = const Duration(seconds: 10),
+  }) {
+    final now = DateTime.now();
+
+    for (var i = _messages.length - 1; i >= 0; i--) {
+      final msg = _messages[i];
+      if (msg.messageType != MessageType.SYSTEM) continue;
+      if (msg.messageText != messageText) continue;
+
+      final deltaMs = now.difference(msg.createdAt).inMilliseconds;
+      final absDeltaMs = deltaMs < 0 ? -deltaMs : deltaMs;
+      if (absDeltaMs <= within.inMilliseconds) {
+        return true;
+      }
+
+      if (deltaMs > within.inMilliseconds * 3) {
+        break;
+      }
+    }
+
+    return false;
+  }
+
+  void _appendSystemMessageIfNotDuplicate(String messageText) {
+    if (_hasRecentSystemMessage(messageText)) return;
+
+    _messages.add(
+      ChatMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        tradeChatId: _currentChat.id,
+        sentById: 'system',
+        messageText: messageText,
+        messageType: MessageType.SYSTEM,
+        isRead: true,
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+
   Widget _buildMessageBubble(ChatMessage message) {
     final isCurrentUser = _isMessageFromCurrentUser(message);
     final isSystemMessage = message.messageType == MessageType.SYSTEM;
@@ -1730,16 +2043,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Widget _buildOfferBanner() {
     if (_currentChat.offers.isEmpty) return const SizedBox();
 
-    final pendingOffers = _currentChat.offers
-        .where((offer) => offer.isPending)
+    if (!_currentChat.isActive) return const SizedBox();
+
+    final visibleOffers = _currentChat.offers
+        .where((offer) => !offer.isWithdrawn)
         .toList();
 
-    if (pendingOffers.isEmpty) return const SizedBox();
+    if (visibleOffers.isEmpty) return const SizedBox();
 
-    final latestOffer = pendingOffers.last;
+    visibleOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final latestOffer = visibleOffers.last;
     final isIncoming = latestOffer.madeById != widget.currentUserId;
 
     if (!isIncoming) return const SizedBox();
+
+    final statusText = latestOffer.offerStatus.value;
+    final statusColor = latestOffer.isPending
+        ? Colors.blue.shade700
+        : latestOffer.isAccepted
+        ? Colors.green.shade700
+        : latestOffer.isRejected
+        ? Colors.red.shade700
+        : Colors.grey.shade700;
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -1757,10 +2082,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               Icon(Icons.request_page, color: Colors.blue.shade700),
               const SizedBox(width: 8),
               Text(
-                'Pending Offer',
+                'Offer ($statusText)',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: Colors.blue.shade700,
+                  color: statusColor,
                 ),
               ),
             ],
@@ -1772,41 +2097,90 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               'Price: ${latestOffer.currency ?? '\$'} ${latestOffer.price!.toStringAsFixed(2)}',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
-          ] else if (latestOffer.isBarterOffer) ...[
+          ] else if (latestOffer.isBarterOffer || latestOffer.isBothOffer) ...[
+            const Text(
+              'This user is interested in your product. Here are their thoughts:',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
             Text(
               'Item: ${latestOffer.barterItemTitle ?? 'Unknown'}',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
-            if (latestOffer.barterItemDescription != null)
+            if (latestOffer.barterItemDescription != null &&
+                latestOffer.barterItemDescription!.trim().isNotEmpty)
               Text(
                 latestOffer.barterItemDescription!,
                 style: const TextStyle(fontSize: 12),
               ),
           ],
 
-          const SizedBox(height: 12),
-
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _rejectOffer(latestOffer),
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                  child: const Text('Reject'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _acceptOffer(latestOffer),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+          if (latestOffer.isPending && !_currentChat.hasAcceptedOffer) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed:
+                        _isOfferActionInProgress &&
+                            _processingOfferId == latestOffer.id
+                        ? null
+                        : () => _rejectOffer(latestOffer),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                    ),
+                    child:
+                        _isOfferActionInProgress &&
+                            _processingOfferId == latestOffer.id
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Reject'),
                   ),
-                  child: const Text('Accept'),
                 ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed:
+                        _isOfferActionInProgress &&
+                            _processingOfferId == latestOffer.id
+                        ? null
+                        : () => _acceptOffer(latestOffer),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                    ),
+                    child:
+                        _isOfferActionInProgress &&
+                            _processingOfferId == latestOffer.id
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Accept'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed:
+                    _isOfferActionInProgress &&
+                        _processingOfferId == latestOffer.id
+                    ? null
+                    : () => _showCounterOfferDialog(latestOffer),
+                icon: const Icon(Icons.swap_horiz),
+                label: const Text('Counter Offer'),
               ),
-            ],
-          ),
+            ),
+          ],
         ],
       ),
     );
@@ -1815,15 +2189,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Widget _buildMyOfferBanner() {
     if (_currentChat.offers.isEmpty) return const SizedBox();
 
-    final myPendingOffers = _currentChat.offers
+    if (!_currentChat.isActive) return const SizedBox();
+
+    final myOffers = _currentChat.offers
         .where(
-          (offer) => offer.isPending && offer.madeById == widget.currentUserId,
+          (offer) =>
+              offer.madeById == widget.currentUserId && !offer.isWithdrawn,
         )
         .toList();
 
-    if (myPendingOffers.isEmpty) return const SizedBox();
+    if (myOffers.isEmpty) return const SizedBox();
 
-    final latestOffer = myPendingOffers.last;
+    myOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final latestOffer = myOffers.last;
+
+    final statusText = latestOffer.offerStatus.value;
+    final statusColor = latestOffer.isPending
+        ? Colors.orange.shade700
+        : latestOffer.isAccepted
+        ? Colors.green.shade700
+        : latestOffer.isRejected
+        ? Colors.red.shade700
+        : Colors.grey.shade700;
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -1844,19 +2231,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   Icon(Icons.access_time, color: Colors.orange.shade700),
                   const SizedBox(width: 8),
                   Text(
-                    'Your Pending Offer',
+                    'Your Offer ($statusText)',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: Colors.orange.shade700,
+                      color: statusColor,
                     ),
                   ),
                 ],
               ),
-              IconButton(
-                icon: const Icon(Icons.close, size: 20),
-                onPressed: () => _withdrawOffer(latestOffer),
-                tooltip: 'Withdraw Offer',
-              ),
+              //   if (latestOffer.isPending)
+              // IconButton(
+              //   icon: const Icon(Icons.close, size: 20),
+              //   onPressed: () => _withdrawOffer(latestOffer),
+              //   tooltip: 'Withdraw Offer',
+              // ),
             ],
           ),
           const SizedBox(height: 8),
@@ -1866,7 +2254,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               'Price: ${latestOffer.currency ?? '\$'} ${latestOffer.price!.toStringAsFixed(2)}',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
-          ] else if (latestOffer.isBarterOffer) ...[
+          ] else if (latestOffer.isBarterOffer || latestOffer.isBothOffer) ...[
             Text(
               'Item: ${latestOffer.barterItemTitle ?? 'Unknown'}',
               style: const TextStyle(fontWeight: FontWeight.w500),
@@ -2045,7 +2433,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               children: [
                 Text(otherUser.firstName),
                 Text(
-                  _currentChat.isActive ? 'Active' : 'Inactive',
+                  (_currentChat.isActive && _isOtherUserOnline)
+                      ? 'Active'
+                      : 'Inactive',
                   style: const TextStyle(fontSize: 12),
                 ),
               ],
@@ -2108,7 +2498,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ),
             IconButton(
               icon: const Icon(Icons.request_page, color: Colors.orange),
-              onPressed: _showMakeOfferDialog,
+              onPressed: _currentChat.hasAcceptedOffer
+                  ? null
+                  : _showMakeOfferDialog,
             ),
             Expanded(
               child: TextField(
@@ -2165,79 +2557,92 @@ class __DealCompletionDialogState extends State<_DealCompletionDialog> {
   final TextEditingController _priceController = TextEditingController();
 
   @override
+  void dispose() {
+    _remarksController.dispose();
+    _priceController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       title: const Text('Complete Deal'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.shade200),
-              ),
-              child: const Text(
-                'Deal Completed: The trade has been completed. Completing a Deal will close further communication, and the chat becomes inactive. The item will be marked as sold, and the post will be deleted.\n\n'
-                'Deal Not Completed: It closes Further Communication with the user and the chat becomes inactive. Since the item is not sold, it will be available on the Marketplace.',
-                style: TextStyle(fontSize: 12),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: RadioListTile<bool>(
-                    title: const Text('Deal Completed'),
-                    value: true,
-                    groupValue: _isDealCompleted,
-                    onChanged: (value) {
-                      setState(() {
-                        _isDealCompleted = value ?? true;
-                      });
-                    },
-                  ),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
                 ),
-                Expanded(
-                  child: RadioListTile<bool>(
-                    title: const Text('Deal Not Completed'),
-                    value: false,
-                    groupValue: _isDealCompleted,
-                    onChanged: (value) {
-                      setState(() {
-                        _isDealCompleted = value ?? false;
-                      });
-                    },
-                  ),
+                child: const Text(
+                  'Deal Completed: The trade has been completed. Completing a Deal will close further communication, and the chat becomes inactive. The item will be marked as sold, and the post will be deleted.\n\n'
+                  'Deal Not Completed: It closes Further Communication with the user and the chat becomes inactive. Since the item is not sold, it will be available on the Marketplace.',
+                  style: TextStyle(fontSize: 12),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _remarksController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Remarks',
-                hintText: 'Enter any remarks about the deal',
-                border: OutlineInputBorder(),
               ),
-            ),
-            if (_isDealCompleted && widget.isPriceOffer) ...[
+              const SizedBox(height: 16),
+              RadioListTile<bool>(
+                contentPadding: EdgeInsets.zero,
+                visualDensity: const VisualDensity(
+                  horizontal: -4,
+                  vertical: -2,
+                ),
+                title: const Text('Deal Completed'),
+                value: true,
+                groupValue: _isDealCompleted,
+                onChanged: (value) {
+                  setState(() {
+                    _isDealCompleted = value ?? true;
+                  });
+                },
+              ),
+              RadioListTile<bool>(
+                contentPadding: EdgeInsets.zero,
+                visualDensity: const VisualDensity(
+                  horizontal: -4,
+                  vertical: -2,
+                ),
+                title: const Text('Deal Not Completed'),
+                value: false,
+                groupValue: _isDealCompleted,
+                onChanged: (value) {
+                  setState(() {
+                    _isDealCompleted = value ?? false;
+                  });
+                },
+              ),
               const SizedBox(height: 16),
               TextField(
-                controller: _priceController,
-                keyboardType: TextInputType.number,
+                controller: _remarksController,
+                maxLines: 3,
                 decoration: const InputDecoration(
-                  labelText: 'Selling Price (Required)',
-                  prefixText: '\$ ',
+                  labelText: 'Remarks',
+                  hintText: 'Enter any remarks about the deal',
                   border: OutlineInputBorder(),
                 ),
               ),
+              if (_isDealCompleted && widget.isPriceOffer) ...[
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _priceController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Selling Price (Required)',
+                    prefixText: '\$ ',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
       actions: [

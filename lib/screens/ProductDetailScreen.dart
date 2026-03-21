@@ -2,17 +2,17 @@ import 'package:Yempover_app/screens/EditProductScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:Yempover_app/services/my_posts2_service.dart';
+import 'package:Yempover_app/utils/snackbar_utils.dart';
 import '../models/my_post_model.dart';
-import 'AddPostScreen.dart';
 
 class PostDetailScreen1 extends StatefulWidget {
   final MyPost post;
 
   const PostDetailScreen1({
-    Key? key,
+    super.key,
     required this.post,
     required List<dynamic> userItems,
-  }) : super(key: key);
+  });
 
   @override
   State<PostDetailScreen1> createState() => _PostDetailScreenState();
@@ -115,16 +115,11 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
     });
 
     try {
-      await _postsService.deletePost(_post.id);
+      await _postsService.deletePost(_post.id, type: _post.type);
 
       if (mounted) {
         Navigator.pop(context, true); // Return true to indicate deletion
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${_post.title} has been deleted'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        SnackbarUtils.showSuccess(context, '${_post.title} has been deleted');
       }
     } catch (e) {
       setState(() {
@@ -158,14 +153,11 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
         if (!mounted) return;
 
         await _refreshPost();
+        if (!mounted) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${_post.title} marked as sold'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        SnackbarUtils.showSuccess(context, '${_post.title} marked as sold');
       } catch (e) {
+        if (!mounted) return;
         setState(() {
           _isLoading = false;
         });
@@ -192,9 +184,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
+    SnackbarUtils.showError(context, message);
   }
 
   String _formatPrice() {
@@ -206,15 +196,6 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
       }
     }
     return '';
-  }
-
-  String _getReturnDetails() {
-    if (_post.isOpenForBarter) {
-      return 'Open for barter';
-    } else if (_post.price != null && _post.price! > 0) {
-      return _formatPrice();
-    }
-    return 'No barter';
   }
 
   @override
@@ -408,7 +389,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
+                                  color: Colors.black.withValues(alpha: 0.05),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -497,7 +478,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
+                                  color: Colors.black.withValues(alpha: 0.05),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -535,7 +516,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
+                                  color: Colors.black.withValues(alpha: 0.05),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -620,7 +601,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
   Widget _buildImageGallery() {
     return Stack(
       children: [
-        Container(
+        SizedBox(
           height: 300,
           width: double.infinity,
           child: PageView.builder(
@@ -658,7 +639,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.6),
+                color: Colors.black.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(

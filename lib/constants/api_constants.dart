@@ -13,7 +13,9 @@ class ApiConstants {
   static const String services = '$baseUrl/me/posts/services';
   static const String categories = '$baseUrl/categories';
   static const String me = '$baseUrl/me';
-  static const String logout = '$baseUrl/auth/logout';  // Add this line
+  static const String mePrivacy = '$baseUrl/me/privacy';
+  static const String mePushToken = '$baseUrl/me/push-token';
+  static const String logout = '$baseUrl/auth/logout'; // Add this line
 
   // Favorites
   static const String favorites = '$baseUrl/me/favorites';
@@ -87,6 +89,7 @@ class ApiConstants {
   static const String uploadAvatarBase64 = '$baseUrl/me/avatar/base64';
 
   static const String userStats = '$baseUrl/me/stats';
+  static String otherUserProfile(String id) => '$baseUrl/users/$id';
 
   // Headers
   static const Map<String, String> headers = {
@@ -131,7 +134,7 @@ class ValidationRegex {
     r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
   );
 
-  static final RegExp phoneRegex = RegExp(r'^\+?[1-9]\d{1,14}$');
+  static final RegExp phoneRegex = RegExp(r'^\+?\d{10,15}$');
 
   static final RegExp nameRegex = RegExp(r'^[a-zA-Z ]{2,}$');
   static final RegExp otpRegex = RegExp(r'^\d{6}$');

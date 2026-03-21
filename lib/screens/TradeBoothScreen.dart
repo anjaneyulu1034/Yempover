@@ -3,6 +3,7 @@ import 'package:Yempover_app/screens/ProductDetailScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:Yempover_app/services/token_service.dart';
+import 'package:Yempover_app/utils/snackbar_utils.dart';
 import '../models/my_post_model.dart';
 import '../services/my_posts_service.dart';
 import '../screens/AddPostScreen.dart';
@@ -237,13 +238,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    SnackbarUtils.showError(context, message);
   }
 
   String _formatPrice(MyPost post) {
@@ -410,7 +405,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -493,7 +488,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                         vertical: 5,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.7),
+                        color: Colors.black.withValues(alpha: 0.7),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(

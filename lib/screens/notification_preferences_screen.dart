@@ -3,7 +3,6 @@ import 'package:Yempover_app/utils/loading_widget.dart';
 import 'package:Yempover_app/utils/notification_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/notification_preferences_model.dart';
 
 class NotificationPreferencesScreen extends StatefulWidget {
   const NotificationPreferencesScreen({super.key});

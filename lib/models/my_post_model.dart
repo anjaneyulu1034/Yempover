@@ -85,7 +85,7 @@ class MyPost {
     required this.count,
     required this.type,
     required this.openOffersCount,
-    this.isClubbable = true,
+    this.isClubbable = false,
   });
 
   factory MyPost.fromJson(Map<String, dynamic> json) {
@@ -122,10 +122,36 @@ class MyPost {
       count: Count.fromJson(json['_count'] ?? {}),
       type: json['type'] ?? 'product',
       openOffersCount: json['openOffersCount'] ?? 0,
-      isClubbable: json['isClubbable'] == null
-          ? (json['canClubItems'] ?? true)
-          : json['isClubbable'],
+      isClubbable: _parseFlexibleBool(json, const [
+        'isClubbable',
+        'canClubItems',
+        'canBeClubbed',
+      ], defaultValue: false),
     );
+  }
+
+  static bool _parseFlexibleBool(
+    Map<String, dynamic> json,
+    List<String> keys, {
+    required bool defaultValue,
+  }) {
+    for (final key in keys) {
+      if (!json.containsKey(key)) continue;
+      final value = json[key];
+      if (value == null) continue;
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        final normalized = value.trim().toLowerCase();
+        if (normalized == 'true' || normalized == '1' || normalized == 'yes') {
+          return true;
+        }
+        if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+          return false;
+        }
+      }
+    }
+    return defaultValue;
   }
 
   bool get isForSale => status == 'FOR_SALE';

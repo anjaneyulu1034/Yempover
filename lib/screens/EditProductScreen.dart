@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../constants/api_constants.dart';
 import '../models/my_post_model.dart';
+import '../services/add_post_service.dart';
 import '../services/category_service.dart';
 import '../services/my_posts_service.dart';
 
@@ -21,6 +25,7 @@ class EditProductScreen extends StatefulWidget {
 class _EditProductScreenState extends State<EditProductScreen> {
   final _formKey = GlobalKey<FormState>();
   final MyPostsService _postsService = MyPostsService();
+  final AddPostService _addPostService = AddPostService();
   final CategoryService _categoryService = CategoryService();
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -66,12 +71,20 @@ class _EditProductScreenState extends State<EditProductScreen> {
     );
 
     _selectedStatus = widget.post.status;
-    _selectedBarterStatus = widget.post.barterStatus;
+    _selectedBarterStatus = _normalizeBarterStatus(widget.post.barterStatus);
     _selectedCategoryId = widget.post.categoryId;
     _postType = widget.post.type;
     _isListed = widget.post.isListed;
     _images = List.from(widget.post.images);
     _validateStatus();
+  }
+
+  String _normalizeBarterStatus(String? status) {
+    final normalized = (status ?? '').trim().toUpperCase();
+    if (normalized == 'OPEN_FOR_BARTER' || normalized == 'BARTER') {
+      return 'OPEN_FOR_BARTER';
+    }
+    return 'NO_BARTER';
   }
 
   Future<void> _loadCategories() async {
@@ -242,19 +255,12 @@ class _EditProductScreenState extends State<EditProductScreen> {
         maxHeight: 1024,
         imageQuality: 85,
       );
+      if (!mounted) return;
 
       if (image != null) {
         setState(() {
-          _isLoading = true;
-        });
-
-        // TODO: Implement actual image upload to your server
-        final String imageUrl =
-            'https://yempover-barter-image-store.s3.us-east-1.amazonaws.com/posts/${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-        setState(() {
-          _images.add(imageUrl);
-          _isLoading = false;
+          // Keep local file path for preview and convert to base64 during save.
+          _images.add(image.path);
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -265,6 +271,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -303,13 +310,45 @@ class _EditProductScreenState extends State<EditProductScreen> {
     });
 
     try {
+      final List<String> existingImages = [];
+      final List<String> newBase64Images = [];
+
+      for (final image in _images) {
+        if (_isLocalImagePath(image)) {
+          final file = File(image);
+          if (!await file.exists()) {
+            continue;
+          }
+
+          final base64Image = await _addPostService.imageToBase64Url(file);
+          newBase64Images.add(base64Image);
+        } else if (image.trim().startsWith('data:image/')) {
+          newBase64Images.add(image);
+        } else {
+          existingImages.add(image);
+        }
+      }
+
+      final uploadedImageUrls = newBase64Images.isNotEmpty
+          ? await _postsService.uploadPostImagesBase64(newBase64Images)
+          : <String>[];
+
+      final List<String> preparedImages = [
+        ...existingImages,
+        ...uploadedImageUrls,
+      ];
+
+      if (preparedImages.isEmpty) {
+        throw Exception('Please add at least one image');
+      }
+
       // Create request with type explicitly set
       final requestData = {
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
-        'images': _images,
+        'images': preparedImages,
         'status': _selectedStatus,
-        'barterStatus': _selectedBarterStatus,
+        'barterStatus': _normalizeBarterStatus(_selectedBarterStatus),
         'categoryId': _selectedCategoryId,
         'isListed': _isListed,
         'type': _postType, // IMPORTANT: Include the post type
@@ -349,7 +388,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
         widget.onProductUpdated();
         Navigator.pop(context, true);
       } else {
-        throw Exception(response.message ?? 'Update failed');
+        throw Exception(
+          response.message.isNotEmpty ? response.message : 'Update failed',
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -619,13 +660,15 @@ class _EditProductScreenState extends State<EditProductScreen> {
                             child: Text('No Barter'),
                           ),
                           DropdownMenuItem(
-                            value: 'BARTER',
+                            value: 'OPEN_FOR_BARTER',
                             child: Text('Open for Barter'),
                           ),
                         ],
                         onChanged: (value) {
                           setState(() {
-                            _selectedBarterStatus = value.toString();
+                            _selectedBarterStatus = _normalizeBarterStatus(
+                              value,
+                            );
                           });
                         },
                       ),
@@ -648,7 +691,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
+                              color: Colors.black.withValues(alpha: 0.05),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -671,7 +714,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                                   _isListed = value;
                                 });
                               },
-                              activeColor: Colors.blue,
+                              activeThumbColor: Colors.blue,
                             ),
                           ],
                         ),
@@ -726,7 +769,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -759,6 +802,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
   }
 
   Widget _buildImageItem(int index) {
+    final image = _images[index];
+    final isLocalFile = _isLocalImagePath(image);
+    final displayUrl = _normalizeImageUrl(image);
+
     return Container(
       width: 100,
       height: 100,
@@ -772,16 +819,33 @@ class _EditProductScreenState extends State<EditProductScreen> {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              _images[index],
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  color: Colors.grey[200],
-                  child: const Icon(Icons.broken_image, color: Colors.grey),
-                );
-              },
-            ),
+            child: isLocalFile
+                ? Image.file(
+                    File(image),
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey[200],
+                        child: const Icon(
+                          Icons.broken_image,
+                          color: Colors.grey,
+                        ),
+                      );
+                    },
+                  )
+                : Image.network(
+                    displayUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey[200],
+                        child: const Icon(
+                          Icons.broken_image,
+                          color: Colors.grey,
+                        ),
+                      );
+                    },
+                  ),
           ),
           Positioned(
             top: 4,
@@ -801,6 +865,39 @@ class _EditProductScreenState extends State<EditProductScreen> {
         ],
       ),
     );
+  }
+
+  bool _isLocalImagePath(String path) {
+    final value = path.trim();
+    if (value.isEmpty) return false;
+    if (value.startsWith('http://') ||
+        value.startsWith('https://') ||
+        value.startsWith('data:image/')) {
+      return false;
+    }
+    return value.contains('\\') ||
+        value.startsWith('/') ||
+        value.contains(':/');
+  }
+
+  String _normalizeImageUrl(String value) {
+    final image = value.trim();
+    if (image.isEmpty) return image;
+    if (image.startsWith('http://') ||
+        image.startsWith('https://') ||
+        image.startsWith('data:image/')) {
+      return image;
+    }
+
+    final baseUri = Uri.parse(ApiConstants.baseUrl);
+    final origin =
+        '${baseUri.scheme}://${baseUri.host}${baseUri.hasPort ? ':${baseUri.port}' : ''}';
+
+    if (image.startsWith('/')) {
+      return '$origin$image';
+    }
+
+    return '$origin/${image.replaceFirst(RegExp(r'^/+'), '')}';
   }
 
   Widget _buildAddImageButton() {
@@ -848,7 +945,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -903,6 +1000,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
     required Function(String?) onChanged,
     String? hint,
   }) {
+    final hasMatchingValue =
+        value != null && items.any((item) => item.value == value);
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -910,7 +1010,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -929,7 +1029,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
-            value: value,
+            initialValue: hasMatchingValue ? value : null,
             items: items,
             onChanged: onChanged,
             hint: hint != null ? Text(hint) : null,

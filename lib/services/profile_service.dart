@@ -1,32 +1,43 @@
 // lib/services/profile_service.dart
 import 'dart:convert';
+import 'package:Yempover_app/services/api_service.dart';
+import 'package:Yempover_app/services/token_service.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:Yempover_app/constants/api_constants.dart';
 import 'package:Yempover_app/models/get_my_profile_response.dart';
 import 'package:Yempover_app/models/profile_update_request.dart';
 import 'package:Yempover_app/services/profile_session_manager.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:Yempover_app/utils/error_message_utils.dart';
 
 class ProfileService {
   static final ProfileService _instance = ProfileService._internal();
   factory ProfileService() => _instance;
   ProfileService._internal();
 
-  // Method to get token - you can modify this based on where you store tokens
-  Future<String?> _getToken() async {
-    // Option 1: Using SharedPreferences
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString('auth_token'); // Adjust key as needed
-    } catch (e) {
-      debugPrint('Error getting token: $e');
-      return null;
+  final ApiService _apiService = ApiService();
+  final TokenService _tokenService = TokenService();
+
+  Map<String, dynamic> _extractUserData(Map<String, dynamic> jsonResponse) {
+    final data = jsonResponse['data'];
+    if (data is Map) {
+      final dataMap = Map<String, dynamic>.from(data);
+      final user = dataMap['user'];
+
+      if (user is Map) {
+        return Map<String, dynamic>.from(user);
+      }
+
+      return dataMap;
     }
 
-    // Option 2: If you're using a different storage method, implement here
-    // Option 3: If token is stored in memory, you might have a AuthService class
+    if (data is List && data.isNotEmpty && data.first is Map) {
+      return Map<String, dynamic>.from(data.first as Map<dynamic, dynamic>);
+    }
+
+    throw Exception('Unable to read profile details right now.');
   }
+
+  Future<String?> _getToken() => _tokenService.getToken();
 
   Future<ProfileData> updateProfile(ProfileUpdateRequest request) async {
     try {
@@ -39,14 +50,9 @@ class ProfileService {
         'Updating profile with data: ${request.toJson()}',
       ); // For debugging
 
-      final response = await http.put(
-        Uri.parse(ApiConstants.me),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(request.toJson()),
+      final response = await _apiService.put(
+        ApiConstants.me,
+        body: request.toJson(),
       );
 
       debugPrint('Response status: ${response.statusCode}');
@@ -56,7 +62,7 @@ class ProfileService {
         final jsonResponse = jsonDecode(response.body);
 
         if (jsonResponse['status'] == 'success') {
-          final userData = jsonResponse['data']['user'];
+          final userData = _extractUserData(jsonResponse);
           final updatedProfile = ProfileData.fromJson(userData);
 
           // Update the session with new profile data
@@ -75,7 +81,12 @@ class ProfileService {
       }
     } catch (e) {
       debugPrint('Error updating profile: $e'); // For debugging
-      throw Exception('Failed to update profile: ${e.toString()}');
+      throw Exception(
+        ErrorMessageUtils.sanitize(
+          e,
+          fallback: 'Unable to update profile right now. Please try again.',
+        ),
+      );
     }
   }
 
@@ -86,20 +97,13 @@ class ProfileService {
         throw Exception('Authentication token not found. Please login again.');
       }
 
-      final response = await http.get(
-        Uri.parse(ApiConstants.me),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
+      final response = await _apiService.get(ApiConstants.me);
 
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
 
         if (jsonResponse['status'] == 'success') {
-          final userData = jsonResponse['data']['user'];
+          final userData = _extractUserData(jsonResponse);
           final profile = ProfileData.fromJson(userData);
 
           // Update session with fetched profile
@@ -116,27 +120,70 @@ class ProfileService {
       }
     } catch (e) {
       debugPrint('Error fetching profile: $e');
-      throw Exception('Failed to fetch profile: ${e.toString()}');
+      throw Exception(
+        ErrorMessageUtils.sanitize(
+          e,
+          fallback: 'Unable to load profile right now. Please try again.',
+        ),
+      );
+    }
+  }
+
+  Future<void> updatePrivacySettings({
+    required bool shareEmail,
+    required bool sharePhone,
+    required bool notificationEnabled,
+  }) async {
+    try {
+      final token = await _getToken();
+      if (token == null) {
+        throw Exception('Authentication token not found. Please login again.');
+      }
+
+      final response = await _apiService.patch(
+        ApiConstants.mePrivacy,
+        body: {
+          'shareEmail': shareEmail,
+          'sharePhone': sharePhone,
+          'notificationEnabled': notificationEnabled,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        ProfileSessionManager.instance.updateProfile(
+          shareEmail: shareEmail,
+          sharePhone: sharePhone,
+          notificationEnabled: notificationEnabled,
+        );
+        return;
+      }
+
+      if (response.statusCode == 401) {
+        throw Exception('Session expired. Please login again.');
+      }
+
+      throw Exception(
+        'Failed to update privacy settings: ${response.statusCode}',
+      );
+    } catch (e) {
+      debugPrint('Error updating privacy settings: $e');
+      throw Exception(
+        ErrorMessageUtils.sanitize(
+          e,
+          fallback:
+              'Unable to update privacy settings right now. Please try again.',
+        ),
+      );
     }
   }
 
   // Optional: Method to save token after login
   Future<void> saveToken(String token) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('auth_token', token);
-    } catch (e) {
-      debugPrint('Error saving token: $e');
-    }
+    await _tokenService.saveTokens(token: token);
   }
 
   // Optional: Method to clear token on logout
   Future<void> clearToken() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('auth_token');
-    } catch (e) {
-      debugPrint('Error clearing token: $e');
-    }
+    await _tokenService.clearTokens();
   }
 }

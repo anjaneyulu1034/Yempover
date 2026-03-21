@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:Yempover_app/constants/api_constants.dart';
-import 'package:Yempover_app/screens/LocationScreen.dart';
 import 'package:Yempover_app/screens/LoginScreen.dart';
 import 'package:Yempover_app/screens/OTPVerificationScreen.dart';
 import 'package:Yempover_app/services/api_service.dart';
@@ -202,12 +201,7 @@ class _SignupPhotoVerificationScreenState
       MaterialPageRoute(
         builder: (_) => OTPVerificationScreen(
           phoneNumber: widget.mobileNumber,
-          onVerificationSuccess: (user) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const LocationScreen()),
-            );
-          },
+          onVerificationSuccess: (_) {},
           isSignupFlow: true,
         ),
       ),
@@ -261,68 +255,79 @@ class _SignupPhotoVerificationScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Live Photo Verification')),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Take a live photo to complete your registration.',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              height: 260,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade300),
-                color: Colors.grey.shade100,
+      body: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            20 + MediaQuery.of(context).viewPadding.bottom,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Take a live photo to complete your registration.',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
-              child: _capturedPhoto == null
-                  ? const Center(
-                      child: Text(
-                        'No photo captured',
-                        style: TextStyle(color: Colors.black54),
+              const SizedBox(height: 16),
+              Container(
+                height: 260,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: Colors.grey.shade100,
+                ),
+                child: _capturedPhoto == null
+                    ? const Center(
+                        child: Text(
+                          'No photo captured',
+                          style: TextStyle(color: Colors.black54),
+                        ),
+                      )
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.file(_capturedPhoto!, fit: BoxFit.cover),
                       ),
-                    )
-                  : ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.file(_capturedPhoto!, fit: BoxFit.cover),
-                    ),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _isLoading ? null : _captureLivePhoto,
-              icon: const Icon(Icons.camera_alt),
-              label: Text(
-                _capturedPhoto == null ? 'Capture Live Photo' : 'Retake Photo',
               ),
-            ),
-            const Spacer(),
-            ElevatedButton(
-              onPressed: _isLoading ? null : _registerWithPhoto,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: AppConstants.primaryColor,
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: _isLoading ? null : _captureLivePhoto,
+                icon: const Icon(Icons.camera_alt),
+                label: Text(
+                  _capturedPhoto == null
+                      ? 'Capture Live Photo'
+                      : 'Retake Photo',
+                ),
               ),
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 22,
-                      width: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _registerWithPhoto,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: AppConstants.primaryColor,
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
+                    : const Text(
+                        'Complete Registration',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    )
-                  : const Text(
-                      'Complete Registration',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

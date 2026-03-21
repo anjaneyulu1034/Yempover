@@ -40,7 +40,7 @@
 //                 borderRadius: BorderRadius.circular(24),
 //                 boxShadow: [
 //                   BoxShadow(
-//                     color: Colors.black.withOpacity(0.1),
+//                     color: Colors.black.withValues(alpha: 0.1),
 //                     blurRadius: 20,
 //                     spreadRadius: 2,
 //                   ),
@@ -164,30 +164,32 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A73E8),
+      backgroundColor: Colors.white,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // App Logo/Icon
             Container(
-              width: 120,
-              height: 120,
+              width: 170,
+              height: 170,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 20,
                     spreadRadius: 2,
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.battery_charging_full,
-                size: 64,
-                color: Color(0xFF1A73E8),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Image.asset(
+                  'assets/YemPover_applogo.png',
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
             const SizedBox(height: 30),
@@ -199,7 +201,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   style: TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: Color(0xFF111827),
                     letterSpacing: 1.2,
                   ),
                 ),
@@ -208,7 +210,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   'Barter System',
                   style: TextStyle(
                     fontSize: 18,
-                    color: Colors.white70,
+                    color: Color(0xFF6B7280),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -217,7 +219,7 @@ class _SplashScreenState extends State<SplashScreen> {
             const SizedBox(height: 50),
             // Loading Indicator
             const CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1A73E8)),
               strokeWidth: 2,
             ),
           ],

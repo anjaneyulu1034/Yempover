@@ -115,18 +115,23 @@ class MyPostsService {
     }
   }
 
-  Future<ApiResponse> deletePost(String postId) async {
+  Future<ApiResponse> deletePost(
+    String postId, {
+    String type = 'product',
+  }) async {
     try {
       final token = await TokenService().getToken();
       if (token == null) {
         throw Exception('No authentication token');
       }
 
+      final endpoint = type == 'service'
+          ? '${ApiConstants.services}/$postId'
+          : '${ApiConstants.products}/$postId';
+
       final response = await _client
           .delete(
-            Uri.parse(
-              '${ApiConstants.products}/$postId',
-            ), // Using products endpoint for delete
+            Uri.parse(endpoint),
             headers: {
               ...ApiConstants.headers,
               'Authorization': 'Bearer $token',

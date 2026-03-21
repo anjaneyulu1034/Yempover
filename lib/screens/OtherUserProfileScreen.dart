@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:Yempover_app/models/ProductPost.dart';
-import 'package:Yempover_app/screens/PostDetailScreen.dart';
 
 class OtherUserProfileScreen extends StatefulWidget {
   final String userId;
@@ -332,7 +331,7 @@ class _OtherUserProfileScreenState extends State<OtherUserProfileScreen> {
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),

@@ -186,21 +186,21 @@ class TradeChatService {
     required File imageFile,
   }) async {
     try {
-      final headers = await _getMultipartHeaders();
+      final headers = await _getHeaders();
       final url = Uri.parse(ApiConstants.tradeChatUploadImage(chatId));
 
       print('📤 Uploading image - URL: $url');
 
-      var request = http.MultipartRequest('POST', url);
-      request.headers.addAll(headers);
+      final bytes = await imageFile.readAsBytes();
+      final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
 
-      // Add image file as 'images' field (from your API response example)
-      request.files.add(
-        await http.MultipartFile.fromPath('images', imageFile.path),
+      final response = await _client.post(
+        url,
+        headers: headers,
+        body: json.encode({
+          'images': [base64Image],
+        }),
       );
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
 
       print('📥 Response status: ${response.statusCode}');
       print('📥 Response body: ${response.body}');
@@ -310,6 +310,50 @@ class TradeChatService {
       }
     } catch (e) {
       print('❌ Error creating barter offer: $e');
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
+  // 7b. Create a combined (price + barter) offer
+  Future<TradeOffer> createBothOffer({
+    required String chatId,
+    required double price,
+    required String barterItemTitle,
+    String? barterItemDescription,
+    List<String>? barterItemImages,
+    List<String>? barterWishCategories,
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatOffer(chatId));
+
+      final body = json.encode({
+        'offerType': 'BOTH',
+        'price': price,
+        'currency': 'USD',
+        'barterItemTitle': barterItemTitle,
+        'barterItemDescription': barterItemDescription,
+        'barterItemImages': barterItemImages ?? [],
+        'barterWishCategories': barterWishCategories ?? [],
+      });
+
+      print('📤 Creating BOTH offer - URL: $url');
+      print('📤 Body: $body');
+
+      final response = await _client.post(url, headers: headers, body: body);
+
+      print('📥 Response status: ${response.statusCode}');
+      print('📥 Response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonResponse = json.decode(response.body);
+        final offerResponse = OfferResponse.fromJson(jsonResponse);
+        return offerResponse.data;
+      } else {
+        throw await ErrorHandler.handleHttpError(response);
+      }
+    } catch (e) {
+      print('❌ Error creating BOTH offer: $e');
       throw ErrorHandler.handleError(e);
     }
   }

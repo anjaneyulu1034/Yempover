@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
@@ -6,7 +6,7 @@ class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  _SettingsScreenState createState() => _SettingsScreenState();
+  State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
@@ -27,6 +27,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     // Load user data
     _loadUserData();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _locationController.dispose();
+    super.dispose();
   }
 
   void _loadUserData() {
@@ -150,9 +159,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     // Navigate to login screen
-    Future.delayed(const Duration(seconds: 2), () {
-      // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
-    });
+    Future.delayed(const Duration(seconds: 2), () {});
   }
 
   void _editPhoneNumber() {
@@ -211,7 +218,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          20 + MediaQuery.of(context).viewPadding.bottom,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -436,7 +448,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _pushNotifications = value;
                     });
                   },
-                  activeColor: Colors.blue,
+                  activeThumbColor: Colors.blue,
                 ),
               ),
             ),
@@ -472,7 +484,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _shareEmail = value;
                         });
                       },
-                      activeColor: Colors.green,
+                      activeThumbColor: Colors.green,
                     ),
                   ),
                   const Divider(height: 0),
@@ -486,7 +498,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _sharePhoneNumber = value;
                         });
                       },
-                      activeColor: Colors.orange,
+                      activeThumbColor: Colors.orange,
                     ),
                   ),
                 ],

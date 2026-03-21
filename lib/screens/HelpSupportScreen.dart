@@ -4,12 +4,19 @@ class HelpSupportScreen extends StatefulWidget {
   const HelpSupportScreen({super.key});
 
   @override
-  _HelpSupportScreenState createState() => _HelpSupportScreenState();
+  State<HelpSupportScreen> createState() => _HelpSupportScreenState();
 }
 
 class _HelpSupportScreenState extends State<HelpSupportScreen> {
   final TextEditingController _subjectController = TextEditingController();
   final TextEditingController _messageController = TextEditingController();
+
+  @override
+  void dispose() {
+    _subjectController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +33,12 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       ),
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          20 + MediaQuery.of(context).viewPadding.bottom,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -365,6 +377,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
 
     // Simulate API call
     Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
       Navigator.pop(context); // Close loading dialog
 
       // Clear form
