@@ -27,6 +27,12 @@ class AddPostScreen extends StatefulWidget {
 class _AddPostScreenState extends State<AddPostScreen> {
   static const int _maxAllowedImages = 5;
   static const int _minRequiredProductImages = 1;
+  static const List<String> _expiryUnits = [
+    'Hours',
+    'Days',
+    'Months',
+    'No expiry',
+  ];
 
   // Services
   final CategoryService _categoryService = CategoryService();
@@ -45,8 +51,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _willPayAmountController =
       TextEditingController();
-  final TextEditingController _validFromController = TextEditingController();
-  final TextEditingController _validUntilController = TextEditingController();
+  final TextEditingController _expiryValueController = TextEditingController(
+    text: '',
+  );
   final TextEditingController _needByController = TextEditingController();
 
   // Category data - Two level selection
@@ -72,14 +79,14 @@ class _AddPostScreenState extends State<AddPostScreen> {
   String? _locationValidationError;
   String? _needByValidationError;
   String? _priceValidationError;
+  String? _expiryValidationError;
 
   // Location variables
   bool _isGettingLocation = false;
   double? _selectedLatitude;
   double? _selectedLongitude;
-  DateTime? _validFromDate;
-  DateTime? _validUntilDate;
   DateTime? _needByDate;
+  String _selectedExpiryUnit = 'Days';
 
   // Manual location search
   final FocusNode _locationFocusNode = FocusNode();
@@ -101,8 +108,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
     _locationController.dispose();
     _priceController.dispose();
     _willPayAmountController.dispose();
-    _validFromController.dispose();
-    _validUntilController.dispose();
+    _expiryValueController.dispose();
     _needByController.dispose();
     _locationFocusNode.dispose();
     _addPostService.dispose();
@@ -148,6 +154,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         title: const Text('Session Expired'),
         content: const Text('Please login again to continue.'),
         actions: [
@@ -315,6 +323,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         title: const Text('Location Services Disabled'),
         content: const Text(
           'Please enable location services to use this feature.',
@@ -782,6 +792,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
               // Main Category Dropdown
               Container(
                 decoration: BoxDecoration(
+                  color: Colors.white,
                   border: Border.all(color: Colors.grey.shade300),
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -794,12 +805,15 @@ class _AddPostScreenState extends State<AddPostScreen> {
                       : null,
                   decoration: InputDecoration(
                     hintText: 'Select main category',
+                    filled: true,
+                    fillColor: Colors.white,
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,
                     ),
                   ),
+                  dropdownColor: Colors.white,
                   icon: const Icon(Icons.arrow_drop_down),
                   items: _mainCategories.map((category) {
                     return DropdownMenuItem(
@@ -867,6 +881,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 else
                   Container(
                     decoration: BoxDecoration(
+                      color: Colors.white,
                       border: Border.all(color: Colors.grey.shade300),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -879,12 +894,15 @@ class _AddPostScreenState extends State<AddPostScreen> {
                           : null,
                       decoration: InputDecoration(
                         hintText: 'Select sub category',
+                        filled: true,
+                        fillColor: Colors.white,
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 12,
                         ),
                       ),
+                      dropdownColor: Colors.white,
                       icon: const Icon(Icons.arrow_drop_down),
                       items: _subCategories.map((category) {
                         return DropdownMenuItem(
@@ -1029,37 +1047,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
     );
   }
 
-  Future<void> _pickValidityDate({required bool isStart}) async {
-    final now = DateTime.now();
-    final initial = isStart
-        ? (_validFromDate ?? now)
-        : (_validUntilDate ?? _validFromDate ?? now);
-
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 5),
-    );
-
-    if (picked == null) return;
-
-    setState(() {
-      if (isStart) {
-        _validFromDate = picked;
-        _validFromController.text = _formatDateOnly(picked);
-        if (_validUntilDate != null &&
-            !_validUntilDate!.isAfter(_validFromDate!)) {
-          _validUntilDate = null;
-          _validUntilController.clear();
-        }
-      } else {
-        _validUntilDate = picked;
-        _validUntilController.text = _formatDateOnly(picked);
-      }
-    });
-  }
-
   String _formatDateOnly(DateTime date) {
     final year = date.year.toString().padLeft(4, '0');
     final month = date.month.toString().padLeft(2, '0');
@@ -1083,13 +1070,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
       _selectedSubCategoryId = null;
       _subCategories = [];
 
-      if (_postType == 'Product') {
-        _validFromDate = null;
-        _validUntilDate = null;
-        _validFromController.clear();
-        _validUntilController.clear();
-      }
-
       if (option != 2) {
         _needByDate = null;
         _needByController.clear();
@@ -1102,6 +1082,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
       _locationValidationError = null;
       _needByValidationError = null;
       _priceValidationError = null;
+      _expiryValidationError = null;
     });
 
     _loadMainCategories();
@@ -1117,13 +1098,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
       _selectedSubCategoryId = null;
       _subCategories = [];
 
-      if (type == 'Product') {
-        _validFromDate = null;
-        _validUntilDate = null;
-        _validFromController.clear();
-        _validUntilController.clear();
-      }
-
       if (type != 'Service') {
         _needByDate = null;
         _needByController.clear();
@@ -1131,102 +1105,138 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
       _mainCategoryValidationError = null;
       _subCategoryValidationError = null;
+      _expiryValidationError = null;
     });
 
     _loadMainCategories();
   }
 
-  Widget _buildValidityFields() {
+  void _onExpiryUnitChanged(String value) {
+    setState(() {
+      _selectedExpiryUnit = value;
+      _expiryValidationError = null;
+      if (value == 'No expiry') {
+        _expiryValueController.clear();
+      } else if (_expiryValueController.text.trim().isEmpty) {
+        if (value == 'Hours') {
+          _expiryValueController.text = '24';
+        } else if (value == 'Days') {
+          _expiryValueController.text = '7';
+        } else {
+          _expiryValueController.text = '1';
+        }
+      }
+    });
+  }
+
+  DateTime? _computeExpiryDate() {
+    if (_selectedExpiryUnit == 'No expiry') {
+      return null;
+    }
+
+    final value = int.tryParse(_expiryValueController.text.trim());
+    if (value == null || value <= 0) {
+      return null;
+    }
+
+    final now = DateTime.now();
+    switch (_selectedExpiryUnit) {
+      case 'Hours':
+        return now.add(Duration(hours: value));
+      case 'Days':
+        return now.add(Duration(days: value));
+      case 'Months':
+        return DateTime(
+          now.year,
+          now.month + value,
+          now.day,
+          now.hour,
+          now.minute,
+          now.second,
+        );
+      default:
+        return null;
+    }
+  }
+
+  Widget _buildTimelineExpirySection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Validity (Optional)',
+          'Timeline Post Expiry',
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _validFromController,
-                readOnly: true,
-                onTap: () => _pickValidityDate(isStart: true),
-                decoration: InputDecoration(
-                  hintText: 'Valid From',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.calendar_today),
-                    onPressed: () => _pickValidityDate(isStart: true),
-                  ),
-                ),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButtonFormField<String>(
+            initialValue: _selectedExpiryUnit,
+            dropdownColor: Colors.white,
+            decoration: const InputDecoration(
+              filled: true,
+              fillColor: Colors.white,
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: _validUntilController,
-                readOnly: true,
-                onTap: () => _pickValidityDate(isStart: false),
-                decoration: InputDecoration(
-                  hintText: 'Valid Until',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.calendar_today),
-                    onPressed: () => _pickValidityDate(isStart: false),
-                  ),
-                ),
-              ),
-            ),
-          ],
+            items: _expiryUnits
+                .map(
+                  (unit) =>
+                      DropdownMenuItem<String>(value: unit, child: Text(unit)),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                _onExpiryUnitChanged(value);
+              }
+            },
+          ),
         ),
+        if (_selectedExpiryUnit != 'No expiry') ...[
+          const SizedBox(height: 10),
+          TextField(
+            controller: _expiryValueController,
+            keyboardType: TextInputType.number,
+            onChanged: (_) {
+              if (_expiryValidationError != null) {
+                setState(() {
+                  _expiryValidationError = null;
+                });
+              }
+            },
+            decoration: InputDecoration(
+              hintText: _selectedExpiryUnit == 'Hours'
+                  ? 'Enter hours (e.g. 24)'
+                  : _selectedExpiryUnit == 'Days'
+                  ? 'Enter days (e.g. 7)'
+                  : 'Enter months (e.g. 1)',
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              errorText: _expiryValidationError,
+            ),
+          ),
+        ],
       ],
     );
-  }
-
-  Future<void> _pickNeedByDate() async {
-    final now = DateTime.now();
-    final initial = _needByDate ?? now;
-
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 5),
-    );
-
-    if (picked == null) return;
-
-    setState(() {
-      _needByDate = picked;
-      _needByController.text = _formatDateOnly(picked);
-      _needByValidationError = null;
-    });
   }
 
   Widget _buildNeedByField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
-          children: [
-            Text(
-              'Need Service By',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
-              ),
-            ),
-          ],
+        const Text(
+          'Need Service By (Optional)',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
         TextField(
@@ -1298,6 +1308,26 @@ class _AddPostScreenState extends State<AddPostScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _pickNeedByDate() async {
+    final now = DateTime.now();
+    final initial = _needByDate ?? now;
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year + 5),
+    );
+
+    if (picked == null) return;
+
+    setState(() {
+      _needByDate = picked;
+      _needByController.text = _formatDateOnly(picked);
+      _needByValidationError = null;
+    });
   }
 
   Widget _buildBarterStatusField() {
@@ -1710,9 +1740,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
           _buildLocationField(),
         ],
 
-        if (_postType == 'Service' && _selectedOption == 1) ...[
+        if (_selectedOption == 1) ...[
           const SizedBox(height: 24),
-          _buildValidityFields(),
+          _buildTimelineExpirySection(),
         ],
 
         const SizedBox(height: 24),
@@ -1856,7 +1886,12 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
         const SizedBox(height: 24),
 
-        // Need by date (required)
+        // Timeline expiry
+        _buildTimelineExpirySection(),
+
+        const SizedBox(height: 24),
+
+        // Need by date (optional)
         _buildNeedByField(),
       ],
     );
@@ -1878,6 +1913,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
       _locationValidationError = null;
       _needByValidationError = null;
       _priceValidationError = null;
+      _expiryValidationError = null;
     });
 
     // Validate required fields
@@ -1945,21 +1981,15 @@ class _AddPostScreenState extends State<AddPostScreen> {
       return;
     }
 
-    if (_selectedOption == 2 && _needByDate == null) {
-      setState(() {
-        _needByValidationError = 'Need by date is required';
-      });
-      _showError('Please select by when you need the service');
-      return;
-    }
-
-    if (_postType == 'Service' &&
-        _selectedOption == 1 &&
-        _validFromDate != null &&
-        _validUntilDate != null &&
-        !_validUntilDate!.isAfter(_validFromDate!)) {
-      _showError('Valid Until must be later than Valid From');
-      return;
+    if (_selectedExpiryUnit != 'No expiry') {
+      final expiryValue = int.tryParse(_expiryValueController.text.trim());
+      if (expiryValue == null || expiryValue <= 0) {
+        setState(() {
+          _expiryValidationError = 'Enter a valid expiry value';
+        });
+        _showError('Please enter a valid expiry value');
+        return;
+      }
     }
 
     // Price validation
@@ -2044,6 +2074,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
       double price = _selectedOption == 1
           ? double.parse(_priceController.text)
           : double.parse(_willPayAmountController.text);
+      final expiryDate = _computeExpiryDate();
+      final validFromIso = DateTime.now().toUtc().toIso8601String();
+      final validUntilIso = expiryDate?.toUtc().toIso8601String();
 
       if (_selectedOption == 1) {
         // Create product/service post
@@ -2059,6 +2092,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
             barterStatus: _barterAllowed ? 'OPEN_FOR_BARTER' : 'NO_BARTER',
             canClubItems: _canBeClubbed,
             price: price,
+            validFrom: validUntilIso == null ? null : validFromIso,
+            validUntil: validUntilIso,
           );
 
           debugPrint(
@@ -2079,12 +2114,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
             images: imageUrls,
             barterStatus: _barterAllowed ? 'OPEN_FOR_BARTER' : 'NO_BARTER',
             status: 'PROVIDE_SERVICE',
-            validFrom: _validFromController.text.trim().isEmpty
-                ? null
-                : _validFromController.text.trim(),
-            validUntil: _validUntilController.text.trim().isEmpty
-                ? null
-                : _validUntilController.text.trim(),
+            validFrom: validUntilIso == null ? null : validFromIso,
+            validUntil: validUntilIso,
           );
 
           final data = response['data'];
@@ -2128,9 +2159,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
           latitude: _selectedLatitude,
           longitude: _selectedLongitude,
           barterStatus: _barterAllowed ? 'OPEN_FOR_BARTER' : 'NO_BARTER',
-          validUntil: _needByController.text.trim().isEmpty
-              ? null
-              : _needByController.text.trim(),
+          validUntil: validUntilIso,
           status: 'LOOKING_FOR_SERVICE',
           price: price,
         );

@@ -54,7 +54,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_title),
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
         elevation: 0,
         actions: [
@@ -64,7 +64,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
           ),
         ],
       ),
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null

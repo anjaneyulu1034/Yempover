@@ -54,7 +54,7 @@ class _NotificationPreferencesScreenState
         title: const Text('Notification Preferences'),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
         actions: [
           TextButton(

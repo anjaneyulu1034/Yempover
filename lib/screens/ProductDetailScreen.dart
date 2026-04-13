@@ -209,7 +209,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
         actions: [
           if (!_post.isSold)

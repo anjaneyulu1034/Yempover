@@ -432,9 +432,9 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     debugPrint('🟡 OTPVerificationScreen: build() called');
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),

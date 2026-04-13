@@ -72,7 +72,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
     debugPrint('🔵 PrivacyPolicyScreen: build() called');
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: AppConstants.primaryColor,
         elevation: 0,
@@ -98,7 +98,10 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: Colors.white.withValues(alpha: 0.2), height: 1),
+          child: Container(
+            color: Colors.white.withValues(alpha: 0.2),
+            height: 1,
+          ),
         ),
       ),
       body: _isLoading

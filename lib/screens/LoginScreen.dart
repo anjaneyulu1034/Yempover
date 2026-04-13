@@ -189,7 +189,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final keyboardSpace = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {

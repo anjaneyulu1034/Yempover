@@ -79,7 +79,7 @@ class _OtherUserProfileScreenState extends State<OtherUserProfileScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
         actions: [
           PopupMenuButton<String>(
@@ -103,7 +103,7 @@ class _OtherUserProfileScreenState extends State<OtherUserProfileScreen> {
           ),
         ],
       ),
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(

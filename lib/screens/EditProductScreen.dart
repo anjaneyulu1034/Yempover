@@ -422,7 +422,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
         actions: [
           TextButton(

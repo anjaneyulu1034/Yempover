@@ -99,7 +99,7 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
         actions: [
           if (_totalTrades > 0)
@@ -114,7 +114,7 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
             ),
         ],
       ),
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null

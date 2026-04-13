@@ -443,7 +443,7 @@ class _AppointmentsDashboardScreenState
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black87,
         title: const Text(
           'Appointments',

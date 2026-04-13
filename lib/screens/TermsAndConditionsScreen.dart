@@ -6,7 +6,8 @@ class TermsAndConditionsScreen extends StatefulWidget {
   const TermsAndConditionsScreen({super.key});
 
   @override
-  State<TermsAndConditionsScreen> createState() => _TermsAndConditionsScreenState();
+  State<TermsAndConditionsScreen> createState() =>
+      _TermsAndConditionsScreenState();
 }
 
 class _TermsAndConditionsScreenState extends State<TermsAndConditionsScreen> {
@@ -24,7 +25,7 @@ class _TermsAndConditionsScreenState extends State<TermsAndConditionsScreen> {
 
   Future<void> _loadTermsAndConditions() async {
     debugPrint('🔄 TermsAndConditionsScreen: Loading terms and conditions...');
-    
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -32,9 +33,9 @@ class _TermsAndConditionsScreenState extends State<TermsAndConditionsScreen> {
 
     try {
       final response = await _contentService.getTermsAndConditions();
-      
+
       debugPrint('📨 TermsAndConditionsScreen: API Response received');
-      
+
       if (response.data != null) {
         setState(() {
           _content = response.data?.content ?? 'No content available';
@@ -60,9 +61,9 @@ class _TermsAndConditionsScreenState extends State<TermsAndConditionsScreen> {
   @override
   Widget build(BuildContext context) {
     debugPrint('🔵 TermsAndConditionsScreen: build() called');
-    
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: AppConstants.primaryColor,
         elevation: 0,
@@ -90,8 +91,8 @@ class _TermsAndConditionsScreenState extends State<TermsAndConditionsScreen> {
       body: _isLoading
           ? _buildLoadingState()
           : _errorMessage != null
-              ? _buildErrorState()
-              : _buildContent(),
+          ? _buildErrorState()
+          : _buildContent(),
     );
   }
 
@@ -100,16 +101,11 @@ class _TermsAndConditionsScreenState extends State<TermsAndConditionsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(
-            color: AppConstants.primaryColor,
-          ),
+          CircularProgressIndicator(color: AppConstants.primaryColor),
           const SizedBox(height: 16),
           Text(
             'Loading Terms & Conditions...',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 16,
-            ),
+            style: TextStyle(color: Colors.grey[600], fontSize: 16),
           ),
         ],
       ),
@@ -123,11 +119,7 @@ class _TermsAndConditionsScreenState extends State<TermsAndConditionsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red[300],
-            ),
+            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
             const SizedBox(height: 16),
             Text(
               'Unable to load content',
@@ -141,10 +133,7 @@ class _TermsAndConditionsScreenState extends State<TermsAndConditionsScreen> {
             Text(
               _errorMessage ?? 'An unknown error occurred',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
@@ -161,10 +150,7 @@ class _TermsAndConditionsScreenState extends State<TermsAndConditionsScreen> {
               ),
               child: const Text(
                 'Try Again',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.white,
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.white),
               ),
             ),
           ],
@@ -207,9 +193,9 @@ class _TermsAndConditionsScreenState extends State<TermsAndConditionsScreen> {
               ],
             ),
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Content
           Container(
             width: double.infinity,
@@ -228,9 +214,9 @@ class _TermsAndConditionsScreenState extends State<TermsAndConditionsScreen> {
               ),
             ),
           ),
-          
+
           const SizedBox(height: 20),
-          
+
           // Footer note
           Container(
             padding: const EdgeInsets.all(12),
@@ -240,19 +226,12 @@ class _TermsAndConditionsScreenState extends State<TermsAndConditionsScreen> {
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.access_time,
-                  size: 16,
-                  color: Colors.grey[600],
-                ),
+                Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Last updated: ${_getLastUpdatedDate()}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                 ),
               ],

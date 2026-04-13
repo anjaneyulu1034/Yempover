@@ -161,7 +161,7 @@ class _SignupScreenState extends State<SignupScreen> {
     debugPrint('🔵 SignupScreen: build() called');
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(

@@ -195,10 +195,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
       ),
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       body: !_isLoggedIn
           ? Center(
               child: Column(

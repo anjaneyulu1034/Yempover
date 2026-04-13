@@ -230,7 +230,7 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
         backgroundColor: Colors.grey[50],
         appBar: AppBar(
           elevation: 0,
-          backgroundColor: Colors.white,
+          backgroundColor: Colors.transparent,
           foregroundColor: Colors.black87,
           title: const Text(
             'Set Availability',
@@ -608,7 +608,7 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black87,
         title: const Text(
           'Service Published',

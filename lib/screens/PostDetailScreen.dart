@@ -855,7 +855,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   ) {
                     return Chip(
                       label: Text(barterCategory.category.name),
-                      backgroundColor: Colors.white,
+                      backgroundColor: Colors.white.withValues(alpha: 0.25),
                       side: BorderSide(color: Colors.orange.shade200),
                     );
                   }).toList(),
@@ -1107,9 +1107,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),

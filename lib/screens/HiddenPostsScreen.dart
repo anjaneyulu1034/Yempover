@@ -102,7 +102,7 @@ class _HiddenPostsScreenState extends State<HiddenPostsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Hidden Posts'),
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
         elevation: 0,
       ),

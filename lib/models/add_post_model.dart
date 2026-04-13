@@ -10,6 +10,8 @@ class CreateProductRequest {
   final String barterStatus;
   final bool canClubItems;
   final double price;
+  final String? validFrom;
+  final String? validUntil;
 
   CreateProductRequest({
     required this.title,
@@ -22,6 +24,8 @@ class CreateProductRequest {
     required this.barterStatus,
     this.canClubItems = true,
     required this.price,
+    this.validFrom,
+    this.validUntil,
   });
 
   Map<String, dynamic> toJson() {
@@ -36,6 +40,9 @@ class CreateProductRequest {
       'barterStatus': barterStatus,
       'canClubItems': canClubItems,
       'price': price,
+      if (validFrom != null && validFrom!.isNotEmpty) 'validFrom': validFrom,
+      if (validUntil != null && validUntil!.isNotEmpty)
+        'validUntil': validUntil,
     };
   }
 }

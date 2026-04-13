@@ -109,11 +109,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
-        actions: const [],
+        // actions: [
+        //   IconButton(
+        //     tooltip: 'Preferences',
+        //     onPressed: () => _navigateToPreferences(context),
+        //     icon: const Icon(Icons.tune_rounded),
+        //   ),
+        //   Consumer<NotificationProvider>(
+        //     builder: (context, provider, _) {
+        //       return IconButton(
+        //         tooltip: 'Clear all',
+        //         onPressed: provider.notifications.isEmpty
+        //             ? null
+        //             : () => _clearAllNotifications(context),
+        //         icon: const Icon(Icons.delete_sweep_rounded),
+        //       );
+        //     },
+        //   ),
+        // ],
       ),
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       body: Consumer<NotificationProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading && provider.notifications.isEmpty) {
@@ -185,57 +202,96 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final totalCount = provider.totalCount;
 
     return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.grey.shade50,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      margin: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withValues(alpha: 0.24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.48)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Text(
-                '$unreadCount',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                ),
+              _statCard(
+                value: '$unreadCount',
+                label: 'Unread',
+                accent: const Color(0xFF1A73E8),
               ),
-              const Text(
-                'Unread',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+              const SizedBox(width: 10),
+              _statCard(
+                value: '$totalCount',
+                label: 'Total',
+                accent: const Color(0xFF2C3E50),
               ),
             ],
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '$totalCount',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+          if (provider.notifications.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _markAllAsRead(context),
+                icon: const Icon(Icons.done_all, size: 18),
+                label: const Text('Mark all as read'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(
+                    0xFF1A73E8,
+                  ).withValues(alpha: 0.9),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-              ),
-              const Text(
-                'Total',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
-          ),
-          if (provider.notifications.isNotEmpty)
-            ElevatedButton.icon(
-              onPressed: () => _markAllAsRead(context),
-              icon: const Icon(Icons.done_all, size: 16),
-              label: const Text('Mark all read'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue.shade50,
-                foregroundColor: Colors.blue,
-                elevation: 0,
               ),
             ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _statCard({
+    required String value,
+    required String label,
+    required Color accent,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: Colors.white.withValues(alpha: 0.30),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.5)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: accent,
+              ),
+            ),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black.withValues(alpha: 0.55),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
