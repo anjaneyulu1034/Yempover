@@ -2534,6 +2534,7 @@
 //   }
 // }
 
+import 'dart:async';
 import 'dart:math';
 import 'package:Yempover_app/utils/notification_provider.dart';
 import 'package:flutter/material.dart';
@@ -2593,6 +2594,9 @@ class ExtendedPost {
   String get id => post.id;
   double? get latitude => post.latitude;
   double? get longitude => post.longitude;
+  DateTime? get validUntil => post.validUntil;
+  String? get remainingTime => post.remainingTime;
+  bool get hasExpired => post.hasExpired;
 
   String get postTypeText {
     switch (post.status) {
@@ -2637,6 +2641,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final ScrollController _scrollController = ScrollController();
   final Map<String, Location?> _postLocationCache = {};
+  Timer? _expiryTicker;
 
   // Data states
   List<ExtendedPost> _posts = [];
@@ -2677,6 +2682,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _startExpiryTicker();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeData();
     });
@@ -2684,9 +2690,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _expiryTicker?.cancel();
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _startExpiryTicker() {
+    _expiryTicker?.cancel();
+    _expiryTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {
+        // Rebuild to refresh countdown labels.
+      });
+    });
   }
 
   Future<void> _initializeData() async {
@@ -3803,6 +3820,84 @@ class _HomeScreenState extends State<HomeScreen> {
     return post.formattedPrice;
   }
 
+  String _getTimelineLabel(ExtendedPost post) {
+    final validUntil = post.validUntil;
+    if (validUntil == null) {
+      return 'No expiry';
+    }
+
+    final now = DateTime.now();
+    if (!validUntil.isAfter(now)) {
+      return 'Expired';
+    }
+
+    final difference = validUntil.difference(now);
+
+    final totalMinutes = difference.inMinutes;
+    final hours = totalMinutes ~/ 60;
+    final minutes = totalMinutes % 60;
+    final seconds = difference.inSeconds % 60;
+    final days = difference.inDays;
+
+    if (hours < 24) {
+      return 'Expires in ${hours}h:${minutes.toString().padLeft(2, '0')}m:${seconds.toString().padLeft(2, '0')}s';
+    }
+    if (days < 30) {
+      final dayHours = difference.inHours % 24;
+      return dayHours > 0
+          ? 'Expires in ${days}d ${dayHours}h'
+          : 'Expires in ${days}d';
+    }
+
+    final months = (days / 30).floor();
+    final remDays = days % 30;
+    return remDays > 0
+        ? 'Expires in ${months}mo ${remDays}d'
+        : 'Expires in ${months}mo';
+  }
+
+  Color _getTimelineChipBgColor(ExtendedPost post) {
+    final validUntil = post.validUntil;
+    if (validUntil == null) {
+      return Colors.blueGrey.shade50;
+    }
+
+    final now = DateTime.now();
+    if (!validUntil.isAfter(now)) {
+      return Colors.red.shade50;
+    }
+
+    final difference = validUntil.difference(now);
+    if (difference.inHours < 1) {
+      return Colors.red.shade50;
+    }
+    if (difference.inHours < 24) {
+      return Colors.orange.shade50;
+    }
+    return Colors.green.shade50;
+  }
+
+  Color _getTimelineChipFgColor(ExtendedPost post) {
+    final validUntil = post.validUntil;
+    if (validUntil == null) {
+      return Colors.blueGrey.shade700;
+    }
+
+    final now = DateTime.now();
+    if (!validUntil.isAfter(now)) {
+      return Colors.red.shade700;
+    }
+
+    final difference = validUntil.difference(now);
+    if (difference.inHours < 1) {
+      return Colors.red.shade700;
+    }
+    if (difference.inHours < 24) {
+      return Colors.orange.shade700;
+    }
+    return Colors.green.shade700;
+  }
+
   void _showPleaseLoginMessage() {
     if (!mounted) return;
     SnackbarUtils.showInfo(context, 'Please login to continue');
@@ -4583,6 +4678,35 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ),
                         ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _getTimelineChipBgColor(post),
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.timer_outlined,
+                              size: 14,
+                              color: _getTimelineChipFgColor(post),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _getTimelineLabel(post),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: _getTimelineChipFgColor(post),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),

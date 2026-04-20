@@ -111,6 +111,10 @@ class AddPostService {
         'isClubbable': request.canClubItems,
         'canBeClubbed': request.canClubItems,
         'price': request.price,
+        if (request.validFrom != null && request.validFrom!.isNotEmpty)
+          'validFrom': request.validFrom,
+        if (request.validUntil != null && request.validUntil!.isNotEmpty)
+          'validUntil': request.validUntil,
       };
 
       final url = '${ApiConstants.baseUrl}/me/posts/products';

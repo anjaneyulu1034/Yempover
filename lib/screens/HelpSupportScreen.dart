@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class HelpSupportScreen extends StatefulWidget {
   const HelpSupportScreen({super.key});
@@ -8,6 +9,10 @@ class HelpSupportScreen extends StatefulWidget {
 }
 
 class _HelpSupportScreenState extends State<HelpSupportScreen> {
+  static const String _supportPhoneNumber = '9010931034';
+  static const String _defaultSupportMessage =
+      'Hi YemPower Support, I need help with the app.';
+
   final TextEditingController _subjectController = TextEditingController();
   final TextEditingController _messageController = TextEditingController();
 
@@ -135,7 +140,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                           ),
                         ),
                         child: const Text(
-                          'Submit',
+                          'Chat on WhatsApp',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -275,7 +280,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     _buildContactInfo(
                       Icons.phone,
                       'Phone',
-                      '+1 (555) 123-4567',
+                      '+91 9010931034',
                       Colors.green,
                     ),
                     const SizedBox(height: 12),
@@ -338,61 +343,61 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     );
   }
 
-  void _submitForm() {
-    if (_subjectController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a subject'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
+  Future<void> _submitForm() async {
+    final subject = _subjectController.text.trim();
+    final message = _messageController.text.trim();
+
+    String text = _defaultSupportMessage;
+    if (subject.isNotEmpty || message.isNotEmpty) {
+      text =
+          'Hi YemPower Support, I need help.\n\n'
+          'Subject: ${subject.isEmpty ? 'General Support' : subject}\n'
+          'Message: ${message.isEmpty ? 'Please contact me regarding app support.' : message}';
     }
 
-    if (_messageController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a message'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // Submit form logic here
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            const Text('Submitting your request...'),
-          ],
-        ),
-      ),
+    final encodedText = Uri.encodeComponent(text);
+    final whatsappAppUri = Uri.parse(
+      'whatsapp://send?phone=91$_supportPhoneNumber&text=$encodedText',
+    );
+    final whatsappWebUri = Uri.parse(
+      'https://wa.me/91$_supportPhoneNumber?text=$encodedText',
     );
 
-    // Simulate API call
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+    try {
+      if (await canLaunchUrl(whatsappAppUri)) {
+        await launchUrl(whatsappAppUri, mode: LaunchMode.externalApplication);
+      } else if (await canLaunchUrl(whatsappWebUri)) {
+        await launchUrl(whatsappWebUri, mode: LaunchMode.externalApplication);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to open WhatsApp right now. Please try again.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
 
-      // Clear form
+      if (!mounted) return;
       _subjectController.clear();
       _messageController.clear();
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Your request has been submitted successfully! We\'ll get back to you soon.',
-          ),
+          content: Text('Redirecting to WhatsApp support...'),
           backgroundColor: Colors.green,
-          duration: Duration(seconds: 3),
         ),
       );
-    });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to open WhatsApp. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

@@ -159,6 +159,10 @@ class Post {
   final bool isListed;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? validFrom;
+  final DateTime? validUntil;
+  final String? remainingTime;
+  final bool hasExpired;
   final Category category;
   final User postedBy;
   final BarterDetails? barterDetails;
@@ -186,6 +190,10 @@ class Post {
     required this.isListed,
     required this.createdAt,
     required this.updatedAt,
+    this.validFrom,
+    this.validUntil,
+    this.remainingTime,
+    this.hasExpired = false,
     required this.category,
     required this.postedBy,
     this.barterDetails,
@@ -239,6 +247,13 @@ class Post {
       updatedAt: DateTime.parse(
         json['updatedAt'] ?? DateTime.now().toIso8601String(),
       ),
+      validFrom: _parseOptionalDateTime(json['validFrom']),
+      validUntil: _parseOptionalDateTime(json['validUntil']),
+      remainingTime: _parseRemainingTime(json['remainingTime']),
+      hasExpired: _parseFlexibleBool(json, const [
+        'hasExpired',
+        'isExpired',
+      ], defaultValue: false),
       category: Category.fromJson(json['category'] ?? {}),
       postedBy: User.fromJson(postedByJson),
       barterDetails: json['barterDetails'] != null
@@ -309,6 +324,21 @@ class Post {
     }
 
     return null;
+  }
+
+  static DateTime? _parseOptionalDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String && value.trim().isNotEmpty) {
+      return DateTime.tryParse(value);
+    }
+    return null;
+  }
+
+  static String? _parseRemainingTime(dynamic value) {
+    if (value == null) return null;
+    final parsed = value.toString().trim();
+    return parsed.isEmpty ? null : parsed;
   }
 
   static PostStatus _parsePostStatus(String status) {
