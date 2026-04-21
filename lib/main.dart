@@ -18,7 +18,12 @@ final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // 🔥 Required for background messages
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('Firebase background init skipped: $e');
+    return;
+  }
   debugPrint("📩 Background message received: ${message.messageId}");
 }
 
@@ -26,13 +31,19 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 🔥 STEP 1: Initialize Firebase FIRST
-  await Firebase.initializeApp();
+  var firebaseReady = false;
+  try {
+    await Firebase.initializeApp();
+    firebaseReady = true;
+  } catch (e) {
+    debugPrint('Firebase init failed, continuing without push features: $e');
+  }
 
-  // 🔥 STEP 2: Set background handler
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-  // 🔥 STEP 3: Initialize notification service
-  await NotificationService1().init();
+  // 🔥 STEP 2/3: Configure push features only when Firebase is ready
+  if (firebaseReady) {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    await NotificationService1().init();
+  }
 
   // 🔥 STEP 4: Run app
   runApp(const MyApp());
