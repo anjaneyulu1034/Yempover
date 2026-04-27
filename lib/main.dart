@@ -1,6 +1,5 @@
-import 'package:Yempover_app/services/notification1_service.dart';
+import 'package:YemPover_app/services/notification1_service.dart';
 import 'package:flutter/material.dart';
-import 'dart:ui';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -13,17 +12,27 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
+class _NoAnimationPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _NoAnimationPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return child;
+  }
+}
+
 /// 🔥 Background message handler
 /// MUST be top-level function
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // 🔥 Required for background messages
-  try {
-    await Firebase.initializeApp();
-  } catch (e) {
-    debugPrint('Firebase background init skipped: $e');
-    return;
-  }
+  await Firebase.initializeApp();
   debugPrint("📩 Background message received: ${message.messageId}");
 }
 
@@ -31,18 +40,16 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 🔥 STEP 1: Initialize Firebase FIRST
-  var firebaseReady = false;
-  try {
-    await Firebase.initializeApp();
-    firebaseReady = true;
-  } catch (e) {
-    debugPrint('Firebase init failed, continuing without push features: $e');
-  }
+  await Firebase.initializeApp();
 
-  // 🔥 STEP 2/3: Configure push features only when Firebase is ready
-  if (firebaseReady) {
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  // 🔥 STEP 2: Set background handler
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // 🔥 STEP 3: Initialize notification service
+  try {
     await NotificationService1().init();
+  } catch (e) {
+    debugPrint('Notification init failed (continuing app launch): $e');
   }
 
   // 🔥 STEP 4: Run app
@@ -64,24 +71,34 @@ class MyApp extends StatelessWidget {
       ],
       child: MaterialApp(
         navigatorKey: rootNavigatorKey,
-        title: 'Yempover',
+        title: 'YemPover',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           primaryColor: const Color(0xFF1A73E8),
+          pageTransitionsTheme: const PageTransitionsTheme(
+            builders: {
+              TargetPlatform.android: _NoAnimationPageTransitionsBuilder(),
+              TargetPlatform.iOS: _NoAnimationPageTransitionsBuilder(),
+              TargetPlatform.macOS: _NoAnimationPageTransitionsBuilder(),
+              TargetPlatform.windows: _NoAnimationPageTransitionsBuilder(),
+              TargetPlatform.linux: _NoAnimationPageTransitionsBuilder(),
+              TargetPlatform.fuchsia: _NoAnimationPageTransitionsBuilder(),
+            },
+          ),
           colorScheme: ColorScheme.fromSeed(
             seedColor: const Color(0xFF1A73E8),
             primary: const Color(0xFF1A73E8),
-            surface: Colors.white.withValues(alpha: 0.22),
-            surfaceContainerHigh: Colors.white.withValues(alpha: 0.18),
+            surface: Colors.white,
+            surfaceContainerHigh: Colors.white,
           ),
           fontFamily: 'Roboto',
           useMaterial3: true,
-          scaffoldBackgroundColor: Colors.transparent,
+          scaffoldBackgroundColor: Colors.white,
           appBarTheme: const AppBarTheme(
             elevation: 0,
             centerTitle: true,
-            backgroundColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.white,
             foregroundColor: Colors.black,
             titleTextStyle: TextStyle(
               color: Colors.black,
@@ -194,63 +211,10 @@ class MyApp extends StatelessWidget {
           ),
         ),
         builder: (context, child) {
-          return _AppGlassBackground(child: child ?? const SizedBox.shrink());
+          return child ?? const SizedBox.shrink();
         },
         home: const SplashScreen(),
       ),
-    );
-  }
-}
-
-class _AppGlassBackground extends StatelessWidget {
-  const _AppGlassBackground({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFFE6F0FF), Color(0xFFDDF6F2), Color(0xFFF7ECFF)],
-            ),
-          ),
-        ),
-        Positioned(
-          top: -80,
-          left: -60,
-          child: _glassOrb(
-            size: 220,
-            color: const Color(0xFF5AA9FF).withValues(alpha: 0.25),
-          ),
-        ),
-        Positioned(
-          bottom: -90,
-          right: -70,
-          child: _glassOrb(
-            size: 260,
-            color: const Color(0xFF4AD2B8).withValues(alpha: 0.22),
-          ),
-        ),
-        BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Container(color: Colors.white.withValues(alpha: 0.08)),
-        ),
-        child,
-      ],
-    );
-  }
-
-  static Widget _glassOrb({required double size, required Color color}) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
     );
   }
 }

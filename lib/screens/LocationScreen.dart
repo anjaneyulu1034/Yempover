@@ -1,6 +1,6 @@
 // lib/screens/LocationScreen.dart
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/screens/LoginScreen.dart';
+import 'package:YemPover_app/screens/LoginScreen.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -206,7 +206,7 @@ class _LocationScreenState extends State<LocationScreen> {
         return AlertDialog(
           title: const Text('Location Permission Required'),
           content: const Text(
-            'Yempover needs access to your location to show nearby items and set your current location. '
+            'YemPover needs access to your location to show nearby items and set your current location. '
             'Please grant location permission in settings.',
           ),
           actions: <Widget>[
@@ -686,9 +686,9 @@ class _LocationScreenState extends State<LocationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87),

@@ -33,14 +33,14 @@ class TradeDetailScreen extends StatelessWidget {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -48,7 +48,7 @@ class TradeDetailScreen extends StatelessWidget {
           children: [
             // Trade Type and Date
             Card(
-              elevation: 2,
+              elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -131,7 +131,7 @@ class TradeDetailScreen extends StatelessWidget {
 
             // User Profile and Items
             Card(
-              elevation: 2,
+              elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -188,7 +188,7 @@ class TradeDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Card(
-                    elevation: 2,
+                    elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -238,7 +238,7 @@ class TradeDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Card(
-                    elevation: 2,
+                    elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -272,7 +272,7 @@ class TradeDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Card(
-                    elevation: 2,
+                    elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -308,7 +308,7 @@ class TradeDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Card(
-                    elevation: 2,
+                    elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),

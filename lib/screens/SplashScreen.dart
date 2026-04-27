@@ -1,6 +1,6 @@
 // // ignore: file_names
 // import 'package:flutter/material.dart';
-// import 'package:Yempover_app/screens/OnboardingScreen.dart';
+// import 'package:YemPover_app/screens/OnboardingScreen.dart';
 
 // class SplashScreen extends StatefulWidget {
 //   const SplashScreen({super.key});
@@ -57,7 +57,7 @@
 //             const Column(
 //               children: [
 //                 Text(
-//                   'Yempover',
+//                   'YemPover',
 //                   style: TextStyle(
 //                     fontSize: 36,
 //                     fontWeight: FontWeight.bold,
@@ -91,12 +91,12 @@
 
 // screens/SplashScreen.dart
 
-import 'package:Yempover_app/screens/LoginScreen.dart';
-import 'package:Yempover_app/services/shared_prefs_service.dart';
+import 'package:YemPover_app/screens/LoginScreen.dart';
+import 'package:YemPover_app/services/shared_prefs_service.dart';
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/screens/OnboardingScreen.dart';
-import 'package:Yempover_app/screens/Home_screen.dart';
-import 'package:Yempover_app/services/token_service.dart';
+import 'package:YemPover_app/screens/OnboardingScreen.dart';
+import 'package:YemPover_app/screens/Home_screen.dart';
+import 'package:YemPover_app/services/token_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -164,7 +164,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -197,7 +197,7 @@ class _SplashScreenState extends State<SplashScreen> {
             const Column(
               children: [
                 Text(
-                  'Yempover',
+                  'YemPover',
                   style: TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,

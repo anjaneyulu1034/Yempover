@@ -1,11 +1,10 @@
-import 'package:Yempover_app/models/favorites_response.dart';
+import 'package:YemPover_app/models/favorites_response.dart';
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/models/ProductPostmain.dart';
-import 'package:Yempover_app/services/post_action_service.dart';
-import 'package:Yempover_app/screens/PostDetailScreen.dart';
-import 'package:Yempover_app/screens/Home_screen.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
-import 'package:Yempover_app/utils/loading_widget.dart';
+import 'package:YemPover_app/models/ProductPostmain.dart';
+import 'package:YemPover_app/services/post_action_service.dart';
+import 'package:YemPover_app/screens/PostDetailScreen.dart';
+import 'package:YemPover_app/screens/Home_screen.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -228,8 +227,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FF),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
@@ -242,22 +242,19 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             fontSize: 20,
           ),
         ),
-        actions: [
-          if (_favorites.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.refresh, color: Colors.black),
-              onPressed: _refreshFavorites,
-            ),
-        ],
       ),
       body: _isLoading
-          ? const LoadingWidget()
+          ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null
           ? _buildErrorWidget()
           : _favorites.isEmpty
           ? _buildEmptyWidget()
           : RefreshIndicator(
               onRefresh: _refreshFavorites,
+              color: const Color(0xFF2E5BFF),
+              backgroundColor: Colors.white,
+              elevation: 0,
+              strokeWidth: 2.2,
               child: ListView.builder(
                 controller: _scrollController,
                 padding: const EdgeInsets.all(16),
@@ -361,17 +358,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   Widget _buildLoadingMoreIndicator() {
     if (!_isLoadingMore) {
-      if (!_hasMore && _favorites.isNotEmpty) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          child: Center(
-            child: Text(
-              'No more favorites',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-          ),
-        );
-      }
       return const SizedBox();
     }
 

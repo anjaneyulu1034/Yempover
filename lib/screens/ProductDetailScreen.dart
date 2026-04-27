@@ -1,8 +1,8 @@
-import 'package:Yempover_app/screens/EditProductScreen.dart';
+import 'package:YemPover_app/screens/EditProductScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:Yempover_app/services/my_posts2_service.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/services/my_posts2_service.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 import '../models/my_post_model.dart';
 
 class PostDetailScreen1 extends StatefulWidget {
@@ -209,7 +209,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         actions: [
           if (!_post.isSold)
@@ -229,6 +229,10 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _refreshPost,
+              color: const Color(0xFF2E5BFF),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              strokeWidth: 2.2,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: Column(

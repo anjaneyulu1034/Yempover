@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/models/ProductPost.dart';
-import 'package:Yempover_app/utils/image_picker_utils.dart';
+import 'package:YemPover_app/models/ProductPost.dart';
+import 'package:YemPover_app/utils/image_picker_utils.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final Function(UserItem) onPostCreated;

@@ -1,5 +1,5 @@
 // import 'package:flutter/material.dart';
-// import 'package:Yempover_app/screens/SignupScreen.dart';
+// import 'package:YemPover_app/screens/SignupScreen.dart';
 
 // class OnboardingScreen extends StatefulWidget {
 //   const OnboardingScreen({super.key});
@@ -14,7 +14,7 @@
 
 //   final List<OnboardingPage> _pages = [
 //     OnboardingPage(
-//       title: 'Welcome to\nYempover Barter System!',
+//       title: 'Welcome to\nYemPover Barter System!',
 //       description:
 //           'Trade and exchange battery systems efficiently with our innovative platform.',
 //       icon: Icons.battery_charging_full,
@@ -204,8 +204,8 @@
 // screens/OnboardingScreen.dart
 
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/screens/LoginScreen.dart';
-import 'package:Yempover_app/services/shared_prefs_service.dart';
+import 'package:YemPover_app/screens/LoginScreen.dart';
+import 'package:YemPover_app/services/shared_prefs_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -220,7 +220,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   final List<OnboardingPage> _pages = [
     OnboardingPage(
-      title: 'Welcome to\nYempover Barter System!',
+      title: 'Welcome to\nYemPover Barter System!',
       description:
           'Trade and exchange items efficiently with our innovative platform.',
       icon: Icons.swap_horiz,
@@ -252,9 +252,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         actions: [
           TextButton(

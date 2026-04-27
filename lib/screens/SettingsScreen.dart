@@ -213,10 +213,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
       ),
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           20,

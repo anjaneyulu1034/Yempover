@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/constants/api_constants.dart';
-import 'package:Yempover_app/models/auth_models.dart';
-import 'package:Yempover_app/services/api_service.dart';
-import 'package:Yempover_app/utils/error_message_utils.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:YemPover_app/models/auth_models.dart';
+import 'package:YemPover_app/services/api_service.dart';
+import 'package:YemPover_app/utils/error_message_utils.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 
 class AuthService extends ChangeNotifier {
   final ApiService _apiService = ApiService();

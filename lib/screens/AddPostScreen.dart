@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:Yempover_app/models/my_post_model.dart';
+import 'package:YemPover_app/models/my_post_model.dart';
 import 'dart:io';
-import 'package:Yempover_app/services/category_service.dart';
-import 'package:Yempover_app/services/add_post_service.dart';
-import 'package:Yempover_app/models/add_post_model.dart';
-import 'package:Yempover_app/screens/service/ServiceAvailabilityScreen.dart';
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/services/location_service.dart';
-import 'package:Yempover_app/services/service_booking_service.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/services/category_service.dart';
+import 'package:YemPover_app/services/add_post_service.dart';
+import 'package:YemPover_app/models/add_post_model.dart';
+import 'package:YemPover_app/screens/service/ServiceAvailabilityScreen.dart';
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/services/location_service.dart';
+import 'package:YemPover_app/services/service_booking_service.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
 
@@ -54,7 +54,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
   final TextEditingController _expiryValueController = TextEditingController(
     text: '',
   );
-  final TextEditingController _needByController = TextEditingController();
 
   // Category data - Two level selection
   List<Map<String, dynamic>> _mainCategories = [];
@@ -77,7 +76,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
   String? _subCategoryValidationError;
   String? _descriptionValidationError;
   String? _locationValidationError;
-  String? _needByValidationError;
   String? _priceValidationError;
   String? _expiryValidationError;
 
@@ -85,7 +83,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
   bool _isGettingLocation = false;
   double? _selectedLatitude;
   double? _selectedLongitude;
-  DateTime? _needByDate;
   String _selectedExpiryUnit = 'Days';
 
   // Manual location search
@@ -109,7 +106,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
     _priceController.dispose();
     _willPayAmountController.dispose();
     _expiryValueController.dispose();
-    _needByController.dispose();
     _locationFocusNode.dispose();
     _addPostService.dispose();
     super.dispose();
@@ -589,19 +585,15 @@ class _AddPostScreenState extends State<AddPostScreen> {
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 8),
                   if (_postType == 'Product' && _selectedOption == 1)
+                    const SizedBox(height: 8),
+                  if (_postType == 'Product' &&
+                      _selectedOption == 1 &&
+                      _showImageValidationError &&
+                      _selectedImages.isEmpty)
                     Text(
-                      _showImageValidationError && _selectedImages.isEmpty
-                          ? '*At least $_minRequiredProductImages image required'
-                          : 'Add more images (optional)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color:
-                            _showImageValidationError && _selectedImages.isEmpty
-                            ? Colors.red
-                            : Colors.grey,
-                      ),
+                      '*At least $_minRequiredProductImages image required',
+                      style: const TextStyle(fontSize: 11, color: Colors.red),
                       textAlign: TextAlign.center,
                     ),
                 ],
@@ -980,6 +972,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
             focusNode: _locationFocusNode,
             googleAPIKey: _googleApiKey,
             debounceTime: 400,
+            isCrossBtnShown: false,
             countries: const ['us', 'in', 'ca', 'gb', 'au'],
             isLatLngRequired: true,
             inputDecoration: InputDecoration(
@@ -1026,7 +1019,46 @@ class _AddPostScreenState extends State<AddPostScreen> {
               });
               _locationFocusNode.unfocus();
             },
-            seperatedBuilder: const Divider(height: 1),
+            itemBuilder: (context, index, prediction) {
+              return Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.grey.shade300, width: 1),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: Icon(
+                        Icons.location_on_outlined,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        prediction.description ?? '',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.black87,
+                          fontSize: 16,
+                          height: 1.25,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+            seperatedBuilder: const Divider(height: 1, thickness: 1),
             containerHorizontalPadding: 0,
           ),
         ),
@@ -1047,13 +1079,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
     );
   }
 
-  String _formatDateOnly(DateTime date) {
-    final year = date.year.toString().padLeft(4, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '$year-$month-$day';
-  }
-
   void _onOptionSelected(int option) {
     setState(() {
       _selectedOption = option;
@@ -1070,17 +1095,11 @@ class _AddPostScreenState extends State<AddPostScreen> {
       _selectedSubCategoryId = null;
       _subCategories = [];
 
-      if (option != 2) {
-        _needByDate = null;
-        _needByController.clear();
-      }
-
       _titleValidationError = null;
       _mainCategoryValidationError = null;
       _subCategoryValidationError = null;
       _descriptionValidationError = null;
       _locationValidationError = null;
-      _needByValidationError = null;
       _priceValidationError = null;
       _expiryValidationError = null;
     });
@@ -1097,11 +1116,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
       _selectedMainCategoryId = null;
       _selectedSubCategoryId = null;
       _subCategories = [];
-
-      if (type != 'Service') {
-        _needByDate = null;
-        _needByController.clear();
-      }
 
       _mainCategoryValidationError = null;
       _subCategoryValidationError = null;
@@ -1171,17 +1185,28 @@ class _AddPostScreenState extends State<AddPostScreen> {
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: Colors.grey.shade300),
+            border: Border.all(color: Colors.grey.shade400, width: 1.2),
             borderRadius: BorderRadius.circular(8),
           ),
           child: DropdownButtonFormField<String>(
             initialValue: _selectedExpiryUnit,
             dropdownColor: Colors.white,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               filled: true,
               fillColor: Colors.white,
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 12,
               ),
@@ -1222,37 +1247,21 @@ class _AddPostScreenState extends State<AddPostScreen> {
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                  color: Color(0xFF2E5BFF),
+                  width: 1.5,
+                ),
+              ),
               errorText: _expiryValidationError,
             ),
           ),
         ],
-      ],
-    );
-  }
-
-  Widget _buildNeedByField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Need Service By (Optional)',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _needByController,
-          readOnly: true,
-          onTap: _pickNeedByDate,
-          decoration: InputDecoration(
-            hintText: 'Select required by date',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            errorText: _needByValidationError,
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.calendar_today),
-              onPressed: _pickNeedByDate,
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -1298,6 +1307,17 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 : 'Enter amount you are willing to pay',
             prefixText: '\$ ',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFF2E5BFF),
+                width: 1.5,
+              ),
+            ),
             errorText: _priceValidationError,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -1308,26 +1328,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
         ),
       ],
     );
-  }
-
-  Future<void> _pickNeedByDate() async {
-    final now = DateTime.now();
-    final initial = _needByDate ?? now;
-
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 5),
-    );
-
-    if (picked == null) return;
-
-    setState(() {
-      _needByDate = picked;
-      _needByController.text = _formatDateOnly(picked);
-      _needByValidationError = null;
-    });
   }
 
   Widget _buildBarterStatusField() {
@@ -1411,7 +1411,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Scaffold(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         resizeToAvoidBottomInset: true,
         body: Container(
           decoration: const BoxDecoration(
@@ -1507,12 +1507,21 @@ class _AddPostScreenState extends State<AddPostScreen> {
                         child: OutlinedButton(
                           onPressed: () => Navigator.pop(context),
                           style: OutlinedButton.styleFrom(
+                            backgroundColor: const Color(0xFFEFF4FF),
+                            foregroundColor: const Color(0xFF1F3D7A),
+                            side: const BorderSide(
+                              color: Color(0xFF9AB4FF),
+                              width: 1.4,
+                            ),
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: const Text('Cancel'),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -1554,13 +1563,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
   Widget _buildOptionCard(int option, String description) {
     return Card(
-      elevation: 2,
+      color: Colors.white,
+      surfaceTintColor: Colors.white,
+      elevation: 0,
+      margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
           color: _selectedOption == option
               ? const Color(0xFF2E5BFF)
-              : Colors.transparent,
+              : Colors.grey.shade300,
           width: 2,
         ),
       ),
@@ -1672,6 +1684,17 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 ? 'Enter product title'
                 : 'Enter service title',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFF2E5BFF),
+                width: 1.5,
+              ),
+            ),
             errorText: _titleValidationError,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -1720,6 +1743,17 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 ? 'Describe your product'
                 : 'Describe your service',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFF2E5BFF),
+                width: 1.5,
+              ),
+            ),
             errorText: _descriptionValidationError,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -1810,6 +1844,17 @@ class _AddPostScreenState extends State<AddPostScreen> {
           decoration: InputDecoration(
             hintText: 'What are you looking for?',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFF2E5BFF),
+                width: 1.5,
+              ),
+            ),
             errorText: _titleValidationError,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -1856,6 +1901,17 @@ class _AddPostScreenState extends State<AddPostScreen> {
           decoration: InputDecoration(
             hintText: 'Describe what you are looking for',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFF2E5BFF),
+                width: 1.5,
+              ),
+            ),
             errorText: _descriptionValidationError,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -1888,11 +1944,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
         // Timeline expiry
         _buildTimelineExpirySection(),
-
-        const SizedBox(height: 24),
-
-        // Need by date (optional)
-        _buildNeedByField(),
       ],
     );
   }
@@ -1911,7 +1962,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
       _subCategoryValidationError = null;
       _descriptionValidationError = null;
       _locationValidationError = null;
-      _needByValidationError = null;
       _priceValidationError = null;
       _expiryValidationError = null;
     });
@@ -1969,7 +2019,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
     }
 
     if (_selectedImages.length > _maxAllowedImages) {
-      _showError('Maximum $_maxAllowedImages photos are allowed');
+      _showErrorSnackBar('Maximum $_maxAllowedImages photos are allowed');
       return;
     }
 
@@ -2039,6 +2089,21 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
+    final normalized = message.toLowerCase();
+    if (normalized.contains('maximum') && normalized.contains('photos')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red.shade700,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+      return;
+    }
+
     SnackbarUtils.showError(context, message);
   }
 

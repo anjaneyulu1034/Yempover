@@ -2,9 +2,9 @@
 // import 'dart:convert';
 // import 'package:flutter/material.dart';
 // import 'package:http/http.dart' as http;
-// import 'package:Yempover_app/constants/api_constants.dart';
-// import 'package:Yempover_app/models/category_model.dart';
-// import 'package:Yempover_app/services/token_service.dart';
+// import 'package:YemPover_app/constants/api_constants.dart';
+// import 'package:YemPover_app/models/category_model.dart';
+// import 'package:YemPover_app/services/token_service.dart';
 
 // class CategoryService {
 //   static final CategoryService _instance = CategoryService._internal();
@@ -88,9 +88,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:Yempover_app/constants/api_constants.dart';
-import 'package:Yempover_app/models/category_model.dart';
-import 'package:Yempover_app/services/token_service.dart';
+import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:YemPover_app/models/category_model.dart';
+import 'package:YemPover_app/services/token_service.dart';
 
 class CategoryService {
   static final CategoryService _instance = CategoryService._internal();

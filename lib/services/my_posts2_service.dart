@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:Yempover_app/constants/api_constants.dart';
-import 'package:Yempover_app/models/api_response.dart';
-import 'package:Yempover_app/models/my_post_model.dart';
-import 'package:Yempover_app/services/token_service.dart';
+import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:YemPover_app/models/api_response.dart';
+import 'package:YemPover_app/models/my_post_model.dart';
+import 'package:YemPover_app/services/token_service.dart';
 
 class MyPostsService {
   final http.Client _client = http.Client();

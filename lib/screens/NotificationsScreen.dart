@@ -1,16 +1,16 @@
-import 'package:Yempover_app/models/ProductPostmain.dart' hide AppNotification;
-import 'package:Yempover_app/screens/PostDetailScreen.dart';
-import 'package:Yempover_app/screens/notification_preferences_screen.dart';
-import 'package:Yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
-import 'package:Yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:Yempover_app/services/api_service.dart';
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:Yempover_app/utils/CustomErrorWidget.dart';
-import 'package:Yempover_app/utils/loading_widget.dart';
-import 'package:Yempover_app/utils/notification_provider.dart';
-import 'package:Yempover_app/utils/notification_tile.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/models/ProductPostmain.dart' hide AppNotification;
+import 'package:YemPover_app/screens/PostDetailScreen.dart';
+import 'package:YemPover_app/screens/notification_preferences_screen.dart';
+import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:YemPover_app/services/api_service.dart';
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:YemPover_app/utils/CustomErrorWidget.dart';
+import 'package:YemPover_app/utils/loading_widget.dart';
+import 'package:YemPover_app/utils/notification_provider.dart';
+import 'package:YemPover_app/utils/notification_tile.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
@@ -109,7 +109,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         // actions: [
         //   IconButton(
@@ -130,7 +130,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         //   ),
         // ],
       ),
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Consumer<NotificationProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading && provider.notifications.isEmpty) {
@@ -146,6 +146,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: _refreshNotifications,
+                  color: const Color(0xFF2E5BFF),
+                  backgroundColor: Colors.white,
+                  elevation: 0,
+                  strokeWidth: 2.2,
                   child: provider.notifications.isEmpty
                       ? EmptyStateWidget(
                           icon: Icons.notifications_off,

@@ -1,9 +1,9 @@
 // ignore: file_names
-import 'package:Yempover_app/services/service_booking_service.dart';
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:Yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/services/service_booking_service.dart';
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -444,7 +444,7 @@ class _AppointmentsDashboardScreenState
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         title: const Text(
           'Appointments',
@@ -538,7 +538,10 @@ class _AppointmentsDashboardScreenState
             )
           : RefreshIndicator(
               onRefresh: _loadAll,
-              color: Colors.deepPurple,
+              color: const Color(0xFF2E5BFF),
+              backgroundColor: Colors.white,
+              elevation: 0,
+              strokeWidth: 2.2,
               child: TabBarView(
                 controller: _tabController,
                 children: [

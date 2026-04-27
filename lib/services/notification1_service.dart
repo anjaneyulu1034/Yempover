@@ -2,20 +2,20 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:Yempover_app/constants/api_constants.dart';
-import 'package:Yempover_app/models/ProductPostmain.dart';
-import 'package:Yempover_app/screens/PostDetailScreen.dart';
-import 'package:Yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
-import 'package:Yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:Yempover_app/services/api_service.dart';
+import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:YemPover_app/models/ProductPostmain.dart';
+import 'package:YemPover_app/screens/PostDetailScreen.dart';
+import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:YemPover_app/services/api_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
 import 'package:http/http.dart' as http;
-import 'package:Yempover_app/main.dart' as app;
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:YemPover_app/main.dart' as app;
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
 
 class NotificationService1 {
   static final fln.FlutterLocalNotificationsPlugin
@@ -32,23 +32,38 @@ class NotificationService1 {
   Future<void> init() async {
     if (_isInitialized) return;
 
-    await _firebaseMessaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
-
-    String? token = await _firebaseMessaging.getToken();
-    debugPrint("🔥 FCM TOKEN: $token");
-    if (token != null && token.isNotEmpty) {
-      await _registerTokenWithBackend(token);
+    try {
+      await _firebaseMessaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
+    } catch (e) {
+      debugPrint('FCM permission request failed: $e');
     }
 
-    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
-      debugPrint('FCM token refreshed');
-      await _registerTokenWithBackend(newToken);
-    });
+    try {
+      final token = await _firebaseMessaging.getToken().timeout(
+        const Duration(seconds: 8),
+      );
+      debugPrint('🔥 FCM TOKEN: $token');
+      if (token != null && token.isNotEmpty) {
+        await _registerTokenWithBackend(token);
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch FCM token during init: $e');
+    }
+
+    FirebaseMessaging.instance.onTokenRefresh.listen(
+      (newToken) async {
+        debugPrint('FCM token refreshed');
+        await _registerTokenWithBackend(newToken);
+      },
+      onError: (e) {
+        debugPrint('FCM token refresh stream error: $e');
+      },
+    );
 
     const fln.AndroidInitializationSettings androidSettings =
         fln.AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -100,15 +115,20 @@ class NotificationService1 {
     });
 
     // Get initial message if app was opened from a terminated state
-    RemoteMessage? initialMessage = await _firebaseMessaging
-        .getInitialMessage();
-    if (initialMessage != null) {
-      debugPrint(
-        '📩 App opened from terminated state: ${initialMessage.messageId}',
-      );
-      if (initialMessage.data.isNotEmpty) {
-        _pendingNavigationData = Map<String, dynamic>.from(initialMessage.data);
+    try {
+      final initialMessage = await _firebaseMessaging.getInitialMessage();
+      if (initialMessage != null) {
+        debugPrint(
+          '📩 App opened from terminated state: ${initialMessage.messageId}',
+        );
+        if (initialMessage.data.isNotEmpty) {
+          _pendingNavigationData = Map<String, dynamic>.from(
+            initialMessage.data,
+          );
+        }
       }
+    } catch (e) {
+      debugPrint('Failed to read initial FCM message: $e');
     }
 
     _isInitialized = true;
@@ -434,7 +454,7 @@ class NotificationService1 {
   Future<void> showLoginSuccessNotification() async {
     await _showLocalNotification(
       '🔐 Login Successful!',
-      'Welcome back to Yempover! You have successfully logged in.',
+      'Welcome back to YemPover! You have successfully logged in.',
     );
   }
 

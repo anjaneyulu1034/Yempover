@@ -1,10 +1,11 @@
-import 'package:Yempover_app/models/chats/trade_chat.dart';
+import 'package:YemPover_app/models/chats/trade_chat.dart';
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/models/ProductPostmain.dart';
-import 'package:Yempover_app/payment/SubscriptionScreen.dart';
-import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:Yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:Yempover_app/utils/error_message_utils.dart';
+import 'package:flutter/services.dart';
+import 'package:YemPover_app/models/ProductPostmain.dart';
+import 'package:YemPover_app/payment/SubscriptionScreen.dart';
+import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:YemPover_app/utils/error_message_utils.dart';
 
 enum OfferSubmissionMode { price, barter, both }
 
@@ -35,6 +36,8 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   bool _isSubmitting = false;
+  String? _priceError;
+  String? _descriptionError;
 
   bool get _requiresPrice =>
       widget.offerMode == OfferSubmissionMode.price ||
@@ -143,17 +146,31 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   }
 
   Future<void> _submitOffer() async {
-    final parsedPrice = double.tryParse(_priceController.text.trim());
+    final priceValidationError = _validatePrice(_priceController.text);
+    final descriptionValidationError = _validateDescription(
+      _descriptionController.text,
+    );
 
-    if (_requiresPrice && (parsedPrice == null || parsedPrice <= 0)) {
+    setState(() {
+      _priceError = priceValidationError;
+      _descriptionError = descriptionValidationError;
+    });
+
+    if (priceValidationError != null || descriptionValidationError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid quoted price'),
+        SnackBar(
+          content: Text(
+            priceValidationError ??
+                descriptionValidationError ??
+                'Invalid input',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
+
+    final parsedPrice = int.tryParse(_priceController.text.trim())?.toDouble();
 
     if (_requiresBarterItems && widget.selectedItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -301,12 +318,57 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
     }
   }
 
+  String? _validatePrice(String value) {
+    if (!_requiresPrice) return null;
+
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return 'Quoted price is required';
+    }
+
+    final parsed = int.tryParse(trimmed);
+    if (parsed == null || parsed <= 0) {
+      return 'Enter a valid integer price';
+    }
+
+    if (trimmed.length > 9) {
+      return 'Price is too large';
+    }
+
+    return null;
+  }
+
+  String? _validateDescription(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return 'Description is required';
+    }
+
+    if (!RegExp(r'[A-Za-z]').hasMatch(trimmed)) {
+      return 'Description must contain text';
+    }
+
+    if (RegExp(r'\d').hasMatch(trimmed)) {
+      return 'Description cannot contain numbers';
+    }
+
+    if (!RegExp(r"^[A-Za-z\s.,!?()'\-]+$").hasMatch(trimmed)) {
+      return 'Use only letters';
+    }
+
+    if (trimmed.length < 3) {
+      return 'Description is too short';
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
@@ -414,12 +476,63 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                   .take(2)
                                   .map(
                                     (item) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 2),
-                                      child: Text(
-                                        '• ${item.name}',
-                                        style: const TextStyle(fontSize: 12),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: Row(
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                            child: item.imageUrl.isNotEmpty
+                                                ? Image.network(
+                                                    item.imageUrl,
+                                                    width: 28,
+                                                    height: 28,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder:
+                                                        (
+                                                          context,
+                                                          error,
+                                                          stackTrace,
+                                                        ) {
+                                                          return Container(
+                                                            width: 28,
+                                                            height: 28,
+                                                            color: Colors
+                                                                .grey
+                                                                .shade200,
+                                                            child: const Icon(
+                                                              Icons.image,
+                                                              size: 16,
+                                                              color:
+                                                                  Colors.grey,
+                                                            ),
+                                                          );
+                                                        },
+                                                  )
+                                                : Container(
+                                                    width: 28,
+                                                    height: 28,
+                                                    color: Colors.grey.shade200,
+                                                    child: const Icon(
+                                                      Icons.image,
+                                                      size: 16,
+                                                      color: Colors.grey,
+                                                    ),
+                                                  ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              item.name,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -478,13 +591,20 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
               const SizedBox(height: 8),
               TextField(
                 controller: _priceController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                onChanged: (_) => setState(() {}),
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(9),
+                ],
+                onChanged: (_) {
+                  setState(() {
+                    _priceError = _validatePrice(_priceController.text);
+                  });
+                },
                 decoration: InputDecoration(
                   hintText: 'Enter your price quote',
                   prefixText: '\$ ',
+                  errorText: _priceError,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -504,9 +624,17 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
               controller: _descriptionController,
               maxLines: 6,
               maxLength: 500,
+              onChanged: (_) {
+                setState(() {
+                  _descriptionError = _validateDescription(
+                    _descriptionController.text,
+                  );
+                });
+              },
               decoration: InputDecoration(
                 hintText: 'Explain your offer and why you want to trade...',
                 hintStyle: TextStyle(color: Colors.grey.shade400),
+                errorText: _descriptionError,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),

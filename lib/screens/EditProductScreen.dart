@@ -23,6 +23,8 @@ class EditProductScreen extends StatefulWidget {
 }
 
 class _EditProductScreenState extends State<EditProductScreen> {
+  static const int _maxPostImages = 5;
+
   final _formKey = GlobalKey<FormState>();
   final MyPostsService _postsService = MyPostsService();
   final AddPostService _addPostService = AddPostService();
@@ -249,6 +251,16 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
   Future<void> _pickImage() async {
     try {
+      if (_images.length >= _maxPostImages) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Maximum 5 images allowed'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.gallery,
         maxWidth: 1024,
@@ -342,6 +354,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
         throw Exception('Please add at least one image');
       }
 
+      if (preparedImages.length > _maxPostImages) {
+        throw Exception('Maximum 5 images allowed');
+      }
+
       // Create request with type explicitly set
       final requestData = {
         'title': _titleController.text.trim(),
@@ -422,7 +438,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         actions: [
           TextButton(
@@ -762,6 +778,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
   }
 
   Widget _buildImagesSection() {
+    final canAddMoreImages = _images.length < _maxPostImages;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -787,9 +805,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
             height: 100,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              itemCount: _images.length + 1,
+              itemCount: canAddMoreImages ? _images.length + 1 : _images.length,
               itemBuilder: (context, index) {
-                if (index == _images.length) {
+                if (canAddMoreImages && index == _images.length) {
                   return _buildAddImageButton();
                 }
                 return _buildImageItem(index);

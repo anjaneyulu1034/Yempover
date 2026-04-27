@@ -1,8 +1,8 @@
-import 'package:Yempover_app/screens/service/AppointmentsDashboardScreen.dart';
-import 'package:Yempover_app/screens/service/ServiceAvailabilityScreen.dart';
-import 'package:Yempover_app/services/service_booking_service.dart';
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/screens/service/AppointmentsDashboardScreen.dart';
+import 'package:YemPover_app/screens/service/ServiceAvailabilityScreen.dart';
+import 'package:YemPover_app/services/service_booking_service.dart';
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -462,7 +462,7 @@ class _ServiceDetailBookingScreenState
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         title: const Text(
           'Service Details',
@@ -643,6 +643,10 @@ class _ServiceDetailBookingScreenState
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.grey.shade300,
+                        width: 1.2,
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.grey.withValues(alpha: 0.1),
@@ -863,6 +867,8 @@ class _ServiceDetailBookingScreenState
                                 : DateTime(now.year + 3);
                             final picked = await showDatePicker(
                               context: context,
+                              initialEntryMode:
+                                  DatePickerEntryMode.calendarOnly,
                               initialDate: _selectedDate,
                               firstDate: DateTime(now.year, now.month, now.day),
                               lastDate: upperBound,
@@ -896,7 +902,10 @@ class _ServiceDetailBookingScreenState
                               vertical: 14,
                             ),
                             decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey[300]!),
+                              border: Border.all(
+                                color: Colors.grey.shade400,
+                                width: 1.2,
+                              ),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Row(
@@ -939,7 +948,10 @@ class _ServiceDetailBookingScreenState
                                 vertical: 14,
                               ),
                               decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
+                                border: Border.all(
+                                  color: Colors.grey.shade400,
+                                  width: 1.2,
+                                ),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Row(
@@ -997,7 +1009,10 @@ class _ServiceDetailBookingScreenState
                               decoration: BoxDecoration(
                                 color: Colors.grey[50],
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.grey[200]!),
+                                border: Border.all(
+                                  color: Colors.grey.shade300,
+                                  width: 1.2,
+                                ),
                               ),
                               child: Column(
                                 children: [
@@ -1062,8 +1077,9 @@ class _ServiceDetailBookingScreenState
                                         color: selected
                                             ? Colors.deepPurple
                                             : available
-                                            ? Colors.grey[300]!
-                                            : Colors.grey[200]!,
+                                            ? Colors.grey.shade400
+                                            : Colors.grey.shade300,
+                                        width: 1.2,
                                       ),
                                       boxShadow: selected
                                           ? [
@@ -1136,12 +1152,23 @@ class _ServiceDetailBookingScreenState
                           decoration: InputDecoration(
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.grey[300]!),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade400,
+                                width: 1.2,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade400,
+                                width: 1.2,
+                              ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: const BorderSide(
                                 color: Colors.deepPurple,
+                                width: 1.6,
                               ),
                             ),
                             labelText: 'Location',
@@ -1152,34 +1179,44 @@ class _ServiceDetailBookingScreenState
                         const SizedBox(height: 16),
 
                         // Duration Dropdown
-                        Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey[300]!),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: DropdownButtonFormField<int>(
-                            initialValue: _duration,
-                            items: const [15, 30, 45, 60]
-                                .map(
-                                  (e) => DropdownMenuItem(
-                                    value: e,
-                                    child: Text('$e minutes'),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setState(() => _duration = value);
-                            },
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
+                        DropdownButtonFormField<int>(
+                          initialValue: _duration,
+                          items: const [15, 30, 45, 60]
+                              .map(
+                                (e) => DropdownMenuItem(
+                                  value: e,
+                                  child: Text('$e minutes'),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() => _duration = value);
+                          },
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade400,
+                                width: 1.2,
                               ),
-                              labelText: 'Duration',
-                              prefixIcon: const Icon(Icons.timer, size: 20),
                             ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade400,
+                                width: 1.2,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: Colors.deepPurple,
+                                width: 1.6,
+                              ),
+                            ),
+                            labelText: 'Duration',
+                            prefixIcon: const Icon(Icons.timer, size: 20),
                           ),
                         ),
 
@@ -1195,13 +1232,22 @@ class _ServiceDetailBookingScreenState
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                  color: Colors.grey[300]!,
+                                  color: Colors.grey.shade400,
+                                  width: 1.2,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade400,
+                                  width: 1.2,
                                 ),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: const BorderSide(
                                   color: Colors.deepPurple,
+                                  width: 1.6,
                                 ),
                               ),
                               labelText: 'Your Quote Price',
@@ -1222,17 +1268,27 @@ class _ServiceDetailBookingScreenState
                           decoration: InputDecoration(
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.grey[300]!),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade400,
+                                width: 1.2,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade400,
+                                width: 1.2,
+                              ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: const BorderSide(
                                 color: Colors.deepPurple,
+                                width: 1.6,
                               ),
                             ),
                             labelText: 'Additional Notes',
                             prefixIcon: const Icon(Icons.note, size: 20),
-                            alignLabelWithHint: true,
                           ),
                         ),
                       ],

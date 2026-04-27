@@ -1,6 +1,6 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:Yempover_app/services/content_service.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/services/content_service.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 
 class TermsScreen extends StatefulWidget {
   const TermsScreen({super.key});
@@ -51,14 +51,14 @@ class _TermsScreenState extends State<TermsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_title),
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchTerms),
         ],
       ),
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null

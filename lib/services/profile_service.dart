@@ -1,13 +1,13 @@
 // lib/services/profile_service.dart
 import 'dart:convert';
-import 'package:Yempover_app/services/api_service.dart';
-import 'package:Yempover_app/services/token_service.dart';
+import 'package:YemPover_app/services/api_service.dart';
+import 'package:YemPover_app/services/token_service.dart';
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/constants/api_constants.dart';
-import 'package:Yempover_app/models/get_my_profile_response.dart';
-import 'package:Yempover_app/models/profile_update_request.dart';
-import 'package:Yempover_app/services/profile_session_manager.dart';
-import 'package:Yempover_app/utils/error_message_utils.dart';
+import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:YemPover_app/models/get_my_profile_response.dart';
+import 'package:YemPover_app/models/profile_update_request.dart';
+import 'package:YemPover_app/services/profile_session_manager.dart';
+import 'package:YemPover_app/utils/error_message_utils.dart';
 
 class ProfileService {
   static final ProfileService _instance = ProfileService._internal();

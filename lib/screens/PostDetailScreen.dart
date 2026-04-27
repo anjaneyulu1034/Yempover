@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/models/ProductPostmain.dart';
-import 'package:Yempover_app/screens/OfferDeckScreen.dart';
-import 'package:Yempover_app/screens/OfferDescriptionScreen.dart';
-import 'package:Yempover_app/screens/service/ServiceDetailBookingScreen.dart';
-import 'package:Yempover_app/services/api_service.dart';
-import 'package:Yempover_app/services/post_action_service.dart';
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/utils/loading_widget.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/models/ProductPostmain.dart';
+import 'package:YemPover_app/screens/OfferDeckScreen.dart';
+import 'package:YemPover_app/screens/OfferDescriptionScreen.dart';
+import 'package:YemPover_app/screens/service/ServiceDetailBookingScreen.dart';
+import 'package:YemPover_app/services/api_service.dart';
+import 'package:YemPover_app/services/post_action_service.dart';
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/utils/loading_widget.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -1107,9 +1107,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFFF8F9FF),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: const Color(0xFFF8F9FF),
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),

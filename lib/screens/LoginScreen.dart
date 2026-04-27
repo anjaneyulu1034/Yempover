@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/constants/api_constants.dart';
-import 'package:Yempover_app/screens/Home_screen.dart';
-import 'package:Yempover_app/screens/OTPVerificationScreen.dart';
-import 'package:Yempover_app/screens/SignupScreen.dart';
-import 'package:Yempover_app/services/api_service.dart';
-import 'package:Yempover_app/services/auth_service.dart';
-import 'package:Yempover_app/services/token_service.dart';
+import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:YemPover_app/screens/Home_screen.dart';
+import 'package:YemPover_app/screens/OTPVerificationScreen.dart';
+import 'package:YemPover_app/screens/SignupScreen.dart';
+import 'package:YemPover_app/services/api_service.dart';
+import 'package:YemPover_app/services/auth_service.dart';
+import 'package:YemPover_app/services/token_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -189,7 +189,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final keyboardSpace = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {

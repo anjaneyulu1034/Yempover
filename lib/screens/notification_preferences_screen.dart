@@ -1,6 +1,6 @@
 // lib/screens/notification_preferences_screen.dart
-import 'package:Yempover_app/utils/loading_widget.dart';
-import 'package:Yempover_app/utils/notification_provider.dart';
+import 'package:YemPover_app/utils/loading_widget.dart';
+import 'package:YemPover_app/utils/notification_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -54,7 +54,7 @@ class _NotificationPreferencesScreenState
         title: const Text('Notification Preferences'),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         actions: [
           TextButton(

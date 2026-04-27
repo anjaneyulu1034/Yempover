@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/services/content_service.dart';
-import 'package:Yempover_app/constants/api_constants.dart';
+import 'package:YemPover_app/services/content_service.dart';
+import 'package:YemPover_app/constants/api_constants.dart';
 
 class TermsAndConditionsScreen extends StatefulWidget {
   const TermsAndConditionsScreen({super.key});
@@ -63,7 +63,7 @@ class _TermsAndConditionsScreenState extends State<TermsAndConditionsScreen> {
     debugPrint('🔵 TermsAndConditionsScreen: build() called');
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: AppConstants.primaryColor,
         elevation: 0,

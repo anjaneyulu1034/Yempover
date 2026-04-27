@@ -33,10 +33,10 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
       ),
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           20,
@@ -66,7 +66,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
 
             // Contact Form
             Card(
-              elevation: 3,
+              elevation: 0,
+              color: const Color(0xFFF1F1F1),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -82,17 +83,33 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: Colors.grey,
+                          color: Colors.black87,
                         ),
                       ),
                     ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _subjectController,
+                      style: const TextStyle(color: Colors.black87),
                       decoration: InputDecoration(
                         hintText: 'Enter subject/title',
+                        hintStyle: TextStyle(color: Colors.grey.shade700),
+                        filled: true,
+                        fillColor: const Color(0xFFF6F6F6),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF2E5BFF),
+                            width: 1.6,
+                          ),
                         ),
                       ),
                     ),
@@ -107,7 +124,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: Colors.grey,
+                          color: Colors.black87,
                         ),
                       ),
                     ),
@@ -115,10 +132,26 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     TextField(
                       controller: _messageController,
                       maxLines: 5,
+                      style: const TextStyle(color: Colors.black87),
                       decoration: InputDecoration(
                         hintText: 'Describe your issue or question...',
+                        hintStyle: TextStyle(color: Colors.grey.shade700),
+                        filled: true,
+                        fillColor: const Color(0xFFF6F6F6),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF2E5BFF),
+                            width: 1.6,
+                          ),
                         ),
                         alignLabelWithHint: true,
                       ),
@@ -167,18 +200,24 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             const SizedBox(height: 16),
 
             Card(
-              elevation: 2,
+              elevation: 0,
+              color: const Color(0xFFF1F1F1),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
               child: ExpansionTile(
-                title: const Text('How do I create a post?'),
+                iconColor: Colors.black54,
+                collapsedIconColor: Colors.black54,
+                title: const Text(
+                  'How do I create a post?',
+                  style: TextStyle(color: Colors.black87),
+                ),
                 children: const [
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     child: Text(
                       'Go to the Marketplace tab and click the "+" button to create a new post. Fill in the required details and submit.',
-                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                      style: TextStyle(fontSize: 14, color: Colors.black54),
                     ),
                   ),
                 ],
@@ -188,18 +227,24 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             const SizedBox(height: 8),
 
             Card(
-              elevation: 2,
+              elevation: 0,
+              color: const Color(0xFFF1F1F1),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
               child: ExpansionTile(
-                title: const Text('How does the barter system work?'),
+                iconColor: Colors.black54,
+                collapsedIconColor: Colors.black54,
+                title: const Text(
+                  'How does the barter system work?',
+                  style: TextStyle(color: Colors.black87),
+                ),
                 children: const [
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     child: Text(
                       'You can list items you want to trade and specify what you\'re looking for in return. Other users can make offers, and you can negotiate until reaching an agreement.',
-                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                      style: TextStyle(fontSize: 14, color: Colors.black54),
                     ),
                   ),
                 ],
@@ -209,18 +254,24 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             const SizedBox(height: 8),
 
             Card(
-              elevation: 2,
+              elevation: 0,
+              color: const Color(0xFFF1F1F1),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
               child: ExpansionTile(
-                title: const Text('How do I complete a trade?'),
+                iconColor: Colors.black54,
+                collapsedIconColor: Colors.black54,
+                title: const Text(
+                  'How do I complete a trade?',
+                  style: TextStyle(color: Colors.black87),
+                ),
                 children: const [
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     child: Text(
                       'Once both parties agree on the trade terms, mark the deal as completed in the chat. You can then rate the transaction and provide feedback.',
-                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                      style: TextStyle(fontSize: 14, color: Colors.black54),
                     ),
                   ),
                 ],
@@ -230,18 +281,24 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             const SizedBox(height: 8),
 
             Card(
-              elevation: 2,
+              elevation: 0,
+              color: const Color(0xFFF1F1F1),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
               child: ExpansionTile(
-                title: const Text('What payment methods are accepted?'),
+                iconColor: Colors.black54,
+                collapsedIconColor: Colors.black54,
+                title: const Text(
+                  'What payment methods are accepted?',
+                  style: TextStyle(color: Colors.black87),
+                ),
                 children: const [
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     child: Text(
                       'We accept major credit cards and digital payment methods through secure in-app payment processing.',
-                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                      style: TextStyle(fontSize: 14, color: Colors.black54),
                     ),
                   ),
                 ],
@@ -252,7 +309,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
 
             // Contact Information
             Card(
-              elevation: 3,
+              elevation: 0,
+              color: const Color(0xFFF1F1F1),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -273,7 +331,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     _buildContactInfo(
                       Icons.email,
                       'Email',
-                      'support@Yempover.com',
+                      'support@YemPover.com',
                       Colors.blue,
                     ),
                     const SizedBox(height: 12),
@@ -294,7 +352,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     _buildContactInfo(
                       Icons.language,
                       'Website',
-                      'www.Yempover.com',
+                      'www.YemPover.com',
                       Colors.purple,
                     ),
                   ],

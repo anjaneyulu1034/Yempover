@@ -1,11 +1,11 @@
-import 'package:Yempover_app/screens/PrivacyPolicyScreen.dart';
-import 'package:Yempover_app/screens/SignupPhotoVerificationScreen.dart';
-import 'package:Yempover_app/screens/TermsAndConditionsScreen.dart';
-import 'package:Yempover_app/services/notification1_service.dart';
+import 'package:YemPover_app/screens/PrivacyPolicyScreen.dart';
+import 'package:YemPover_app/screens/SignupPhotoVerificationScreen.dart';
+import 'package:YemPover_app/screens/TermsAndConditionsScreen.dart';
+import 'package:YemPover_app/services/notification1_service.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/constants/api_constants.dart';
-import 'package:Yempover_app/screens/LoginScreen.dart';
+import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:YemPover_app/screens/LoginScreen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -161,7 +161,7 @@ class _SignupScreenState extends State<SignupScreen> {
     debugPrint('🔵 SignupScreen: build() called');
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(
@@ -218,7 +218,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Yempover Barter System!',
+                  'YemPover Barter System!',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),

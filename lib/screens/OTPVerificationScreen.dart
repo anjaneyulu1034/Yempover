@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/constants/api_constants.dart';
-import 'package:Yempover_app/models/auth_models.dart';
-import 'package:Yempover_app/services/api_service.dart';
-import 'package:Yempover_app/services/auth_service.dart';
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/services/notification1_service.dart';
-import 'package:Yempover_app/screens/LoginScreen.dart';
+import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:YemPover_app/models/auth_models.dart';
+import 'package:YemPover_app/services/api_service.dart';
+import 'package:YemPover_app/services/auth_service.dart';
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/services/notification1_service.dart';
+import 'package:YemPover_app/screens/LoginScreen.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -432,9 +432,9 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     debugPrint('🟡 OTPVerificationScreen: build() called');
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
@@ -493,7 +493,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                           children: List.generate(6, (index) {
                             return SizedBox(
                               width: boxWidth,
-                              height: 52,
+                              height: 60,
                               child: TextField(
                                 controller: _otpControllers[index],
                                 focusNode: _otpFocusNodes[index],
@@ -507,17 +507,27 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                                 decoration: InputDecoration(
                                   isDense: true,
                                   contentPadding: EdgeInsets.zero,
+                                  filled: true,
+                                  fillColor: const Color(0xFFF8FAFF),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     borderSide: BorderSide(
-                                      color: Colors.grey.shade300,
+                                      color: Colors.grey.shade400,
+                                      width: 1.4,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey.shade400,
+                                      width: 1.4,
                                     ),
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     borderSide: const BorderSide(
                                       color: AppConstants.primaryColor,
-                                      width: 2,
+                                      width: 2.2,
                                     ),
                                   ),
                                 ),

@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:Yempover_app/services/api_service.dart';
+import 'package:YemPover_app/services/api_service.dart';
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/constants/api_constants.dart';
-import 'package:Yempover_app/models/get_my_profile_response.dart';
-import 'package:Yempover_app/models/profile_update_request.dart';
-import 'package:Yempover_app/services/profile_service.dart';
-import 'package:Yempover_app/services/profile_session_manager.dart';
-import 'package:Yempover_app/utils/loading_overlay.dart';
+import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:YemPover_app/models/get_my_profile_response.dart';
+import 'package:YemPover_app/models/profile_update_request.dart';
+import 'package:YemPover_app/services/profile_service.dart';
+import 'package:YemPover_app/services/profile_session_manager.dart';
+import 'package:YemPover_app/utils/loading_overlay.dart';
 import 'package:image_picker/image_picker.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -366,9 +366,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return LoadingOverlay(
       isLoading: _isLoading,
       child: Scaffold(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
+          backgroundColor: Colors.white,
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.black),

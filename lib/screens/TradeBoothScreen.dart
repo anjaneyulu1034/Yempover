@@ -1,9 +1,9 @@
 // screens/TradeBoothScreen.dart
-import 'package:Yempover_app/screens/ProductDetailScreen.dart';
+import 'package:YemPover_app/screens/ProductDetailScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 import '../models/my_post_model.dart';
 import '../services/my_posts_service.dart';
 import '../screens/AddPostScreen.dart';
@@ -270,6 +270,9 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     return RefreshIndicator(
       onRefresh: _refreshPosts,
       color: const Color(0xFF2E5BFF),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      strokeWidth: 2.2,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -288,7 +291,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
       ),
       body: Column(
@@ -369,6 +372,9 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                 : RefreshIndicator(
                     onRefresh: _refreshPosts,
                     color: const Color(0xFF2E5BFF),
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    strokeWidth: 2.2,
                     child: ListView.builder(
                       controller: _scrollController,
                       physics: const AlwaysScrollableScrollPhysics(),

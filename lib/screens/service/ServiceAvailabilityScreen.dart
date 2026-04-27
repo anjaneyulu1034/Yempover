@@ -1,6 +1,6 @@
-import 'package:Yempover_app/screens/service/AppointmentsDashboardScreen.dart';
-import 'package:Yempover_app/services/service_booking_service.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/screens/service/AppointmentsDashboardScreen.dart';
+import 'package:YemPover_app/services/service_booking_service.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -21,17 +21,11 @@ class ServiceAvailabilityScreen extends StatefulWidget {
 
 class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
   final ServiceBookingService _service = ServiceBookingService();
-  final TextEditingController _specialReasonController =
-      TextEditingController();
 
   bool _savingAvailability = false;
-  bool _savingSpecialDate = false;
   bool _published = false;
-  DateTime? _specialDate;
-  bool _specialIsAvailable = false;
 
   final DateFormat _timeFormat = DateFormat('h:mm a');
-  final DateFormat _dateFormat = DateFormat('EEEE, MMMM d, yyyy');
 
   Future<bool> _handleWillPop() async {
     if (!widget.isInitialSetup || _published) return true;
@@ -67,7 +61,6 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
 
   @override
   void dispose() {
-    _specialReasonController.dispose();
     super.dispose();
   }
 
@@ -176,41 +169,6 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
     }
   }
 
-  Future<void> _saveSpecialDate() async {
-    if (_specialDate == null) {
-      SnackbarUtils.showError(context, 'Please choose a special date');
-      return;
-    }
-
-    setState(() => _savingSpecialDate = true);
-
-    try {
-      await _service.setSpecialDate(
-        serviceId: widget.serviceId,
-        date: _service.dateOnly(_specialDate!),
-        isAvailable: _specialIsAvailable,
-        reason: _specialReasonController.text.trim(),
-      );
-
-      if (!mounted) return;
-      SnackbarUtils.showSuccess(context, 'Special date updated');
-
-      // Clear form after successful save
-      setState(() {
-        _specialDate = null;
-        _specialIsAvailable = false;
-        _specialReasonController.clear();
-      });
-    } catch (error) {
-      if (!mounted) return;
-      SnackbarUtils.showError(context, _service.extractMessage(error));
-    } finally {
-      if (mounted) {
-        setState(() => _savingSpecialDate = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_published) {
@@ -230,7 +188,7 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
         backgroundColor: Colors.grey[50],
         appBar: AppBar(
           elevation: 0,
-          backgroundColor: Colors.transparent,
+          backgroundColor: Colors.white,
           foregroundColor: Colors.black87,
           title: const Text(
             'Set Availability',
@@ -349,253 +307,6 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
                         ),
                 ),
               ),
-
-              const SizedBox(height: 30),
-
-              // Special Dates Section
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF6B6B), Color(0xFFFD8E8E)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.pink.withValues(alpha: 0.2),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.event, color: Colors.white),
-                        SizedBox(width: 12),
-                        Text(
-                          'Special Dates (Optional)',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Override regular schedule for specific dates',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Special Date Form
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withValues(alpha: 0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    // Date Selection
-                    InkWell(
-                      onTap: () async {
-                        final now = DateTime.now();
-                        final picked = await showDatePicker(
-                          context: context,
-                          firstDate: DateTime(now.year, now.month, now.day),
-                          lastDate: DateTime(now.year + 3),
-                          initialDate: _specialDate ?? now,
-                          builder: (context, child) {
-                            return Theme(
-                              data: Theme.of(context).copyWith(
-                                colorScheme: const ColorScheme.light(
-                                  primary: Colors.deepPurple,
-                                ),
-                              ),
-                              child: child!,
-                            );
-                          },
-                        );
-                        if (picked == null) return;
-                        setState(() => _specialDate = picked);
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey[300]!),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.calendar_month, color: Colors.grey[600]),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                _specialDate == null
-                                    ? 'Select a date'
-                                    : _dateFormat.format(_specialDate!),
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: _specialDate == null
-                                      ? Colors.grey[500]
-                                      : Colors.black87,
-                                ),
-                              ),
-                            ),
-                            Icon(
-                              Icons.arrow_drop_down,
-                              color: Colors.grey[600],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Availability Type
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey[300]!),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: DropdownButtonFormField<bool>(
-                        initialValue: _specialIsAvailable,
-                        items: const [
-                          DropdownMenuItem(
-                            value: false,
-                            child: Row(
-                              children: [
-                                Icon(Icons.block, color: Colors.red, size: 20),
-                                SizedBox(width: 8),
-                                Text('Block Date'),
-                              ],
-                            ),
-                          ),
-                          DropdownMenuItem(
-                            value: true,
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.check_circle,
-                                  color: Colors.green,
-                                  size: 20,
-                                ),
-                                SizedBox(width: 8),
-                                Text('Open Date'),
-                              ],
-                            ),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setState(() => _specialIsAvailable = value ?? false);
-                        },
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 16),
-                          labelText: 'Select action',
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Reason Input
-                    TextField(
-                      controller: _specialReasonController,
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Colors.deepPurple,
-                          ),
-                        ),
-                        labelText: 'Reason (optional)',
-                        prefixIcon: const Icon(Icons.note, size: 20),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Save Special Date Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: _savingSpecialDate ? null : _saveSpecialDate,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.deepPurple,
-                          side: const BorderSide(color: Colors.deepPurple),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                        child: _savingSpecialDate
-                            ? const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.deepPurple,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 12),
-                                  Text('Saving...'),
-                                ],
-                              )
-                            : const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.event_available),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'Save Special Date',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),
@@ -608,7 +319,7 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         title: const Text(
           'Service Published',
@@ -767,38 +478,38 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
               fontWeight: FontWeight.w600,
               color: enabled ? Colors.black87 : Colors.grey,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (enabled)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.green[50],
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '${_formatTime(row['startTime'])} - ${_formatTime(row['endTime'])}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.green[700],
-                      fontWeight: FontWeight.w500,
+          subtitle: enabled
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green[50],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${_formatTime(row['startTime'])} - ${_formatTime(row['endTime'])}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                ),
-              const SizedBox(width: 8),
-              Switch(
-                value: enabled,
-                onChanged: (value) {
-                  setState(() => row['isAvailable'] = value);
-                },
-                activeThumbColor: Colors.deepPurple,
-              ),
-            ],
+                )
+              : null,
+          trailing: Switch(
+            value: enabled,
+            onChanged: (value) {
+              setState(() => row['isAvailable'] = value);
+            },
+            activeThumbColor: Colors.deepPurple,
           ),
           children: enabled
               ? [

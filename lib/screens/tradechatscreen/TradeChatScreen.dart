@@ -1,22 +1,22 @@
 // // lib/screens/tradechatscreen/TradeChatScreen.dart
 
-// import 'package:Yempover_app/services/socket_io/socket_service.dart';
+// import 'package:YemPover_app/services/socket_io/socket_service.dart';
 
 // import 'package:flutter/material.dart';
 
 // import 'package:intl/intl.dart';
 
-// import 'package:Yempover_app/models/chats/trade_chat.dart';
+// import 'package:YemPover_app/models/chats/trade_chat.dart';
 
-// import 'package:Yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+// import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 
-// import 'package:Yempover_app/services/token_service.dart';
+// import 'package:YemPover_app/services/token_service.dart';
 
-// import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
+// import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
 
-// import 'package:Yempover_app/utils/error_widget.dart';
+// import 'package:YemPover_app/utils/error_widget.dart';
 
-// import 'package:Yempover_app/utils/loading_widget.dart';
+// import 'package:YemPover_app/utils/loading_widget.dart';
 
 // class TradeChatScreen extends StatefulWidget {
 //   const TradeChatScreen({super.key});
@@ -1296,16 +1296,16 @@
 
 // lib/screens/tradechatscreen/TradeChatScreen.dart
 
-import 'package:Yempover_app/screens/Home_screen.dart';
-import 'package:Yempover_app/services/socket_io/socket_service.dart';
+import 'package:YemPover_app/screens/Home_screen.dart';
+import 'package:YemPover_app/services/socket_io/socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:Yempover_app/models/chats/trade_chat.dart';
-import 'package:Yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:Yempover_app/utils/error_widget.dart';
-import 'package:Yempover_app/utils/loading_widget.dart';
+import 'package:YemPover_app/models/chats/trade_chat.dart';
+import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:YemPover_app/utils/error_widget.dart';
+import 'package:YemPover_app/utils/loading_widget.dart';
 
 class TradeChatScreen extends StatefulWidget {
   const TradeChatScreen({super.key});
@@ -2135,7 +2135,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
             onPressed: _navigateToHomeScreen,
           ),
           title: const Text('Trade Chat'),
-          backgroundColor: Colors.transparent,
+          backgroundColor: Colors.white,
           elevation: 0,
           foregroundColor: Colors.black,
         ),
@@ -2151,7 +2151,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
             onPressed: _navigateToHomeScreen,
           ),
           title: const Text('Trade Chat'),
-          backgroundColor: Colors.transparent,
+          backgroundColor: Colors.white,
           elevation: 0,
           foregroundColor: Colors.black,
         ),
@@ -2174,7 +2174,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
           onPressed: _navigateToHomeScreen,
         ),
         title: const Text('Trade Chat'),
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black,
         bottom: TabBar(
@@ -2188,17 +2188,29 @@ class _TradeChatScreenState extends State<TradeChatScreen>
           indicatorSize: TabBarIndicatorSize.tab,
         ),
       ),
-      body: RefreshIndicator(
-        onRefresh: _refreshChats,
-        child: TabBarView(
-          controller: _tabController,
-          children: [
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildRefreshWrapper(
             _buildChatList(_allChats, isLoadingMore: _isLoadingMoreAllChats),
-            _buildInboxList(),
+          ),
+          _buildRefreshWrapper(_buildInboxList()),
+          _buildRefreshWrapper(
             _buildChatList(_outboxChats, isLoadingMore: _isLoadingMoreOutbox),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildRefreshWrapper(Widget child) {
+    return RefreshIndicator(
+      onRefresh: _refreshChats,
+      color: const Color(0xFF2E5BFF),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      strokeWidth: 2.2,
+      child: child,
     );
   }
 
@@ -2206,28 +2218,36 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     debugPrint('📋 Building chat list with ${chats.length} chats');
 
     if (chats.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              size: 64,
-              color: Colors.grey.shade400,
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.chat_bubble_outline,
+                    size: 64,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No chats yet',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'When you start a conversation,\n it will appear here',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'No chats yet',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'When you start a conversation,\n it will appear here',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-            ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
@@ -2239,9 +2259,10 @@ class _TradeChatScreenState extends State<TradeChatScreen>
           debugPrint('📜 Scroll threshold reached, loading more chats...');
           _loadMoreChats();
         }
-        return true;
+        return false;
       },
       child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(top: 8, bottom: 8),
         itemCount: chats.length + (isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
@@ -2261,91 +2282,60 @@ class _TradeChatScreenState extends State<TradeChatScreen>
 
   Widget _buildInboxList() {
     if (_inboxChats.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(
-              'No incoming offers',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 18),
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No incoming offers',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 18),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'When someone makes an offer on your items,\n they will appear here',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'When someone makes an offer on your items,\n they will appear here',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-            ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
-    return Column(
-      children: [
-        if (_userProducts.length > 1)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _showProductFilterDialog,
-                    icon: const Icon(Icons.filter_list, size: 20),
-                    label: Text(
-                      _selectedProductFilter ?? 'Filter by Your Product',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 12,
-                        horizontal: 16,
-                      ),
-                    ),
-                  ),
-                ),
-                if (_selectedProductFilter != null)
-                  IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      setState(() {
-                        _selectedProductFilter = null;
-                      });
-                      _loadInboxChats(refresh: true);
-                    },
-                  ),
-              ],
-            ),
-          ),
-        Expanded(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (scrollInfo) {
-              if (!_isLoadingMoreInbox &&
-                  scrollInfo.metrics.pixels >=
-                      scrollInfo.metrics.maxScrollExtent - 100) {
-                _loadMoreChats();
-              }
-              return true;
-            },
-            child: ListView.builder(
-              padding: const EdgeInsets.only(bottom: 8),
-              itemCount: _inboxChats.length + (_isLoadingMoreInbox ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == _inboxChats.length) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: CircularProgressIndicator(),
-                    ),
-                  );
-                }
-                return _buildChatItem(_inboxChats[index]);
-              },
-            ),
-          ),
-        ),
-      ],
+    return NotificationListener<ScrollNotification>(
+      onNotification: (scrollInfo) {
+        if (!_isLoadingMoreInbox &&
+            scrollInfo.metrics.pixels >=
+                scrollInfo.metrics.maxScrollExtent - 100) {
+          _loadMoreChats();
+        }
+        return false;
+      },
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 8),
+        itemCount: _inboxChats.length + (_isLoadingMoreInbox ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == _inboxChats.length) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+          return _buildChatItem(_inboxChats[index]);
+        },
+      ),
     );
   }
 }

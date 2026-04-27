@@ -1,5 +1,5 @@
 // import 'dart:math';
-// import 'package:Yempover_app/utils/notification_provider.dart';
+// import 'package:YemPover_app/utils/notification_provider.dart';
 // import 'package:flutter/material.dart';
 // import 'package:flutter/services.dart';
 // import 'package:geocoding/geocoding.dart';
@@ -7,21 +7,21 @@
 // import 'package:google_places_flutter/google_places_flutter.dart';
 // import 'package:google_places_flutter/model/prediction.dart';
 // import 'package:provider/provider.dart';
-// import 'package:Yempover_app/models/ProductPostmain.dart';
-// import 'package:Yempover_app/models/get_my_profile_response.dart';
-// import 'package:Yempover_app/services/api_service.dart';
-// import 'package:Yempover_app/screens/PostDetailScreen.dart';
-// import 'package:Yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
-// import 'package:Yempover_app/screens/TradeBoothScreen.dart';
-// import 'package:Yempover_app/screens/HamburgerMenuScreen.dart';
-// import 'package:Yempover_app/screens/MyProfileScreen.dart';
-// import 'package:Yempover_app/screens/NotificationsScreen.dart';
-// import 'package:Yempover_app/services/my_profile_service.dart';
-// import 'package:Yempover_app/services/profile_session_manager.dart';
-// import 'package:Yempover_app/services/category_service.dart';
-// import 'package:Yempover_app/services/token_service.dart';
-// import 'package:Yempover_app/utils/error_message_utils.dart';
-// import 'package:Yempover_app/utils/snackbar_utils.dart';
+// import 'package:YemPover_app/models/ProductPostmain.dart';
+// import 'package:YemPover_app/models/get_my_profile_response.dart';
+// import 'package:YemPover_app/services/api_service.dart';
+// import 'package:YemPover_app/screens/PostDetailScreen.dart';
+// import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
+// import 'package:YemPover_app/screens/TradeBoothScreen.dart';
+// import 'package:YemPover_app/screens/HamburgerMenuScreen.dart';
+// import 'package:YemPover_app/screens/MyProfileScreen.dart';
+// import 'package:YemPover_app/screens/NotificationsScreen.dart';
+// import 'package:YemPover_app/services/my_profile_service.dart';
+// import 'package:YemPover_app/services/profile_session_manager.dart';
+// import 'package:YemPover_app/services/category_service.dart';
+// import 'package:YemPover_app/services/token_service.dart';
+// import 'package:YemPover_app/utils/error_message_utils.dart';
+// import 'package:YemPover_app/utils/snackbar_utils.dart';
 // import '../services/post_action_service.dart';
 
 // // Extended Post class with the required properties
@@ -1470,7 +1470,7 @@
 //                   ),
 //                 ),
 //                 const Text(
-//                   'Welcome to Yempover',
+//                   'Welcome to YemPover',
 //                   style: TextStyle(color: Colors.grey, fontSize: 12),
 //                 ),
 //               ],
@@ -2536,7 +2536,7 @@
 
 import 'dart:async';
 import 'dart:math';
-import 'package:Yempover_app/utils/notification_provider.dart';
+import 'package:YemPover_app/utils/notification_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
@@ -2544,21 +2544,21 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
 import 'package:provider/provider.dart';
-import 'package:Yempover_app/models/ProductPostmain.dart';
-import 'package:Yempover_app/models/get_my_profile_response.dart';
-import 'package:Yempover_app/services/api_service.dart';
-import 'package:Yempover_app/screens/PostDetailScreen.dart';
-import 'package:Yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:Yempover_app/screens/TradeBoothScreen.dart';
-import 'package:Yempover_app/screens/HamburgerMenuScreen.dart';
-import 'package:Yempover_app/screens/MyProfileScreen.dart';
-import 'package:Yempover_app/screens/NotificationsScreen.dart';
-import 'package:Yempover_app/services/my_profile_service.dart';
-import 'package:Yempover_app/services/profile_session_manager.dart';
-import 'package:Yempover_app/services/category_service.dart';
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/utils/error_message_utils.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/models/ProductPostmain.dart';
+import 'package:YemPover_app/models/get_my_profile_response.dart';
+import 'package:YemPover_app/services/api_service.dart';
+import 'package:YemPover_app/screens/PostDetailScreen.dart';
+import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:YemPover_app/screens/TradeBoothScreen.dart';
+import 'package:YemPover_app/screens/HamburgerMenuScreen.dart';
+import 'package:YemPover_app/screens/MyProfileScreen.dart';
+import 'package:YemPover_app/screens/NotificationsScreen.dart';
+import 'package:YemPover_app/services/my_profile_service.dart';
+import 'package:YemPover_app/services/profile_session_manager.dart';
+import 'package:YemPover_app/services/category_service.dart';
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/utils/error_message_utils.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 import '../services/post_action_service.dart';
 
 // Extended Post class with the required properties
@@ -3449,7 +3449,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       builder: (sheetContext) {
         return Padding(
           padding: EdgeInsets.only(
@@ -3460,7 +3460,7 @@ class _HomeScreenState extends State<HomeScreen> {
               color: Colors.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
             ),
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
             child: SafeArea(
               top: false,
               child: Column(
@@ -3510,8 +3510,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200),
-                      color: Colors.grey.shade50,
+                      border: Border.all(color: Colors.grey.shade300),
+                      color: Colors.white,
                     ),
                     child: GooglePlaceAutoCompleteTextField(
                       textEditingController: controller,
@@ -3519,8 +3519,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       debounceTime: 400,
                       isLatLngRequired: true,
                       countries: const ['in', 'us', 'ca', 'gb', 'au'],
+                      boxDecoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
                       inputDecoration: InputDecoration(
                         hintText: 'Search for a location...',
+                        hintStyle: TextStyle(color: Colors.grey.shade600),
                         border: InputBorder.none,
                         prefixIcon: Icon(
                           Icons.search,
@@ -3536,51 +3542,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         selectedLng = double.tryParse(prediction.lng ?? '');
                       },
                       itemClick: (Prediction prediction) {
-                        controller.text = prediction.description ?? '';
-                        controller.selection = TextSelection.fromPosition(
-                          TextPosition(offset: controller.text.length),
-                        );
+                        final selectedAddress = prediction.description ?? '';
+                        if (selectedAddress.isEmpty) return;
+                        selectedLat = double.tryParse(prediction.lat ?? '');
+                        selectedLng = double.tryParse(prediction.lng ?? '');
+                        Navigator.of(sheetContext).pop({
+                          'address': selectedAddress,
+                          'lat': selectedLat,
+                          'lng': selectedLng,
+                        });
                       },
                       seperatedBuilder: const Divider(height: 1),
                       containerHorizontalPadding: 0,
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(sheetContext).pop(),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(52),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: const Text('Cancel'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.of(sheetContext).pop({
-                              'address': controller.text,
-                              'lat': selectedLat,
-                              'lng': selectedLng,
-                            });
-                          },
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(52),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: const Text('Apply'),
-                        ),
-                      ),
-                    ],
-                  ),
+                  const SizedBox(height: 28),
                 ],
               ),
             ),
@@ -3984,19 +3960,111 @@ class _HomeScreenState extends State<HomeScreen> {
         final shouldExit =
             await showDialog<bool>(
               context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Exit App'),
-                content: const Text('Are you sure you want to exit?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('No'),
+              barrierColor: Colors.black.withValues(alpha: 0.52),
+              builder: (context) => Dialog(
+                backgroundColor: Colors.white,
+                surfaceTintColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                insetPadding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 24,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF3F2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.exit_to_app_rounded,
+                              color: Color(0xFFE53935),
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Text(
+                            'Exit App',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF111827),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'Are you sure you want to close YemPover now?',
+                        style: TextStyle(
+                          fontSize: 15,
+                          height: 1.35,
+                          color: Colors.black.withValues(alpha: 0.68),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(context).pop(false),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(50),
+                                foregroundColor: const Color(0xFF374151),
+                                side: const BorderSide(
+                                  color: Color(0xFFD1D5DB),
+                                  width: 1.2,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: const Text(
+                                'Stay',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () => Navigator.of(context).pop(true),
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(50),
+                                backgroundColor: const Color(0xFFE53935),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: const Text(
+                                'Exit',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    child: const Text('Yes'),
-                  ),
-                ],
+                ),
               ),
             ) ??
             false;
@@ -4020,7 +4088,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? _buildEmptyState()
                     : RefreshIndicator(
                         onRefresh: _refreshPosts,
-                        color: Colors.blue,
+                        color: const Color(0xFF2E5BFF),
+                        backgroundColor: Colors.transparent,
+                        elevation: 0,
+                        strokeWidth: 2.2,
                         child: ListView.builder(
                           controller: _scrollController,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -4070,52 +4141,65 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(30),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.search_off,
-              size: 80,
-              color: Colors.blue.shade300,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'No posts found',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey.shade800,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Try adjusting your filters or search query',
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _clearAllFilters,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(30),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.search_off,
+                      size: 80,
+                      color: Colors.blue.shade300,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'No posts found',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Try adjusting your filters or search query',
+                    style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _clearAllFilters,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 30,
+                        vertical: 15,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text('Clear Filters'),
+                  ),
+                ],
               ),
-              elevation: 0,
             ),
-            child: const Text('Clear Filters'),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -4209,7 +4293,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const Text(
-                  'Welcome to Yempover',
+                  'Welcome to YemPover',
                   style: TextStyle(color: Colors.grey, fontSize: 13),
                 ),
               ],

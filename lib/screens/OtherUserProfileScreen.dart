@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/models/ProductPost.dart';
+import 'package:YemPover_app/models/ProductPost.dart';
 
 class OtherUserProfileScreen extends StatefulWidget {
   final String userId;
@@ -79,7 +79,7 @@ class _OtherUserProfileScreenState extends State<OtherUserProfileScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         actions: [
           PopupMenuButton<String>(
@@ -103,7 +103,7 @@ class _OtherUserProfileScreenState extends State<OtherUserProfileScreen> {
           ),
         ],
       ),
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(

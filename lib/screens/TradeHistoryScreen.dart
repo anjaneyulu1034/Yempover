@@ -99,7 +99,7 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         actions: [
           if (_totalTrades > 0)
@@ -114,7 +114,7 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
             ),
         ],
       ),
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null
@@ -123,6 +123,10 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
           ? _buildEmptyWidget()
           : RefreshIndicator(
               onRefresh: _refreshTradeHistory,
+              color: const Color(0xFF2E5BFF),
+              backgroundColor: Colors.white,
+              elevation: 0,
+              strokeWidth: 2.2,
               child: ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: _trades.length,

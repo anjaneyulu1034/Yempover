@@ -1,5 +1,5 @@
-import 'package:Yempover_app/screens/PostDetailScreen.dart';
-import 'package:Yempover_app/services/post_action_service.dart';
+import 'package:YemPover_app/screens/PostDetailScreen.dart';
+import 'package:YemPover_app/services/post_action_service.dart';
 import 'package:flutter/material.dart';
 
 class HiddenPostsScreen extends StatefulWidget {
@@ -102,7 +102,7 @@ class _HiddenPostsScreenState extends State<HiddenPostsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Hidden Posts'),
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
       ),
@@ -112,6 +112,10 @@ class _HiddenPostsScreenState extends State<HiddenPostsScreen> {
           : _hiddenPosts.isEmpty
           ? RefreshIndicator(
               onRefresh: () => _loadHiddenPosts(isRefresh: true),
+              color: const Color(0xFF2E5BFF),
+              backgroundColor: Colors.white,
+              elevation: 0,
+              strokeWidth: 2.2,
               child: ListView(
                 children: const [
                   SizedBox(height: 220),
@@ -130,6 +134,10 @@ class _HiddenPostsScreenState extends State<HiddenPostsScreen> {
             )
           : RefreshIndicator(
               onRefresh: () => _loadHiddenPosts(isRefresh: true),
+              color: const Color(0xFF2E5BFF),
+              backgroundColor: Colors.white,
+              elevation: 0,
+              strokeWidth: 2.2,
               child: ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: _hiddenPosts.length,
@@ -195,16 +203,12 @@ class _HiddenPostsScreenState extends State<HiddenPostsScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: _isRefreshing
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : TextButton(
-                              onPressed: () => _unhidePost(item),
-                              child: const Text('Unhide'),
-                            ),
+                      trailing: TextButton(
+                        onPressed: _isRefreshing
+                            ? null
+                            : () => _unhidePost(item),
+                        child: const Text('Unhide'),
+                      ),
                     ),
                   );
                 },

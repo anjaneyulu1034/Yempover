@@ -99,8 +99,8 @@ class ApiConstants {
 }
 
 class AppConstants {
-  static const String appName = 'Yempover';
-  static const String appTagline = 'Battery Systems';
+  static const String appName = 'YemPover';
+  static const String appTagline = 'Barter System';
   static const int defaultPageSize = 10;
   static const double defaultRadius = 10.0;
   static const double minRadius = 1.0;

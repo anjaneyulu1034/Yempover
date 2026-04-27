@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:Yempover_app/services/socket_io/socket_service.dart';
+import 'package:YemPover_app/services/socket_io/socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:Yempover_app/models/chats/trade_chat.dart';
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:Yempover_app/utils/loading_widget.dart';
+import 'package:YemPover_app/models/chats/trade_chat.dart';
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:YemPover_app/utils/loading_widget.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final TradeChat chat;
@@ -2458,6 +2458,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   Expanded(
                     child: RefreshIndicator(
                       onRefresh: _refreshChat,
+                      color: const Color(0xFF2E5BFF),
+                      backgroundColor: Colors.transparent,
+                      elevation: 0,
+                      strokeWidth: 2.2,
                       child: ListView(
                         controller: _scrollController,
                         padding: const EdgeInsets.symmetric(

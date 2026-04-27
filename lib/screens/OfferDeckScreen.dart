@@ -1,12 +1,11 @@
-import 'package:Yempover_app/screens/LoginScreen.dart';
+import 'package:YemPover_app/screens/LoginScreen.dart';
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/models/ProductPostmain.dart';
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/services/my_posts_service.dart';
-import 'package:Yempover_app/services/api_service.dart';
-import 'package:Yempover_app/screens/OfferDescriptionScreen.dart';
-import 'package:Yempover_app/screens/AddPostScreen.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/models/ProductPostmain.dart';
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/services/my_posts_service.dart';
+import 'package:YemPover_app/screens/OfferDescriptionScreen.dart';
+import 'package:YemPover_app/screens/AddPostScreen.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 
 class OfferDeckScreen extends StatefulWidget {
   final Post post;
@@ -26,14 +25,10 @@ class OfferDeckScreen extends StatefulWidget {
 
 class _OfferDeckScreenState extends State<OfferDeckScreen> {
   final MyPostsService _postsService = MyPostsService();
-  final ApiService _apiService = ApiService();
 
   List<UserItem> _userItems = [];
   final List<UserItem> _selectedItems = [];
-  List<UserItem> _ownerClubItems = [];
-  final List<UserItem> _selectedOwnerClubItems = [];
   bool _isLoading = false;
-  bool _isLoadingOwnerClubItems = false;
   String? _errorMessage;
   int _currentPage = 1;
   int _totalPages = 1;
@@ -44,13 +39,32 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   void initState() {
     super.initState();
     _fetchMyPosts();
-    if (_supportsClubbing) {
-      _fetchOwnerClubItems();
-    }
     _scrollController.addListener(_onScroll);
   }
 
-  bool get _supportsClubbing => widget.post.canClubItems;
+  List<UserItem> _mapMyPostsToUserItems(List<dynamic> posts) {
+    return posts
+        .where((myPost) => myPost.postedById == widget.currentUserId)
+        .where((myPost) => myPost.isListed == true)
+        .where(
+          (myPost) =>
+              myPost.status != 'SOLD' &&
+              myPost.status != 'ARCHIVED' &&
+              myPost.status != 'DELETED',
+        )
+        .map((myPost) {
+          return UserItem(
+            id: myPost.id,
+            name: myPost.title,
+            description: myPost.description,
+            imageUrl: myPost.images.isNotEmpty ? myPost.images.first : '',
+            category: myPost.category.name,
+            price: myPost.price ?? 0.0,
+            value: myPost.price ?? 0.0,
+          );
+        })
+        .toList();
+  }
 
   Widget _buildMetaChip({
     required IconData icon,
@@ -182,18 +196,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       if (!mounted) return;
 
       setState(() {
-        // Convert MyPost objects to UserItem objects
-        _userItems = response.data.posts.map((myPost) {
-          return UserItem(
-            id: myPost.id,
-            name: myPost.title,
-            description: myPost.description,
-            imageUrl: myPost.images.isNotEmpty ? myPost.images.first : '',
-            category: myPost.category.name,
-            price: myPost.price ?? 0.0,
-            value: myPost.price ?? 0.0,
-          );
-        }).toList();
+        _userItems = _mapMyPostsToUserItems(response.data.posts);
         _currentPage = response.data.pagination.page;
         _totalPages = response.data.pagination.pages;
         _isLoading = false;
@@ -234,17 +237,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       if (!mounted) return;
 
       setState(() {
-        final newItems = response.data.posts.map((myPost) {
-          return UserItem(
-            id: myPost.id,
-            name: myPost.title,
-            description: myPost.description,
-            imageUrl: myPost.images.isNotEmpty ? myPost.images.first : '',
-            category: myPost.category.name,
-            price: myPost.price ?? 0.0,
-            value: myPost.price ?? 0.0,
-          );
-        }).toList();
+        final newItems = _mapMyPostsToUserItems(response.data.posts);
         _userItems.addAll(newItems);
         _currentPage = response.data.pagination.page;
         _totalPages = response.data.pagination.pages;
@@ -267,71 +260,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       if (!mounted) return;
 
       setState(() {
-        _userItems = response.data.posts.map((myPost) {
-          return UserItem(
-            id: myPost.id,
-            name: myPost.title,
-            description: myPost.description,
-            imageUrl: myPost.images.isNotEmpty ? myPost.images.first : '',
-            category: myPost.category.name,
-            price: myPost.price ?? 0.0,
-            value: myPost.price ?? 0.0,
-          );
-        }).toList();
+        _userItems = _mapMyPostsToUserItems(response.data.posts);
         _currentPage = response.data.pagination.page;
         _totalPages = response.data.pagination.pages;
       });
     } catch (e) {
       _showErrorSnackBar('Failed to refresh items');
-    }
-  }
-
-  Future<void> _fetchOwnerClubItems() async {
-    if (!_supportsClubbing) return;
-
-    setState(() {
-      _isLoadingOwnerClubItems = true;
-    });
-
-    try {
-      final response = await _apiService.getPosts(page: 1, limit: 100);
-
-      if (!mounted) return;
-
-      final ownerItems = response.posts
-          .where((post) => post.postedById == widget.post.postedById)
-          .where((post) => post.id != widget.post.id)
-          .where((post) => post.isListed)
-          .where(
-            (post) =>
-                post.status != PostStatus.SOLD &&
-                post.status != PostStatus.ARCHIVED &&
-                post.status != PostStatus.DELETED,
-          )
-          .map(
-            (post) => UserItem(
-              id: post.id,
-              name: post.title,
-              description: post.description,
-              imageUrl: post.processedImages.isNotEmpty
-                  ? post.processedImages.first
-                  : '',
-              category: post.category.name,
-              price: post.price,
-              value: post.price,
-            ),
-          )
-          .toList();
-
-      setState(() {
-        _ownerClubItems = ownerItems;
-        _isLoadingOwnerClubItems = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _isLoadingOwnerClubItems = false;
-      });
     }
   }
 
@@ -379,19 +313,6 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   void _removeSelectedItem(UserItem item) {
     setState(() {
       _selectedItems.removeWhere((i) => i.id == item.id);
-    });
-  }
-
-  void _toggleOwnerClubItemSelection(UserItem item) {
-    setState(() {
-      final existingIndex = _selectedOwnerClubItems.indexWhere(
-        (i) => i.id == item.id,
-      );
-      if (existingIndex != -1) {
-        _selectedOwnerClubItems.removeAt(existingIndex);
-      } else {
-        _selectedOwnerClubItems.add(item);
-      }
     });
   }
 
@@ -514,96 +435,6 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     );
   }
 
-  void _showOwnerClubSelectionDialog() {
-    if (!_supportsClubbing) {
-      SnackbarUtils.showInfo(context, 'This post is not enabled for clubbing.');
-      return;
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Seller Items to Bundle'),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 400,
-          child: _isLoadingOwnerClubItems
-              ? const Center(child: CircularProgressIndicator())
-              : _ownerClubItems.isEmpty
-              ? Center(
-                  child: Text(
-                    'No additional items available from this seller.',
-                    style: TextStyle(color: Colors.grey.shade600),
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: _ownerClubItems.length,
-                  itemBuilder: (context, index) {
-                    final item = _ownerClubItems[index];
-                    final isSelected = _selectedOwnerClubItems.any(
-                      (selected) => selected.id == item.id,
-                    );
-
-                    return CheckboxListTile(
-                      value: isSelected,
-                      onChanged: (selected) {
-                        _toggleOwnerClubItemSelection(item);
-                        Navigator.pop(context);
-                        _showOwnerClubSelectionDialog();
-                      },
-                      secondary: Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          color: Colors.grey.shade200,
-                        ),
-                        child: item.imageUrl.isNotEmpty
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  item.imageUrl,
-                                  width: 50,
-                                  height: 50,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return const Icon(
-                                      Icons.image,
-                                      size: 30,
-                                      color: Colors.grey,
-                                    );
-                                  },
-                                ),
-                              )
-                            : const Icon(
-                                Icons.image,
-                                size: 30,
-                                color: Colors.grey,
-                              ),
-                      ),
-                      title: Text(
-                        item.name,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Text(
-                        item.category,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _navigateToDescriptionScreen() {
     if ((widget.offerMode == OfferSubmissionMode.barter ||
             widget.offerMode == OfferSubmissionMode.both) &&
@@ -630,7 +461,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         builder: (context) => OfferDescriptionScreen(
           post: widget.post,
           selectedItems: _selectedItems,
-          selectedBundleItems: _selectedOwnerClubItems,
+          selectedBundleItems: const [],
           currentUserId: widget.currentUserId,
           isService: isService, // Pass the correct type
           offerMode: widget.offerMode,
@@ -642,9 +473,9 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         // leading: IconButton(
         //   icon: const Icon(Icons.arrow_back, color: Colors.black),
@@ -757,118 +588,25 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                 // ADD CARD
                 Expanded(
                   child: InkWell(
-                    onTap: _showOwnerClubSelectionDialog,
+                    onTap: _openAddPostAndRefresh,
                     child: Container(
                       height: 140,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: Colors.blue.shade200),
-                        color: _supportsClubbing
-                            ? Colors.white
-                            : Colors.grey.shade100,
+                        color: Colors.white,
                       ),
-                      child: _supportsClubbing
-                          ? Center(
-                              child: _selectedOwnerClubItems.isEmpty
-                                  ? Container(
-                                      width: 46,
-                                      height: 46,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade100,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(Icons.add, size: 28),
-                                    )
-                                  : Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                          child:
-                                              _selectedOwnerClubItems
-                                                  .first
-                                                  .imageUrl
-                                                  .isNotEmpty
-                                              ? Image.network(
-                                                  _selectedOwnerClubItems
-                                                      .first
-                                                      .imageUrl,
-                                                  width: 70,
-                                                  height: 70,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder:
-                                                      (
-                                                        context,
-                                                        error,
-                                                        stackTrace,
-                                                      ) {
-                                                        return Container(
-                                                          width: 70,
-                                                          height: 70,
-                                                          color: Colors
-                                                              .grey
-                                                              .shade200,
-                                                          child: const Icon(
-                                                            Icons.image,
-                                                          ),
-                                                        );
-                                                      },
-                                                )
-                                              : Container(
-                                                  width: 70,
-                                                  height: 70,
-                                                  color: Colors.grey.shade200,
-                                                  child: const Icon(
-                                                    Icons.image,
-                                                  ),
-                                                ),
-                                        ),
-                                        Positioned(
-                                          top: -8,
-                                          right: -8,
-                                          child: Container(
-                                            padding: const EdgeInsets.all(6),
-                                            decoration: const BoxDecoration(
-                                              color: Colors.blue,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Text(
-                                              '${_selectedOwnerClubItems.length}',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                            )
-                          : Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.lock_outline,
-                                    size: 26,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Clubbing\nOff',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey.shade600,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                      child: Center(
+                        child: Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.add, size: 28),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -877,19 +615,16 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
           ),
 
           const SizedBox(height: 8),
-          if (_supportsClubbing)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  _selectedOwnerClubItems.isEmpty
-                      ? 'Tap + to add seller items (bundle)'
-                      : '${_selectedOwnerClubItems.length} seller item(s) added to bundle',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'Tap + to add new post',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
             ),
+          ),
 
           const SizedBox(height: 14),
 
@@ -1063,6 +798,10 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                   height: 150,
                   child: RefreshIndicator(
                     onRefresh: _refreshPosts,
+                    color: const Color(0xFF2E5BFF),
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    strokeWidth: 2.2,
                     child: ListView.builder(
                       controller: _scrollController,
                       scrollDirection: Axis.horizontal,

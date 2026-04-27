@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:Yempover_app/models/get_current_subscription_plan_response.dart';
-import 'package:Yempover_app/models/get_subscription_plans_response.dart';
-import 'package:Yempover_app/services/subscription_plan_service.dart';
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/models/get_current_subscription_plan_response.dart';
+import 'package:YemPover_app/models/get_subscription_plans_response.dart';
+import 'package:YemPover_app/services/subscription_plan_service.dart';
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
@@ -195,10 +195,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
       ),
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: !_isLoggedIn
           ? Center(
               child: Column(
@@ -231,6 +231,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _fetchData,
+              color: const Color(0xFF2E5BFF),
+              backgroundColor: Colors.white,
+              elevation: 0,
+              strokeWidth: 2.2,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.fromLTRB(
@@ -428,7 +432,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     bool isTrialing = planStatus.toLowerCase() == 'trialing';
 
     return Card(
-      elevation: 3,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -561,19 +565,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       : Colors.grey.shade300,
                   width: isSelected ? 2.5 : 1,
                 ),
-                boxShadow: [
-                  if (isSelected)
-                    BoxShadow(
-                      color: Colors.blue.withValues(alpha: 0.35),
-                      blurRadius: 18,
-                      offset: const Offset(0, 6),
-                    )
-                  else
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 6,
-                    ),
-                ],
+                boxShadow: const [],
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:Yempover_app/services/content_service.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/services/content_service.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 
 class PrivacyScreen extends StatefulWidget {
   const PrivacyScreen({super.key});
@@ -54,7 +54,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_title),
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
         actions: [
@@ -64,7 +64,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
           ),
         ],
       ),
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null
@@ -255,7 +255,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                                   ),
                                   SizedBox(width: 4),
                                   Text(
-                                    'privacy@Yempover.com',
+                                    'privacy@YemPover.com',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.blue,

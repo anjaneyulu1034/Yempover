@@ -1,25 +1,25 @@
-import 'package:Yempover_app/utils/notification_provider.dart';
+import 'package:YemPover_app/utils/notification_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:Yempover_app/payment/SubscriptionScreen.dart';
-import 'package:Yempover_app/screens/FavoritesScreen.dart';
-import 'package:Yempover_app/screens/HelpSupportScreen.dart';
-import 'package:Yempover_app/screens/HiddenPostsScreen.dart';
-import 'package:Yempover_app/screens/MyProfileScreen.dart';
-import 'package:Yempover_app/screens/NotificationsScreen.dart';
-import 'package:Yempover_app/screens/PrivacyScreen.dart';
-import 'package:Yempover_app/screens/service/AppointmentsDashboardScreen.dart';
-import 'package:Yempover_app/screens/TermsScreen.dart';
-import 'package:Yempover_app/screens/TradeHistoryScreen.dart';
-import 'package:Yempover_app/services/account_service.dart';
-import 'package:Yempover_app/services/auth_service.dart';
-import 'package:Yempover_app/services/profile_session_manager.dart';
-import 'package:Yempover_app/services/token_service.dart';
-import 'package:Yempover_app/screens/LoginScreen.dart';
-import 'package:Yempover_app/screens/Home_screen.dart';
-import 'package:Yempover_app/services/subscription_plan_service.dart';
-import 'package:Yempover_app/models/get_current_subscription_plan_response.dart';
-import 'package:Yempover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/payment/SubscriptionScreen.dart';
+import 'package:YemPover_app/screens/FavoritesScreen.dart';
+import 'package:YemPover_app/screens/HelpSupportScreen.dart';
+import 'package:YemPover_app/screens/HiddenPostsScreen.dart';
+import 'package:YemPover_app/screens/MyProfileScreen.dart';
+import 'package:YemPover_app/screens/NotificationsScreen.dart';
+import 'package:YemPover_app/screens/PrivacyScreen.dart';
+import 'package:YemPover_app/screens/service/AppointmentsDashboardScreen.dart';
+import 'package:YemPover_app/screens/TermsScreen.dart';
+import 'package:YemPover_app/screens/TradeHistoryScreen.dart';
+import 'package:YemPover_app/services/account_service.dart';
+import 'package:YemPover_app/services/auth_service.dart';
+import 'package:YemPover_app/services/profile_session_manager.dart';
+import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/screens/LoginScreen.dart';
+import 'package:YemPover_app/screens/Home_screen.dart';
+import 'package:YemPover_app/services/subscription_plan_service.dart';
+import 'package:YemPover_app/models/get_current_subscription_plan_response.dart';
+import 'package:YemPover_app/utils/snackbar_utils.dart';
 
 class HamburgerMenuScreen extends StatefulWidget {
   const HamburgerMenuScreen({super.key});
@@ -118,9 +118,9 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
