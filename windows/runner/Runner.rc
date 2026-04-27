@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "Yempover_app" "\0"
+            VALUE "FileDescription", "YemPover_app" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "Yempover_app" "\0"
+            VALUE "InternalName", "YemPover_app" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "Yempover_app.exe" "\0"
-            VALUE "ProductName", "Yempover_app" "\0"
+            VALUE "OriginalFilename", "YemPover_app.exe" "\0"
+            VALUE "ProductName", "YemPover_app" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

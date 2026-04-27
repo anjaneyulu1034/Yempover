@@ -1,6 +1,6 @@
 {
-    "name": "Yempover_app",
-    "short_name": "Yempover_app",
+    "name": "YemPover_app",
+    "short_name": "YemPover_app",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

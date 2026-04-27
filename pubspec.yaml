@@ -1,5 +1,5 @@
-name: Yempover_app
-description: "Yempover Battery System Application."
+name: YemPover_app
+description: "YemPover Battery System Application."
 publish_to: "none"
 
 version: 1.0.0+1
