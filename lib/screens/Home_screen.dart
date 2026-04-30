@@ -5095,6 +5095,7 @@ class _HomeScreenState extends State<HomeScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Stack(
+            clipBehavior: Clip.none,
             children: [
               iconAssetPath != null
                   ? Opacity(
@@ -5113,7 +5114,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
               if (badge > 0)
                 Positioned(
-                  right: -4,
+                  right: -1,
                   top: -4,
                   child: Container(
                     padding: const EdgeInsets.all(4),

@@ -3092,46 +3092,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ),
             const SizedBox(height: 20),
 
-            if (_currentChat.isActive &&
-                _currentChat.canCompleteDeal(widget.currentUserId)) ...[
-              ListTile(
-                leading: const Icon(Icons.check_circle, color: Colors.green),
-                title: const Text('Complete Deal'),
-                subtitle: const Text('Mark this deal as completed'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _completeTrade();
-                },
-              ),
-              const Divider(),
-            ],
-
-            if (_currentChat.isActive || _currentChat.isCompleted) ...[
-              ListTile(
-                leading: const Icon(Icons.archive, color: Colors.blue),
-                title: const Text('Archive Chat'),
-                subtitle: const Text('Move this chat to archive'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _archiveChat();
-                },
-              ),
-              const Divider(),
-            ],
-
-            if (_currentChat.isActive && !_currentChat.hasAcceptedOffer) ...[
-              ListTile(
-                leading: const Icon(Icons.cancel, color: Colors.orange),
-                title: const Text('Cancel Trade'),
-                subtitle: const Text('Cancel this trade negotiation'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _cancelTrade();
-                },
-              ),
-              const Divider(),
-            ],
-
             ListTile(
               leading: const Icon(Icons.block, color: Colors.red),
               title: const Text('Block User'),
@@ -3157,6 +3117,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
             OutlinedButton(
               onPressed: () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF2E5BFF), width: 1.4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 10,
+                ),
+              ),
               child: const Text('Cancel'),
             ),
           ],

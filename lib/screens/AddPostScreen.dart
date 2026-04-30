@@ -1491,8 +1491,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
                       if (_selectedOption == 1) _buildStep1(),
                       if (_selectedOption == 2) _buildLookingForStep1(),
-
-                      const SizedBox(height: 100), // space for bottom buttons
                     ],
                   ),
                 ),

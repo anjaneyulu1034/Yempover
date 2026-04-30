@@ -688,16 +688,29 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
           title: const Text('Logout'),
           content: const Text('Are you sure you want to logout?'),
           actions: [
-            TextButton(
+            OutlinedButton(
               onPressed: () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.grey.shade700,
+                side: BorderSide(color: Colors.grey.shade400, width: 1.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
               child: const Text('Cancel'),
             ),
-            TextButton(
+            OutlinedButton(
               onPressed: () {
                 Navigator.pop(context); // Close dialog
                 _logout(); // Perform logout with API
               },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red, width: 1.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
               child: const Text('Logout'),
             ),
           ],

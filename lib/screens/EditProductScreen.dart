@@ -27,6 +27,7 @@ class EditProductScreen extends StatefulWidget {
 
 class _EditProductScreenState extends State<EditProductScreen> {
   static const int _maxPostImages = 5;
+  static const String _expiredExpiryUnit = 'Expired';
   static const List<String> _expiryUnits = [
     'Minutes',
     'Hours',
@@ -108,7 +109,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
     final now = DateTime.now();
     if (!validUntil.isAfter(now)) {
-      _selectedExpiryUnit = 'No expiry';
+      _selectedExpiryUnit = _expiredExpiryUnit;
       _expiryValueController.clear();
       return;
     }
@@ -366,13 +367,17 @@ class _EditProductScreenState extends State<EditProductScreen> {
     setState(() {
       _selectedExpiryUnit = value;
       _expiryValidationError = null;
-      if (value == 'No expiry') {
+      if (value == 'No expiry' || value == _expiredExpiryUnit) {
         _expiryValueController.clear();
       }
     });
   }
 
   DateTime? _computeEditedExpiryDate() {
+    if (_selectedExpiryUnit == _expiredExpiryUnit) {
+      return widget.post.validUntil;
+    }
+
     if (_selectedExpiryUnit == 'No expiry') {
       return null;
     }
@@ -410,7 +415,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
   }
 
   bool _validateTimelineInput() {
-    if (_selectedExpiryUnit == 'No expiry') {
+    if (_selectedExpiryUnit == 'No expiry' ||
+        _selectedExpiryUnit == _expiredExpiryUnit) {
       setState(() {
         _expiryValidationError = null;
       });
@@ -1344,6 +1350,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
               ),
             ),
             items: _expiryUnits
+                .followedBy(isExpired ? [_expiredExpiryUnit] : const <String>[])
                 .map(
                   (unit) =>
                       DropdownMenuItem<String>(value: unit, child: Text(unit)),
@@ -1355,7 +1362,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
               }
             },
           ),
-          if (_selectedExpiryUnit != 'No expiry') ...[
+          if (_selectedExpiryUnit != 'No expiry' &&
+              _selectedExpiryUnit != _expiredExpiryUnit) ...[
             const SizedBox(height: 10),
             TextFormField(
               controller: _expiryValueController,

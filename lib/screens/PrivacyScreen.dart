@@ -57,12 +57,6 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _fetchPrivacyPolicy,
-          ),
-        ],
       ),
       backgroundColor: Colors.white,
       body: _isLoading

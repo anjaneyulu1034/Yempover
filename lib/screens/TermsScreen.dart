@@ -54,9 +54,6 @@ class _TermsScreenState extends State<TermsScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchTerms),
-        ],
       ),
       backgroundColor: Colors.white,
       body: _isLoading

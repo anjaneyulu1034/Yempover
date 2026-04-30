@@ -203,9 +203,9 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text(
-          'Post Details',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Text(
+          _post.type == 'service' ? 'Service Details' : 'Product Details',
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         elevation: 0,
