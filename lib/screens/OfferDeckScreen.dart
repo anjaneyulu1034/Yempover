@@ -1,6 +1,7 @@
 import 'package:YemPover_app/screens/LoginScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:YemPover_app/models/ProductPostmain.dart';
+import 'package:YemPover_app/models/my_post_model.dart';
 import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/services/my_posts_service.dart';
 import 'package:YemPover_app/screens/OfferDescriptionScreen.dart';
@@ -42,10 +43,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     _scrollController.addListener(_onScroll);
   }
 
-  List<UserItem> _mapMyPostsToUserItems(List<dynamic> posts) {
+  List<UserItem> _mapMyPostsToUserItems(List<MyPost> posts) {
     return posts
         .where((myPost) => myPost.postedById == widget.currentUserId)
+        .where((myPost) => myPost.type.toLowerCase() == 'product')
         .where((myPost) => myPost.isListed == true)
+        .where((myPost) => myPost.hasExpired == false)
         .where(
           (myPost) =>
               myPost.status != 'SOLD' &&

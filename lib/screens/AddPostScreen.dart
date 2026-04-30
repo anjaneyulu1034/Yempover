@@ -1,4 +1,6 @@
+// ignore: file_names
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:YemPover_app/models/my_post_model.dart';
@@ -28,6 +30,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
   static const int _maxAllowedImages = 5;
   static const int _minRequiredProductImages = 1;
   static const List<String> _expiryUnits = [
+    'Minutes',
     'Hours',
     'Days',
     'Months',
@@ -83,12 +86,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
   bool _isGettingLocation = false;
   double? _selectedLatitude;
   double? _selectedLongitude;
-  String _selectedExpiryUnit = 'Days';
+  String _selectedExpiryUnit = 'No expiry';
 
   // Manual location search
   final FocusNode _locationFocusNode = FocusNode();
   bool _showLocationMinCharsHint = false;
   static const String _googleApiKey = 'AIzaSyAT3wIjV73qVXPAlgkyifnns38GztnbNF4';
+
+  bool get _isImageRequiredForPost =>
+      _selectedOption == 1 &&
+      (_postType == 'Product' || _postType == 'Service');
 
   @override
   void initState() {
@@ -471,15 +478,14 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
                 color:
-                    _postType == 'Product' &&
-                        _selectedOption == 1 &&
+                    _isImageRequiredForPost &&
                         _showImageValidationError &&
                         _selectedImages.isEmpty
                     ? Colors.red
                     : Colors.black,
               ),
             ),
-            if (_postType == 'Product' && _selectedOption == 1)
+            if (_isImageRequiredForPost)
               Text(
                 ' *',
                 style: TextStyle(
@@ -552,15 +558,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
             decoration: BoxDecoration(
               border: Border.all(
                 color:
-                    _postType == 'Product' &&
-                        _selectedOption == 1 &&
+                    _isImageRequiredForPost &&
                         _showImageValidationError &&
                         _selectedImages.isEmpty
                     ? Colors.red
                     : Colors.grey.shade300,
                 width:
-                    _postType == 'Product' &&
-                        _selectedOption == 1 &&
+                    _isImageRequiredForPost &&
                         _showImageValidationError &&
                         _selectedImages.isEmpty
                     ? 2
@@ -585,10 +589,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                     textAlign: TextAlign.center,
                   ),
-                  if (_postType == 'Product' && _selectedOption == 1)
-                    const SizedBox(height: 8),
-                  if (_postType == 'Product' &&
-                      _selectedOption == 1 &&
+                  if (_isImageRequiredForPost) const SizedBox(height: 8),
+                  if (_isImageRequiredForPost &&
                       _showImageValidationError &&
                       _selectedImages.isEmpty)
                     Text(
@@ -1132,12 +1134,14 @@ class _AddPostScreenState extends State<AddPostScreen> {
       if (value == 'No expiry') {
         _expiryValueController.clear();
       } else if (_expiryValueController.text.trim().isEmpty) {
-        if (value == 'Hours') {
-          _expiryValueController.text = '24';
+        if (value == 'Minutes') {
+          _expiryValueController.text = '';
+        } else if (value == 'Hours') {
+          _expiryValueController.text = '';
         } else if (value == 'Days') {
-          _expiryValueController.text = '7';
+          _expiryValueController.text = '';
         } else {
-          _expiryValueController.text = '1';
+          _expiryValueController.text = '';
         }
       }
     });
@@ -1148,13 +1152,20 @@ class _AddPostScreenState extends State<AddPostScreen> {
       return null;
     }
 
-    final value = int.tryParse(_expiryValueController.text.trim());
-    if (value == null || value <= 0) {
+    final rawValue = _expiryValueController.text.trim();
+    if (rawValue.isEmpty) {
       return null;
     }
 
     final now = DateTime.now();
+    final value = int.tryParse(rawValue);
+    if (value == null || value <= 0) {
+      return null;
+    }
+
     switch (_selectedExpiryUnit) {
+      case 'Minutes':
+        return now.add(Duration(minutes: value));
       case 'Hours':
         return now.add(Duration(hours: value));
       case 'Days':
@@ -1229,6 +1240,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
           TextField(
             controller: _expiryValueController,
             keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             onChanged: (_) {
               if (_expiryValidationError != null) {
                 setState(() {
@@ -1237,11 +1249,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
               }
             },
             decoration: InputDecoration(
-              hintText: _selectedExpiryUnit == 'Hours'
-                  ? 'Enter hours (e.g. 24)'
+              hintText: _selectedExpiryUnit == 'Minutes'
+                  ? 'Enter minutes'
+                  : _selectedExpiryUnit == 'Hours'
+                  ? 'Enter hours'
                   : _selectedExpiryUnit == 'Days'
-                  ? 'Enter days (e.g. 7)'
-                  : 'Enter months (e.g. 1)',
+                  ? 'Enter days'
+                  : 'Enter months',
               filled: true,
               fillColor: Colors.white,
               border: OutlineInputBorder(
@@ -1292,6 +1306,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
           controller: _selectedOption == 1
               ? _priceController
               : _willPayAmountController,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+          ],
           onChanged: (_) {
             if (_priceValidationError != null) {
               setState(() {
@@ -1324,7 +1341,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
               vertical: 12,
             ),
           ),
-          keyboardType: TextInputType.number,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
         ),
       ],
     );
@@ -1465,11 +1482,11 @@ class _AddPostScreenState extends State<AddPostScreen> {
                         1,
                         'Add your post in Marketplace (Product or Service).',
                       ),
-                      const SizedBox(height: 12),
-                      _buildOptionCard(
-                        2,
-                        'Looking for a service in Marketplace.',
-                      ),
+                      // const SizedBox(height: 12),
+                      // _buildOptionCard(
+                      //   2,
+                      //   'Looking for a service in Marketplace.',
+                      // ),
                       const SizedBox(height: 24),
 
                       if (_selectedOption == 1) _buildStep1(),
@@ -1999,15 +2016,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
       return;
     }
 
-    // For product posts (selling), require at least one image
-    if (_postType == 'Product' && _selectedOption == 1) {
+    // For add post (Product/Service), require at least one image
+    if (_isImageRequiredForPost) {
       if (_selectedImages.length < _minRequiredProductImages) {
         setState(() {
           _showImageValidationError = true;
         });
-        _showError(
-          'Please upload at least $_minRequiredProductImages image for products',
-        );
+        _showError('Please upload at least $_minRequiredProductImages image');
         return;
       }
 
@@ -2032,12 +2047,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
     }
 
     if (_selectedExpiryUnit != 'No expiry') {
-      final expiryValue = int.tryParse(_expiryValueController.text.trim());
+      final rawExpiry = _expiryValueController.text.trim();
+      final expiryValue = int.tryParse(rawExpiry);
       if (expiryValue == null || expiryValue <= 0) {
         setState(() {
-          _expiryValidationError = 'Enter a valid expiry value';
+          _expiryValidationError =
+              'Enter a valid ${_selectedExpiryUnit.toLowerCase()} value';
         });
-        _showError('Please enter a valid expiry value');
+        _showError(
+          'Please enter a valid ${_selectedExpiryUnit.toLowerCase()} value',
+        );
         return;
       }
     }
@@ -2051,7 +2070,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
         _showError('Please enter a price');
         return;
       }
-      if (double.tryParse(amountText) == null) {
+      final parsedPrice = double.tryParse(amountText);
+      if (parsedPrice == null || parsedPrice <= 0) {
         setState(() {
           _priceValidationError = 'Enter a valid price';
         });
@@ -2066,7 +2086,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
         _showError('Please enter the amount you are willing to pay');
         return;
       }
-      if (double.tryParse(amountText) == null) {
+      final parsedAmount = double.tryParse(amountText);
+      if (parsedAmount == null || parsedAmount <= 0) {
         setState(() {
           _priceValidationError = 'Enter a valid amount';
         });
@@ -2136,9 +2157,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
         debugPrint('✅ Converted ${imageUrls.length} images to base64');
       }
 
-      double price = _selectedOption == 1
-          ? double.parse(_priceController.text)
-          : double.parse(_willPayAmountController.text);
+      final double price = _selectedOption == 1
+          ? double.parse(_priceController.text.trim())
+          : double.parse(_willPayAmountController.text.trim());
       final expiryDate = _computeExpiryDate();
       final validFromIso = DateTime.now().toUtc().toIso8601String();
       final validUntilIso = expiryDate?.toUtc().toIso8601String();

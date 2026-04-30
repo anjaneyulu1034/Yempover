@@ -1,11 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/api_constants.dart';
 import '../models/my_post_model.dart';
 import '../services/add_post_service.dart';
 import '../services/category_service.dart';
+import '../services/location_service.dart';
 import '../services/my_posts_service.dart';
 
 class EditProductScreen extends StatefulWidget {
@@ -24,17 +27,26 @@ class EditProductScreen extends StatefulWidget {
 
 class _EditProductScreenState extends State<EditProductScreen> {
   static const int _maxPostImages = 5;
+  static const List<String> _expiryUnits = [
+    'Minutes',
+    'Hours',
+    'Days',
+    'Months',
+    'No expiry',
+  ];
 
   final _formKey = GlobalKey<FormState>();
   final MyPostsService _postsService = MyPostsService();
   final AddPostService _addPostService = AddPostService();
   final CategoryService _categoryService = CategoryService();
+  final LocationService _locationService = LocationService();
   final ImagePicker _imagePicker = ImagePicker();
 
   late TextEditingController _titleController;
   late TextEditingController _descriptionController;
   late TextEditingController _priceController;
   late TextEditingController _locationController;
+  late TextEditingController _expiryValueController;
 
   late String _selectedStatus;
   late String _selectedBarterStatus;
@@ -52,6 +64,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
   bool _isSaving = false;
   bool _isLoading = false;
+  bool _isGettingLocation = false;
+  String _selectedExpiryUnit = 'No expiry';
+  String? _expiryValidationError;
 
   @override
   void initState() {
@@ -71,14 +86,111 @@ class _EditProductScreenState extends State<EditProductScreen> {
     _locationController = TextEditingController(
       text: widget.post.location ?? '',
     );
+    _expiryValueController = TextEditingController();
 
     _selectedStatus = widget.post.status;
     _selectedBarterStatus = _normalizeBarterStatus(widget.post.barterStatus);
     _selectedCategoryId = widget.post.categoryId;
     _postType = widget.post.type;
     _isListed = widget.post.isListed;
-    _images = List.from(widget.post.images);
+    _images = List.from(widget.post.images.take(_maxPostImages));
+    _initializeTimelineFields();
     _validateStatus();
+  }
+
+  void _initializeTimelineFields() {
+    final validUntil = widget.post.validUntil;
+    if (validUntil == null) {
+      _selectedExpiryUnit = 'No expiry';
+      _expiryValueController.clear();
+      return;
+    }
+
+    final now = DateTime.now();
+    if (!validUntil.isAfter(now)) {
+      _selectedExpiryUnit = 'No expiry';
+      _expiryValueController.clear();
+      return;
+    }
+
+    final diff = validUntil.difference(now);
+    final absDiff = diff;
+
+    if (absDiff.inMinutes < 60) {
+      final minutes = ((absDiff.inSeconds / 60).ceil()).clamp(1, 9999);
+      _selectedExpiryUnit = 'Minutes';
+      _expiryValueController.text = minutes.toString();
+      return;
+    }
+
+    if (absDiff.inHours < 24) {
+      _selectedExpiryUnit = 'Hours';
+      _expiryValueController.text = absDiff.inHours.clamp(1, 9999).toString();
+      return;
+    }
+
+    if (absDiff.inDays < 30) {
+      _selectedExpiryUnit = 'Days';
+      _expiryValueController.text = absDiff.inDays.clamp(1, 9999).toString();
+      return;
+    }
+
+    final months = (absDiff.inDays / 30).ceil().clamp(1, 1200);
+    _selectedExpiryUnit = 'Months';
+    _expiryValueController.text = months.toString();
+  }
+
+  String _formatTimelineDuration(Duration duration) {
+    if (duration.inMinutes < 60) {
+      final minutes = ((duration.inSeconds / 60).ceil()).clamp(1, 9999);
+      return '$minutes minute${minutes == 1 ? '' : 's'}';
+    }
+
+    if (duration.inHours < 24) {
+      final hours = duration.inHours;
+      final minutes = duration.inMinutes % 60;
+      if (minutes > 0) {
+        return '$hours hour${hours == 1 ? '' : 's'} $minutes minute${minutes == 1 ? '' : 's'}';
+      }
+      return '$hours hour${hours == 1 ? '' : 's'}';
+    }
+
+    if (duration.inDays < 30) {
+      final days = duration.inDays;
+      final remHours = duration.inHours % 24;
+      if (remHours > 0) {
+        return '$days day${days == 1 ? '' : 's'} $remHours hour${remHours == 1 ? '' : 's'}';
+      }
+      return '$days day${days == 1 ? '' : 's'}';
+    }
+
+    final months = (duration.inDays / 30).floor().clamp(1, 1200);
+    final remDays = duration.inDays % 30;
+    if (remDays > 0) {
+      return '$months month${months == 1 ? '' : 's'} $remDays day${remDays == 1 ? '' : 's'}';
+    }
+    return '$months month${months == 1 ? '' : 's'}';
+  }
+
+  bool _isExpired(DateTime? validUntil) {
+    if (validUntil == null) return false;
+    return !validUntil.isAfter(DateTime.now());
+  }
+
+  String _getCurrentExpiryText(DateTime? validUntil) {
+    if (validUntil == null) {
+      return 'Current: No expiry is set';
+    }
+
+    final now = DateTime.now();
+
+    if (!validUntil.isAfter(now)) {
+      final elapsed = now.difference(validUntil);
+      return 'Current: Expired ${_formatTimelineDuration(elapsed)} ago';
+    }
+
+    final remaining = validUntil.difference(now);
+    return 'Current: Expires in ${_formatTimelineDuration(remaining)}';
   }
 
   String _normalizeBarterStatus(String? status) {
@@ -221,7 +333,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
   List<String> _getValidStatuses() {
     if (_postType == 'service') {
-      return ['PROVIDE_SERVICE', 'SOLD'];
+      return ['PROVIDE_SERVICE'];
     } else {
       return ['FOR_SALE', 'SOLD'];
     }
@@ -246,7 +358,86 @@ class _EditProductScreenState extends State<EditProductScreen> {
     _descriptionController.dispose();
     _priceController.dispose();
     _locationController.dispose();
+    _expiryValueController.dispose();
     super.dispose();
+  }
+
+  void _onExpiryUnitChanged(String value) {
+    setState(() {
+      _selectedExpiryUnit = value;
+      _expiryValidationError = null;
+      if (value == 'No expiry') {
+        _expiryValueController.clear();
+      }
+    });
+  }
+
+  DateTime? _computeEditedExpiryDate() {
+    if (_selectedExpiryUnit == 'No expiry') {
+      return null;
+    }
+
+    final rawValue = _expiryValueController.text.trim();
+    if (rawValue.isEmpty) {
+      return null;
+    }
+
+    final value = int.tryParse(rawValue);
+    if (value == null || value <= 0) {
+      return null;
+    }
+
+    final now = DateTime.now();
+    switch (_selectedExpiryUnit) {
+      case 'Minutes':
+        return now.add(Duration(minutes: value));
+      case 'Hours':
+        return now.add(Duration(hours: value));
+      case 'Days':
+        return now.add(Duration(days: value));
+      case 'Months':
+        return DateTime(
+          now.year,
+          now.month + value,
+          now.day,
+          now.hour,
+          now.minute,
+          now.second,
+        );
+      default:
+        return null;
+    }
+  }
+
+  bool _validateTimelineInput() {
+    if (_selectedExpiryUnit == 'No expiry') {
+      setState(() {
+        _expiryValidationError = null;
+      });
+      return true;
+    }
+
+    final value = int.tryParse(_expiryValueController.text.trim());
+    if (value == null || value <= 0) {
+      setState(() {
+        _expiryValidationError =
+            'Please enter a valid ${_selectedExpiryUnit.toLowerCase()} value';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Please enter a valid ${_selectedExpiryUnit.toLowerCase()} value',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return false;
+    }
+
+    setState(() {
+      _expiryValidationError = null;
+    });
+    return true;
   }
 
   Future<void> _pickImage() async {
@@ -272,7 +463,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
       if (image != null) {
         setState(() {
           // Keep local file path for preview and convert to base64 during save.
-          _images.add(image.path);
+          if (_images.length < _maxPostImages) {
+            _images.add(image.path);
+          }
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -296,6 +489,93 @@ class _EditProductScreenState extends State<EditProductScreen> {
     }
   }
 
+  Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isGettingLocation = true;
+    });
+
+    try {
+      final serviceEnabled = await _locationService.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        _showLocationServiceDialog();
+        return;
+      }
+
+      final position = await _locationService.getCurrentLocation();
+      if (position == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to get your current location'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final address = await _locationService.getAddressFromLatLng(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _locationController.text = (address != null && address.isNotEmpty)
+            ? address
+            : '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location updated successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to get current location'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGettingLocation = false;
+        });
+      }
+    }
+  }
+
+  void _showLocationServiceDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('Location Services Disabled'),
+        content: const Text(
+          'Please enable location services to use current location.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await Geolocator.openLocationSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _removeImage(int index) {
     setState(() {
       _images.removeAt(index);
@@ -314,6 +594,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
           backgroundColor: Colors.red,
         ),
       );
+      return;
+    }
+
+    if (!_validateTimelineInput()) {
       return;
     }
 
@@ -358,6 +642,12 @@ class _EditProductScreenState extends State<EditProductScreen> {
         throw Exception('Maximum 5 images allowed');
       }
 
+      final updatedExpiryDate = _computeEditedExpiryDate();
+      final validFromIso = updatedExpiryDate == null
+          ? null
+          : DateTime.now().toUtc().toIso8601String();
+      final validUntilIso = updatedExpiryDate?.toUtc().toIso8601String();
+
       // Create request with type explicitly set
       final requestData = {
         'title': _titleController.text.trim(),
@@ -368,6 +658,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
         'categoryId': _selectedCategoryId,
         'isListed': _isListed,
         'type': _postType, // IMPORTANT: Include the post type
+        'validFrom': validFromIso,
+        'validUntil': validUntilIso,
       };
 
       // Add price if present
@@ -375,10 +667,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
         requestData['price'] = double.parse(_priceController.text);
       }
 
-      // Add location if present
-      if (_locationController.text.trim().isNotEmpty) {
-        requestData['location'] = _locationController.text.trim();
-      }
+      requestData['location'] = _locationController.text.trim();
 
       debugPrint('📦 Sending update request with type: $_postType');
       debugPrint('📦 Request data: $requestData');
@@ -411,11 +700,17 @@ class _EditProductScreenState extends State<EditProductScreen> {
     } catch (e) {
       if (!mounted) return;
 
+      final raw = e.toString().toLowerCase();
+      String message = 'Unable to save changes right now. Please try again.';
+      if (raw.contains('please add at least one image') ||
+          raw.contains('at least one image')) {
+        message = 'Please add at least one image to continue.';
+      } else if (raw.contains('maximum 5 images')) {
+        message = 'You can upload a maximum of 5 images.';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) {
@@ -433,7 +728,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: Text(
-          _postType == 'service' ? 'Edit Service' : 'Edit Product',
+          _postType == 'service' ? 'Edit Service' : 'Edit Post',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
@@ -691,10 +986,47 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
                       const SizedBox(height: 16),
 
+                      _buildTimelineExpirySection(),
+
+                      const SizedBox(height: 16),
+
                       _buildTextField(
-                        label: 'Location (Optional)',
+                        label: 'Location *',
                         controller: _locationController,
                         maxLines: 2,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Location is required';
+                          }
+                          return null;
+                        },
+                        suffixIcon: _isGettingLocation
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : IconButton(
+                                onPressed: _getCurrentLocation,
+                                icon: const Icon(
+                                  Icons.my_location,
+                                  color: Colors.blue,
+                                ),
+                                tooltip: 'Use current location',
+                              ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Enter location manually or tap the target icon to use your current location.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
 
                       const SizedBox(height: 16),
@@ -778,6 +1110,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
   }
 
   Widget _buildImagesSection() {
+    if (_images.length > _maxPostImages) {
+      _images = _images.take(_maxPostImages).toList();
+    }
+
     final canAddMoreImages = _images.length < _maxPostImages;
 
     return Container(
@@ -948,12 +1284,126 @@ class _EditProductScreenState extends State<EditProductScreen> {
     );
   }
 
+  Widget _buildTimelineExpirySection() {
+    final validUntil = widget.post.validUntil;
+    final currentExpiryText = _getCurrentExpiryText(validUntil);
+    final isExpired = _isExpired(validUntil);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Timeline Post Expiry',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            currentExpiryText,
+            style: TextStyle(
+              fontSize: 12,
+              color: isExpired ? Colors.red.shade700 : Colors.black54,
+              fontWeight: isExpired ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: _selectedExpiryUnit,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Colors.blue, width: 2),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 4,
+              ),
+            ),
+            items: _expiryUnits
+                .map(
+                  (unit) =>
+                      DropdownMenuItem<String>(value: unit, child: Text(unit)),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                _onExpiryUnitChanged(value);
+              }
+            },
+          ),
+          if (_selectedExpiryUnit != 'No expiry') ...[
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _expiryValueController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (_) {
+                if (_expiryValidationError != null) {
+                  setState(() {
+                    _expiryValidationError = null;
+                  });
+                }
+              },
+              decoration: InputDecoration(
+                hintText: _selectedExpiryUnit == 'Minutes'
+                    ? 'Enter minutes'
+                    : _selectedExpiryUnit == 'Hours'
+                    ? 'Enter hours'
+                    : _selectedExpiryUnit == 'Days'
+                    ? 'Enter days'
+                    : 'Enter months',
+                errorText: _expiryValidationError,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Colors.blue, width: 2),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildTextField({
     required String label,
     required TextEditingController controller,
     int maxLines = 1,
     TextInputType? keyboardType,
     String? prefix,
+    Widget? suffixIcon,
     String? Function(String?)? validator,
   }) {
     return Container(
@@ -988,6 +1438,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
             validator: validator,
             decoration: InputDecoration(
               prefixText: prefix,
+              suffixIcon: suffixIcon,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(color: Colors.grey.shade300),

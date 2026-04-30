@@ -3,13 +3,11 @@ import 'package:YemPover_app/models/get_current_subscription_plan_response.dart'
 import 'package:YemPover_app/screens/EditProfileScreen.dart';
 import 'package:YemPover_app/services/profile_service.dart';
 import 'package:YemPover_app/services/profile_session_manager.dart';
-import 'package:YemPover_app/services/notification1_service.dart';
 import 'package:YemPover_app/services/subscription_plan_service.dart';
 import 'package:YemPover_app/utils/error_message_utils.dart';
 import 'package:YemPover_app/utils/loading_widget.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class MyProfileScreen extends StatefulWidget {
   const MyProfileScreen({super.key});
@@ -25,7 +23,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   CurrentPlan? _currentSubscription;
   bool _isLoading = true;
   bool _isLoadingSubscription = false;
-  bool _isRequestingNotificationPermission = false;
+  bool _isUpdatingVisibility = false;
   String? _error;
 
   @override
@@ -120,70 +118,67 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     await Future.wait([_loadProfile(), _loadSubscription()]);
   }
 
-  Future<void> _requestNotificationPermissionFromProfile() async {
-    if (_isRequestingNotificationPermission) return;
+  Future<void> _updateVisibilitySettings({
+    bool? shareEmail,
+    bool? sharePhone,
+    bool? notificationEnabled,
+  }) async {
+    final currentProfile = _profile;
+    if (currentProfile == null || _isUpdatingVisibility) return;
+
+    final updatedShareEmail = shareEmail ?? (currentProfile.shareEmail ?? true);
+    final updatedSharePhone = sharePhone ?? (currentProfile.sharePhone ?? true);
+    final updatedNotification =
+        notificationEnabled ?? (currentProfile.notificationEnabled ?? true);
+
+    final previousShareEmail = currentProfile.shareEmail;
+    final previousSharePhone = currentProfile.sharePhone;
+    final previousNotification = currentProfile.notificationEnabled;
 
     setState(() {
-      _isRequestingNotificationPermission = true;
+      _isUpdatingVisibility = true;
+      _profile = ProfileData.fromJson({
+        ...currentProfile.toJson(),
+        'shareEmail': updatedShareEmail,
+        'sharePhone': updatedSharePhone,
+        'notificationEnabled': updatedNotification,
+      });
     });
 
     try {
-      final granted = await NotificationService1()
-          .requestNotificationPermissionAgain();
-      if (!mounted) return;
-
-      if (granted) {
-        SnackbarUtils.showSuccess(
-          context,
-          'Notifications enabled successfully.',
-        );
-        return;
-      }
-
-      SnackbarUtils.showError(
-        context,
-        'Notification permission denied. Opening app settings now.',
-        fallback: 'Notification permission denied. Opening app settings now.',
+      await _profileService.updatePrivacySettings(
+        shareEmail: shareEmail,
+        sharePhone: sharePhone,
+        notificationEnabled: notificationEnabled,
       );
-      await openAppSettings();
     } catch (e) {
       if (!mounted) return;
+
+      setState(() {
+        _profile = ProfileData.fromJson({
+          ...currentProfile.toJson(),
+          'shareEmail': previousShareEmail,
+          'sharePhone': previousSharePhone,
+          'notificationEnabled': previousNotification,
+        });
+      });
+
       final message = ErrorMessageUtils.sanitize(
         e,
-        fallback: 'Unable to request notification permission right now.',
+        fallback: 'Unable to update visibility settings right now.',
       );
       SnackbarUtils.showError(
         context,
         message,
-        fallback: 'Unable to request notification permission right now.',
+        fallback: 'Unable to update visibility settings right now.',
       );
     } finally {
       if (mounted) {
         setState(() {
-          _isRequestingNotificationPermission = false;
+          _isUpdatingVisibility = false;
         });
       }
     }
-  }
-
-  Future<void> _handleNotificationToggleTap(bool currentlyEnabled) async {
-    if (_isRequestingNotificationPermission) return;
-
-    // When profile shows OFF, take user directly to app settings to enable it.
-    if (!currentlyEnabled) {
-      final opened = await openAppSettings();
-      if (!opened && mounted) {
-        SnackbarUtils.showError(
-          context,
-          'Unable to open app settings. Please open settings manually.',
-          fallback:
-              'Unable to open app settings. Please open settings manually.',
-        );
-      }
-      return;
-    }
-
-    await _requestNotificationPermissionFromProfile();
   }
 
   String _subscriptionPlanName() {
@@ -475,7 +470,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
   Widget _buildVisibilityCard() {
     final profile = _profile;
-    final notificationsEnabled = profile?.notificationEnabled ?? true;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -495,29 +489,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
             ),
             const SizedBox(height: 14),
             const Text(
-              'NOTIFICATION',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF9AA0A6),
-                letterSpacing: 1,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildVisibilitySection(
-              children: [
-                _buildVisibilityRow(
-                  label: 'Push Notifications',
-                  enabled: notificationsEnabled,
-                  onTap: _isRequestingNotificationPermission
-                      ? null
-                      : () =>
-                            _handleNotificationToggleTap(notificationsEnabled),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            const Text(
               'PRIVACY',
               style: TextStyle(
                 fontSize: 11,
@@ -532,38 +503,22 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 _buildVisibilityRow(
                   label: 'Share Email',
                   enabled: profile?.shareEmail ?? true,
+                  isLoading: _isUpdatingVisibility,
+                  onChanged: (value) {
+                    _updateVisibilitySettings(shareEmail: value);
+                  },
                 ),
                 _buildVisibilityRow(
                   label: 'Share Phone Number',
                   enabled: profile?.sharePhone ?? true,
+                  isLoading: _isUpdatingVisibility,
+                  onChanged: (value) {
+                    _updateVisibilitySettings(sharePhone: value);
+                  },
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            if (_isRequestingNotificationPermission)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 6),
-                child: Text(
-                  'Requesting notification permission...',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF1A73E8),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              )
-            else if (!notificationsEnabled)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 6),
-                child: Text(
-                  'Tap notifications row to open app settings',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF1A73E8),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
             Text(
               'Other users can only see your shared contact details according to your settings.',
               style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
@@ -588,53 +543,29 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   Widget _buildVisibilityRow({
     required String label,
     required bool enabled,
-    VoidCallback? onTap,
+    required ValueChanged<bool> onChanged,
+    bool isLoading = false,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF4B4F5C),
-                  ),
-                ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF4B4F5C),
               ),
-              _buildStaticToggle(enabled),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStaticToggle(bool enabled) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      width: 46,
-      height: 26,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: enabled ? const Color(0xFF22C55E) : const Color(0xFFD1D5DB),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      alignment: enabled ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        width: 20,
-        height: 20,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-        ),
+          Switch(
+            value: enabled,
+            onChanged: isLoading ? null : onChanged,
+            activeColor: const Color(0xFF22C55E),
+          ),
+        ],
       ),
     );
   }

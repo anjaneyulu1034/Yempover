@@ -1,6 +1,8 @@
 import 'package:YemPover_app/screens/service/AppointmentsDashboardScreen.dart';
 import 'package:YemPover_app/screens/service/ServiceAvailabilityScreen.dart';
+import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 import 'package:YemPover_app/services/service_booking_service.dart';
+import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +23,7 @@ class ServiceDetailBookingScreen extends StatefulWidget {
 class _ServiceDetailBookingScreenState
     extends State<ServiceDetailBookingScreen> {
   final ServiceBookingService _service = ServiceBookingService();
+  final TradeChatService _tradeChatService = TradeChatService();
   final TokenService _tokenService = TokenService();
   final TextEditingController _notesController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
@@ -56,6 +59,7 @@ class _ServiceDetailBookingScreenState
     _notesController.dispose();
     _locationController.dispose();
     _quoteController.dispose();
+    _tradeChatService.dispose();
     super.dispose();
   }
 
@@ -85,9 +89,12 @@ class _ServiceDetailBookingScreenState
             : Map<String, dynamic>.from(data);
       }
 
+      final initialBookingDate = _resolveInitialBookingDate(parsed);
+
       if (!mounted) return;
       setState(() {
         _serviceData = parsed;
+        _selectedDate = initialBookingDate;
         _serviceUiState = ServiceDetailUiState.serviceReady;
         _locationController.text = parsed['location']?.toString() ?? '';
       });
@@ -98,6 +105,106 @@ class _ServiceDetailBookingScreenState
         _serviceUiState = ServiceDetailUiState.serviceError;
       });
     }
+  }
+
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  int? _weekdayFromString(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+
+    final normalized = value.trim().toUpperCase();
+    if (normalized.startsWith('MON')) return DateTime.monday;
+    if (normalized.startsWith('TUE')) return DateTime.tuesday;
+    if (normalized.startsWith('WED')) return DateTime.wednesday;
+    if (normalized.startsWith('THU')) return DateTime.thursday;
+    if (normalized.startsWith('FRI')) return DateTime.friday;
+    if (normalized.startsWith('SAT')) return DateTime.saturday;
+    if (normalized.startsWith('SUN')) return DateTime.sunday;
+    return null;
+  }
+
+  Set<int> _availableWeekdays([Map<String, dynamic>? service]) {
+    final source = service ?? _serviceData;
+    if (source == null) return const {};
+
+    final raw = source['availabilitySlots'];
+    if (raw is! List) return const {};
+
+    final weekdays = <int>{};
+    for (final item in raw) {
+      if (item is! Map) continue;
+
+      final slot = Map<String, dynamic>.from(item);
+      if (slot['isAvailable'] == false) continue;
+
+      final weekday = _weekdayFromString(slot['dayOfWeek']?.toString());
+      if (weekday != null) {
+        weekdays.add(weekday);
+      }
+    }
+
+    return weekdays;
+  }
+
+  DateTime? _nextAvailableDate({
+    required DateTime from,
+    required DateTime to,
+    required Set<int> weekdays,
+  }) {
+    final start = _dateOnly(from);
+    final end = _dateOnly(to);
+    if (start.isAfter(end)) return null;
+
+    if (weekdays.isEmpty) return start;
+
+    var cursor = start;
+    while (!cursor.isAfter(end)) {
+      if (weekdays.contains(cursor.weekday)) {
+        return cursor;
+      }
+      cursor = cursor.add(const Duration(days: 1));
+    }
+
+    return null;
+  }
+
+  DateTime _resolveInitialBookingDate(Map<String, dynamic> service) {
+    final now = _dateOnly(DateTime.now());
+
+    final rawValidUntil = service['validUntil']?.toString();
+    final parsedValidUntil = rawValidUntil == null || rawValidUntil.isEmpty
+        ? null
+        : DateTime.tryParse(rawValidUntil)?.toLocal();
+
+    final upperBound =
+        parsedValidUntil != null && _dateOnly(parsedValidUntil).isAfter(now)
+        ? _dateOnly(parsedValidUntil)
+        : DateTime(now.year + 3, now.month, now.day);
+
+    final next = _nextAvailableDate(
+      from: now,
+      to: upperBound,
+      weekdays: _availableWeekdays(service),
+    );
+
+    return next ?? now;
+  }
+
+  bool _isSelectableBookingDate(DateTime day, DateTime first, DateTime last) {
+    final target = _dateOnly(day);
+    final firstDate = _dateOnly(first);
+    final lastDate = _dateOnly(last);
+
+    if (target.isBefore(firstDate) || target.isAfter(lastDate)) {
+      return false;
+    }
+
+    final weekdays = _availableWeekdays();
+    if (weekdays.isEmpty) return true;
+
+    return weekdays.contains(target.weekday);
   }
 
   Future<void> _loadSlotsForDate(DateTime date) async {
@@ -233,6 +340,31 @@ class _ServiceDetailBookingScreenState
         (_currentUserId == directPostedBy ||
             _currentUserId == directUserId ||
             _currentUserId == providerId);
+  }
+
+  String? get _serviceOwnerId {
+    final service = _serviceData;
+    if (service == null) return null;
+
+    final directPostedBy = service['postedById']?.toString();
+    if (directPostedBy != null && directPostedBy.isNotEmpty) {
+      return directPostedBy;
+    }
+
+    final directUserId = service['userId']?.toString();
+    if (directUserId != null && directUserId.isNotEmpty) {
+      return directUserId;
+    }
+
+    final provider = service['provider'];
+    if (provider is Map) {
+      final providerId = provider['id']?.toString();
+      if (providerId != null && providerId.isNotEmpty) {
+        return providerId;
+      }
+    }
+
+    return null;
   }
 
   bool get _isValid {
@@ -405,47 +537,89 @@ class _ServiceDetailBookingScreenState
 
       final payloadDate = _service.isoWithOffset(dateTime);
 
-      await _service.createAppointment(
+      final responderId = _serviceOwnerId;
+      if (responderId == null || responderId.isEmpty) {
+        throw Exception('Unable to find service owner for chat initiation.');
+      }
+
+      final currentUserId = _currentUserId;
+      if (currentUserId == null || currentUserId.isEmpty) {
+        throw Exception('Unable to identify current user. Please login again.');
+      }
+
+      final chat = await _tradeChatService.initiateChat(
+        responderId: responderId,
         serviceId: widget.serviceId,
-        appointmentDate: payloadDate,
-        duration: duration,
-        location: _locationController.text.trim(),
-        proposedPrice: _isLookingForService
-            ? double.tryParse(_quoteController.text.trim())
-            : null,
-        notes: _notesController.text.trim(),
       );
+
+      final quotedPrice = _isLookingForService
+          ? double.tryParse(_quoteController.text.trim())
+          : double.tryParse((_serviceData?['price'] ?? '').toString());
+
+      if (quotedPrice != null && quotedPrice > 0) {
+        await _tradeChatService.createPriceOffer(
+          chatId: chat.id,
+          price: quotedPrice,
+          currency: 'INR',
+        );
+      } else {
+        await _tradeChatService.createBarterOffer(
+          chatId: chat.id,
+          barterItemTitle: 'Service Proposal',
+          barterItemDescription: _notesController.text.trim().isNotEmpty
+              ? _notesController.text.trim()
+              : 'Service proposal for ${_serviceData?['title'] ?? 'service'}',
+        );
+      }
+
+      final details = <String>[
+        'Service proposal submitted',
+        'Date/Time: $payloadDate',
+        'Duration: $duration minutes',
+      ];
+
+      final location = _locationController.text.trim();
+      if (location.isNotEmpty) {
+        details.add('Location: $location');
+      }
+
+      final notes = _notesController.text.trim();
+      if (notes.isNotEmpty) {
+        details.add('Notes: $notes');
+      }
+
+      await _tradeChatService.sendMessage(
+        chatId: chat.id,
+        messageText: details.join('\n'),
+      );
+
+      final latestChat = await _tradeChatService.getChatById(chat.id);
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('✓ Appointment requested successfully'),
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Appointment booked successfully!'),
           backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          action: SnackBarAction(
-            label: 'VIEW',
-            textColor: Colors.white,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const AppointmentsDashboardScreen(
-                    initialProviderTab: false,
-                  ),
-                ),
-              );
-            },
-          ),
+          duration: Duration(seconds: 5),
         ),
       );
 
-      if (!_isLookingForService) {
-        await _loadSlotsForDate(_selectedDate);
-      }
+      await Future.delayed(const Duration(seconds: 5));
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatDetailScreen(
+            chat: latestChat,
+            currentUserId: currentUserId,
+            onChatUpdated: (_) {},
+          ),
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
       SnackbarUtils.showError(context, _service.extractMessage(error));
@@ -856,6 +1030,11 @@ class _ServiceDetailBookingScreenState
                         InkWell(
                           onTap: () async {
                             final now = DateTime.now();
+                            final firstDate = DateTime(
+                              now.year,
+                              now.month,
+                              now.day,
+                            );
                             final validUntil = _serviceValidUntil;
                             final upperBound =
                                 validUntil != null && validUntil.isAfter(now)
@@ -865,13 +1044,37 @@ class _ServiceDetailBookingScreenState
                                     validUntil.day,
                                   )
                                 : DateTime(now.year + 3);
+
+                            final initialDate = _isLookingForService
+                                ? _selectedDate
+                                : (_isSelectableBookingDate(
+                                        _selectedDate,
+                                        firstDate,
+                                        upperBound,
+                                      )
+                                      ? _selectedDate
+                                      : (_nextAvailableDate(
+                                              from: firstDate,
+                                              to: upperBound,
+                                              weekdays: _availableWeekdays(),
+                                            ) ??
+                                            firstDate));
+
                             final picked = await showDatePicker(
                               context: context,
                               initialEntryMode:
                                   DatePickerEntryMode.calendarOnly,
-                              initialDate: _selectedDate,
-                              firstDate: DateTime(now.year, now.month, now.day),
+                              initialDate: initialDate,
+                              firstDate: firstDate,
                               lastDate: upperBound,
+                              selectableDayPredicate: (day) {
+                                if (_isLookingForService) return true;
+                                return _isSelectableBookingDate(
+                                  day,
+                                  firstDate,
+                                  upperBound,
+                                );
+                              },
                               builder: (context, child) {
                                 return Theme(
                                   data: Theme.of(context).copyWith(

@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:YemPover_app/services/socket_io/socket_service.dart';
+import 'package:YemPover_app/services/service_booking_service.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:YemPover_app/models/chats/trade_chat.dart';
+import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
 import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:YemPover_app/utils/loading_widget.dart';
@@ -13,12 +15,14 @@ class ChatDetailScreen extends StatefulWidget {
   final TradeChat chat;
   final String currentUserId;
   final void Function(TradeChat) onChatUpdated;
+  final bool returnToTradeChatOnBack;
 
   const ChatDetailScreen({
     super.key,
     required this.chat,
     required this.currentUserId,
     required this.onChatUpdated,
+    this.returnToTradeChatOnBack = false,
   });
 
   @override
@@ -28,6 +32,7 @@ class ChatDetailScreen extends StatefulWidget {
 class _ChatDetailScreenState extends State<ChatDetailScreen>
     with WidgetsBindingObserver {
   final TradeChatService _chatService = TradeChatService();
+  final ServiceBookingService _serviceBookingService = ServiceBookingService();
   final SocketService _socketService = SocketService();
   final TokenService _tokenService = TokenService();
   final TextEditingController _messageController = TextEditingController();
@@ -1065,55 +1070,103 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   Future<void> _showPriceOfferDialog() async {
     final priceController = TextEditingController();
-    final currencyController = TextEditingController(text: 'USD');
+    String selectedCurrency = 'USD';
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Price Offer'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: priceController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Price',
-                prefixText: '\$ ',
-                border: OutlineInputBorder(),
-              ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final border = OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade500, width: 1.2),
+          );
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: Colors.grey.shade300, width: 1.2),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: currencyController,
-              decoration: const InputDecoration(
-                labelText: 'Currency',
-                border: OutlineInputBorder(),
-              ),
+            title: const Text('Price Offer'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: priceController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Price',
+                    prefixText: '\$ ',
+                    border: border,
+                    enabledBorder: border,
+                    focusedBorder: border.copyWith(
+                      borderSide: const BorderSide(
+                        color: Color(0xFF2E5BFF),
+                        width: 1.8,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedCurrency,
+                  decoration: InputDecoration(
+                    labelText: 'Currency',
+                    border: border,
+                    enabledBorder: border,
+                    focusedBorder: border.copyWith(
+                      borderSide: const BorderSide(
+                        color: Color(0xFF2E5BFF),
+                        width: 1.8,
+                      ),
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'USD', child: Text('USD')),
+                    DropdownMenuItem(value: 'INR', child: Text('INR')),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setDialogState(() {
+                      selectedCurrency = value;
+                    });
+                  },
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (priceController.text.isNotEmpty) {
-                Navigator.pop(context, true);
-              }
-            },
-            child: const Text('Create Offer'),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF2E5BFF),
+                  side: const BorderSide(color: Color(0xFF2E5BFF), width: 1.2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                ),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (priceController.text.isNotEmpty) {
+                    Navigator.pop(context, true);
+                  }
+                },
+                child: const Text('Create Offer'),
+              ),
+            ],
+          );
+        },
       ),
     );
 
     if (result == true && priceController.text.isNotEmpty) {
       await _createPriceOffer(
         price: double.parse(priceController.text),
-        currency: currencyController.text,
+        currency: selectedCurrency,
       );
     }
   }
@@ -1124,44 +1177,80 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Barter Offer'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
-                labelText: 'Item Title',
-                border: OutlineInputBorder(),
+      builder: (context) {
+        final border = OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade500, width: 1.2),
+        );
+
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: Colors.grey.shade300, width: 1.2),
+          ),
+          title: const Text('Barter Offer'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: InputDecoration(
+                  labelText: 'Item Title',
+                  border: border,
+                  enabledBorder: border,
+                  focusedBorder: border.copyWith(
+                    borderSide: const BorderSide(
+                      color: Color(0xFF2E5BFF),
+                      width: 1.8,
+                    ),
+                  ),
+                ),
               ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: descriptionController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: 'Description (Optional)',
+                  border: border,
+                  enabledBorder: border,
+                  focusedBorder: border.copyWith(
+                    borderSide: const BorderSide(
+                      color: Color(0xFF2E5BFF),
+                      width: 1.8,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF2E5BFF),
+                side: const BorderSide(color: Color(0xFF2E5BFF), width: 1.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+              ),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: descriptionController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Description (Optional)',
-                border: OutlineInputBorder(),
-              ),
+            ElevatedButton(
+              onPressed: () {
+                if (titleController.text.isNotEmpty) {
+                  Navigator.pop(context, true);
+                }
+              },
+              child: const Text('Create Offer'),
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (titleController.text.isNotEmpty) {
-                Navigator.pop(context, true);
-              }
-            },
-            child: const Text('Create Offer'),
-          ),
-        ],
-      ),
+        );
+      },
     );
 
     if (result == true && titleController.text.isNotEmpty) {
@@ -1256,44 +1345,80 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Counter Barter Offer'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
-                labelText: 'Item Title',
-                border: OutlineInputBorder(),
+      builder: (context) {
+        final border = OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade500, width: 1.2),
+        );
+
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: Colors.grey.shade300, width: 1.2),
+          ),
+          title: const Text('Counter Barter Offer'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: InputDecoration(
+                  labelText: 'Item Title',
+                  border: border,
+                  enabledBorder: border,
+                  focusedBorder: border.copyWith(
+                    borderSide: const BorderSide(
+                      color: Color(0xFF2E5BFF),
+                      width: 1.8,
+                    ),
+                  ),
+                ),
               ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: descriptionController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: 'Your Thoughts / Description',
+                  border: border,
+                  enabledBorder: border,
+                  focusedBorder: border.copyWith(
+                    borderSide: const BorderSide(
+                      color: Color(0xFF2E5BFF),
+                      width: 1.8,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF2E5BFF),
+                side: const BorderSide(color: Color(0xFF2E5BFF), width: 1.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+              ),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: descriptionController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Your Thoughts / Description',
-                border: OutlineInputBorder(),
-              ),
+            ElevatedButton(
+              onPressed: () {
+                if (titleController.text.trim().isNotEmpty) {
+                  Navigator.pop(context, true);
+                }
+              },
+              child: const Text('Send Counter'),
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (titleController.text.trim().isNotEmpty) {
-                Navigator.pop(context, true);
-              }
-            },
-            child: const Text('Send Counter'),
-          ),
-        ],
-      ),
+        );
+      },
     );
 
     if (result != true || titleController.text.trim().isEmpty) return;
@@ -1308,7 +1433,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
-  Future<void> _createCounterOffer({
+  Future<TradeOffer?> _createCounterOffer({
     required TradeOffer originalOffer,
     required String offerType,
     double? price,
@@ -1319,7 +1444,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         _currentChat.hasAcceptedOffer ||
         !originalOffer.isPending ||
         originalOffer.madeById == widget.currentUserId) {
-      return;
+      return null;
     }
 
     setState(() {
@@ -1359,6 +1484,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
       _scrollToBottom();
       widget.onChatUpdated(_currentChat);
+      return counterOffer;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1368,6 +1494,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           ),
         );
       }
+      return null;
     } finally {
       if (mounted) {
         setState(() {
@@ -1570,6 +1697,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       context: context,
       builder: (context) => _DealCompletionDialog(
         isPriceOffer: _currentChat.latestAcceptedOffer?.isPriceOffer ?? false,
+        acceptedPrice: _currentChat.latestAcceptedOffer?.price,
       ),
     );
 
@@ -1613,13 +1741,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         _isLoading = false;
       });
 
+      // Keep user on Chat Details without showing an error toast.
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to complete deal: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        await _refreshChat();
       }
     }
   }
@@ -2040,6 +2164,573 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
+  Widget _buildServiceProposalBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.deepPurple.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.deepPurple.withValues(alpha: 0.35)),
+      ),
+      child: const Text(
+        'Service Proposal',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: Colors.deepPurple,
+        ),
+      ),
+    );
+  }
+
+  DateTime? _proposalSlotDateTime(
+    DateTime selectedDate,
+    Map<String, dynamic> slot,
+  ) {
+    final direct = [
+      slot['startDateTime'],
+      slot['appointmentDate'],
+      slot['dateTime'],
+      slot['slotDateTime'],
+    ];
+
+    for (final raw in direct) {
+      if (raw == null) continue;
+      final dt = DateTime.tryParse(raw.toString());
+      if (dt != null) return dt;
+    }
+
+    final time = slot['startTime']?.toString() ?? slot['time']?.toString();
+    return _serviceBookingService.parseTimeOfDay(selectedDate, time);
+  }
+
+  bool _proposalSlotAvailable(Map<String, dynamic> slot) {
+    final available = slot['available'];
+    if (available is bool) return available;
+    return slot['isAvailable'] != false;
+  }
+
+  String _proposalSlotLabel(DateTime selectedDate, Map<String, dynamic> slot) {
+    final dt = _proposalSlotDateTime(selectedDate, slot);
+    final end = slot['endTime']?.toString();
+    if (dt != null) {
+      final startText = DateFormat('h:mm a').format(dt);
+      if (end != null && end.isNotEmpty) {
+        return '$startText - $end';
+      }
+      return startText;
+    }
+
+    return slot['startTime']?.toString() ?? slot['time']?.toString() ?? 'Slot';
+  }
+
+  String? _proposalSlotKey(DateTime selectedDate, Map<String, dynamic> slot) {
+    final dt = _proposalSlotDateTime(selectedDate, slot);
+    if (dt != null) {
+      return dt.toIso8601String();
+    }
+    final raw = slot['startTime']?.toString() ?? slot['time']?.toString();
+    if (raw == null || raw.isEmpty) return null;
+    return '${_serviceBookingService.dateOnly(selectedDate)} $raw';
+  }
+
+  DateTime? _parseProposalTime(DateTime date, String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    final value = raw.trim();
+
+    // Common backend formats first.
+    final normalized = value.length >= 5 ? value.substring(0, 5) : value;
+    final hhmm = _serviceBookingService.parseTimeOfDay(date, normalized);
+    if (hhmm != null) return hhmm;
+
+    for (final pattern in ['h:mm a', 'hh:mm a']) {
+      try {
+        final parsed = DateFormat(pattern).parseStrict(value.toUpperCase());
+        return DateTime(
+          date.year,
+          date.month,
+          date.day,
+          parsed.hour,
+          parsed.minute,
+        );
+      } catch (_) {
+        // Try next pattern.
+      }
+    }
+
+    return null;
+  }
+
+  bool _matchesWeekDay(DateTime date, dynamic dayValue) {
+    if (dayValue == null) return false;
+
+    if (dayValue is num) {
+      return date.weekday == dayValue.toInt();
+    }
+
+    final dayText = dayValue.toString().trim().toUpperCase();
+    if (dayText.isEmpty) return false;
+
+    final selected = DateFormat('EEEE').format(date).toUpperCase();
+    if (dayText == selected) return true;
+
+    final aliases = {
+      'MON': 'MONDAY',
+      'TUE': 'TUESDAY',
+      'WED': 'WEDNESDAY',
+      'THU': 'THURSDAY',
+      'FRI': 'FRIDAY',
+      'SAT': 'SATURDAY',
+      'SUN': 'SUNDAY',
+    };
+
+    return aliases[dayText] == selected;
+  }
+
+  List<Map<String, dynamic>> _buildSlotsFromWeeklyAvailability(
+    DateTime date,
+    List<Map<String, dynamic>> weekly,
+    int fallbackDuration,
+  ) {
+    final slots = <Map<String, dynamic>>[];
+
+    for (final row in weekly) {
+      if (row['isAvailable'] == false || row['available'] == false) {
+        continue;
+      }
+      if (!_matchesWeekDay(date, row['dayOfWeek'])) {
+        continue;
+      }
+
+      final start = _parseProposalTime(date, row['startTime']?.toString());
+      final end = _parseProposalTime(date, row['endTime']?.toString());
+      if (start == null || end == null || !end.isAfter(start)) {
+        continue;
+      }
+
+      final rawDuration = row['slotDurationMinutes'];
+      final slotDuration = rawDuration is int
+          ? rawDuration
+          : int.tryParse(rawDuration?.toString() ?? '') ?? fallbackDuration;
+      if (slotDuration <= 0) continue;
+
+      var pointer = start;
+      while (pointer
+              .add(Duration(minutes: slotDuration))
+              .isAtSameMomentAs(end) ||
+          pointer.add(Duration(minutes: slotDuration)).isBefore(end)) {
+        final slotEnd = pointer.add(Duration(minutes: slotDuration));
+        slots.add({
+          'startTime': DateFormat('HH:mm').format(pointer),
+          'endTime': DateFormat('HH:mm').format(slotEnd),
+          'available': true,
+          'slotDurationMinutes': slotDuration,
+          'startDateTime': pointer.toIso8601String(),
+        });
+        pointer = slotEnd;
+      }
+    }
+
+    return slots;
+  }
+
+  Future<void> _openServiceProposalEditor(TradeOffer sourceOffer) async {
+    final serviceId = _currentChat.serviceId;
+    if (serviceId == null || serviceId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to edit slot: service details are missing.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    DateTime selectedDate = DateTime.now();
+    List<Map<String, dynamic>> slots = [];
+    Map<String, dynamic>? selectedSlot;
+    String? slotsUnavailableReason;
+    bool loadingSlots = false;
+    bool sendingProposal = false;
+    bool initialized = false;
+    String location = '';
+    int duration = 30;
+    String notes = '';
+    List<Map<String, dynamic>> weeklyAvailability = [];
+
+    try {
+      final detail = await _serviceBookingService.getServiceDetail(serviceId);
+      final data = detail['data'];
+      if (data is Map<String, dynamic>) {
+        final service = data['service'] is Map<String, dynamic>
+            ? Map<String, dynamic>.from(data['service'])
+            : data;
+        location = service['location']?.toString() ?? '';
+        if (service['availabilitySlots'] is List) {
+          weeklyAvailability = (service['availabilitySlots'] as List)
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList();
+        }
+      }
+    } catch (_) {
+      // Keep defaults when detail fetch fails.
+    }
+
+    Future<void> loadSlotsForDate(
+      DateTime date,
+      void Function(void Function()) setSheetState,
+    ) async {
+      setSheetState(() {
+        selectedDate = DateTime(date.year, date.month, date.day);
+        loadingSlots = true;
+        slots = const [];
+        selectedSlot = null;
+        slotsUnavailableReason = null;
+      });
+
+      try {
+        final response = await _serviceBookingService.getAvailableSlots(
+          serviceId: serviceId,
+          date: _serviceBookingService.dateOnly(selectedDate),
+        );
+
+        List<Map<String, dynamic>> loadedSlots = [];
+        String? unavailableReason;
+
+        final data = response['data'];
+        if (data is List) {
+          if (data.isNotEmpty && data.first is String) {
+            loadedSlots = data
+                .whereType<String>()
+                .map(
+                  (t) => <String, dynamic>{
+                    'startTime': t,
+                    'available': true,
+                    'slotDurationMinutes': duration,
+                  },
+                )
+                .toList();
+          } else {
+            loadedSlots = data
+                .whereType<Map>()
+                .map((slot) => Map<String, dynamic>.from(slot))
+                .toList();
+          }
+        } else if (data is Map<String, dynamic>) {
+          final source =
+              data['slots'] ?? data['availableSlots'] ?? data['data'];
+          if (source is List) {
+            if (source.isNotEmpty && source.first is String) {
+              loadedSlots = source
+                  .whereType<String>()
+                  .map(
+                    (t) => <String, dynamic>{
+                      'startTime': t,
+                      'available': true,
+                      'slotDurationMinutes': duration,
+                    },
+                  )
+                  .toList();
+            } else {
+              loadedSlots = source
+                  .whereType<Map>()
+                  .map((slot) => Map<String, dynamic>.from(slot))
+                  .toList();
+            }
+          }
+          unavailableReason = data['message']?.toString();
+
+          if (loadedSlots.isEmpty && data['availabilitySlots'] is List) {
+            final fromResponseWeekly = (data['availabilitySlots'] as List)
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row))
+                .toList();
+            loadedSlots = _buildSlotsFromWeeklyAvailability(
+              selectedDate,
+              fromResponseWeekly,
+              duration,
+            );
+          }
+        }
+
+        if (loadedSlots.isEmpty && weeklyAvailability.isNotEmpty) {
+          loadedSlots = _buildSlotsFromWeeklyAvailability(
+            selectedDate,
+            weeklyAvailability,
+            duration,
+          );
+        }
+
+        final now = DateTime.now();
+        loadedSlots = loadedSlots.where((slot) {
+          if (!_proposalSlotAvailable(slot)) return false;
+          final start = _proposalSlotDateTime(selectedDate, slot);
+          if (start == null) return false;
+          return start.isAfter(now);
+        }).toList();
+
+        setSheetState(() {
+          slots = loadedSlots;
+          slotsUnavailableReason = unavailableReason;
+          loadingSlots = false;
+        });
+      } catch (e) {
+        setSheetState(() {
+          loadingSlots = false;
+          slots = const [];
+          slotsUnavailableReason = _serviceBookingService.extractMessage(e);
+        });
+      }
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            if (!initialized) {
+              initialized = true;
+              Future.microtask(
+                () => loadSlotsForDate(selectedDate, setSheetState),
+              );
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Edit Slot & Send Return Proposal',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: loadingSlots
+                                ? null
+                                : () async {
+                                    final picked = await showDatePicker(
+                                      context: sheetContext,
+                                      initialDate: selectedDate,
+                                      firstDate: DateTime.now(),
+                                      lastDate: DateTime.now().add(
+                                        const Duration(days: 60),
+                                      ),
+                                    );
+                                    if (picked != null) {
+                                      await loadSlotsForDate(
+                                        picked,
+                                        setSheetState,
+                                      );
+                                    }
+                                  },
+                            icon: const Icon(Icons.calendar_today),
+                            label: Text(
+                              DateFormat('EEE, MMM d').format(selectedDate),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Available Slots',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (loadingSlots)
+                      const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else if (slots.isEmpty)
+                      Text(
+                        slotsUnavailableReason ??
+                            'No slots available for this date',
+                        style: const TextStyle(color: Colors.black54),
+                      )
+                    else
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: slots.map((slot) {
+                          final selected =
+                              selectedSlot != null &&
+                              _proposalSlotKey(selectedDate, selectedSlot!) ==
+                                  _proposalSlotKey(selectedDate, slot);
+                          return ChoiceChip(
+                            label: Text(_proposalSlotLabel(selectedDate, slot)),
+                            selected: selected,
+                            onSelected: (_) {
+                              setSheetState(() {
+                                selectedSlot = slot;
+                                final rawDuration = slot['slotDurationMinutes'];
+                                duration = rawDuration is int
+                                    ? rawDuration
+                                    : int.tryParse(
+                                            rawDuration?.toString() ?? '',
+                                          ) ??
+                                          duration;
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Notes (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) => notes = value,
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: (sendingProposal || selectedSlot == null)
+                            ? null
+                            : () async {
+                                final chosenSlot = selectedSlot;
+                                if (chosenSlot == null) return;
+
+                                final slotDateTime = _proposalSlotDateTime(
+                                  selectedDate,
+                                  chosenSlot,
+                                );
+                                if (slotDateTime == null) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Unable to resolve selected slot date/time',
+                                      ),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                setSheetState(() => sendingProposal = true);
+                                try {
+                                  final payloadDate = _serviceBookingService
+                                      .isoWithOffset(slotDateTime);
+
+                                  final lines = <String>[
+                                    'Return service proposal',
+                                    'Date/Time: $payloadDate',
+                                    'Duration: $duration minutes',
+                                  ];
+
+                                  final trimmedLocation = location.trim();
+                                  if (trimmedLocation.isNotEmpty) {
+                                    lines.add('Location: $trimmedLocation');
+                                  }
+
+                                  final trimmedNotes = notes.trim();
+                                  if (trimmedNotes.isNotEmpty) {
+                                    lines.add('Notes: $trimmedNotes');
+                                  }
+
+                                  final isSourcePrice =
+                                      sourceOffer.isPriceOffer;
+                                  final counterOffer =
+                                      await _createCounterOffer(
+                                        originalOffer: sourceOffer,
+                                        offerType: isSourcePrice
+                                            ? 'PRICE'
+                                            : 'BARTER',
+                                        price: isSourcePrice
+                                            ? sourceOffer.price
+                                            : null,
+                                        barterItemTitle: isSourcePrice
+                                            ? null
+                                            : (sourceOffer.barterItemTitle ??
+                                                  'Service Proposal'),
+                                        barterItemDescription: isSourcePrice
+                                            ? null
+                                            : sourceOffer.barterItemDescription,
+                                      );
+
+                                  if (counterOffer == null) {
+                                    return;
+                                  }
+
+                                  await _chatService.sendMessage(
+                                    chatId: _currentChat.id,
+                                    messageText: lines.join('\n'),
+                                  );
+
+                                  if (!sheetContext.mounted) return;
+                                  Navigator.pop(sheetContext);
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Failed to send return proposal: ${e.toString()}',
+                                      ),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                } finally {
+                                  if (sheetContext.mounted) {
+                                    setSheetState(
+                                      () => sendingProposal = false,
+                                    );
+                                  }
+                                }
+                              },
+                        icon: sendingProposal
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.send),
+                        label: Text(
+                          sendingProposal
+                              ? 'Sending...'
+                              : 'Send Return Proposal',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted) return;
+    await _refreshChat();
+  }
+
   Widget _buildOfferBanner() {
     if (_currentChat.offers.isEmpty) return const SizedBox();
 
@@ -2054,6 +2745,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     visibleOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final latestOffer = visibleOffers.last;
     final isIncoming = latestOffer.madeById != widget.currentUserId;
+    final isServiceChat =
+        (_currentChat.serviceId != null &&
+            _currentChat.serviceId!.isNotEmpty) ||
+        _currentChat.service != null;
 
     if (!isIncoming) return const SizedBox();
 
@@ -2081,25 +2776,36 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             children: [
               Icon(Icons.request_page, color: Colors.blue.shade700),
               const SizedBox(width: 8),
-              Text(
-                'Offer ($statusText)',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: statusColor,
+              Expanded(
+                child: Text(
+                  'Offer ($statusText)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: statusColor,
+                  ),
                 ),
               ),
+              if (isServiceChat) _buildServiceProposalBadge(),
             ],
           ),
           const SizedBox(height: 8),
 
           if (latestOffer.isPriceOffer) ...[
-            Text(
-              'Price: ${latestOffer.currency ?? '\$'} ${latestOffer.price!.toStringAsFixed(2)}',
-              style: const TextStyle(fontWeight: FontWeight.w500),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Price: ${latestOffer.currency ?? '\$'} ${latestOffer.price!.toStringAsFixed(2)}',
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
             ),
           ] else if (latestOffer.isBarterOffer || latestOffer.isBothOffer) ...[
-            const Text(
-              'This user is interested in your product. Here are their thoughts:',
+            Text(
+              isServiceChat
+                  ? 'This user is interested in your service. Here are their thoughts:'
+                  : 'This user is interested in your product. Here are their thoughts:',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 6),
@@ -2117,56 +2823,83 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
           if (latestOffer.isPending && !_currentChat.hasAcceptedOffer) ...[
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed:
-                        _isOfferActionInProgress &&
-                            _processingOfferId == latestOffer.id
-                        ? null
-                        : () => _rejectOffer(latestOffer),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                    ),
-                    child:
-                        _isOfferActionInProgress &&
-                            _processingOfferId == latestOffer.id
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Reject'),
+            if (isServiceChat)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed:
+                      _isOfferActionInProgress &&
+                          _processingOfferId == latestOffer.id
+                      ? null
+                      : () => _acceptOffer(latestOffer),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
                   ),
+                  child:
+                      _isOfferActionInProgress &&
+                          _processingOfferId == latestOffer.id
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Accept'),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed:
-                        _isOfferActionInProgress &&
-                            _processingOfferId == latestOffer.id
-                        ? null
-                        : () => _acceptOffer(latestOffer),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed:
+                          _isOfferActionInProgress &&
+                              _processingOfferId == latestOffer.id
+                          ? null
+                          : () => _rejectOffer(latestOffer),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                      ),
+                      child:
+                          _isOfferActionInProgress &&
+                              _processingOfferId == latestOffer.id
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Reject'),
                     ),
-                    child:
-                        _isOfferActionInProgress &&
-                            _processingOfferId == latestOffer.id
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Accept'),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed:
+                          _isOfferActionInProgress &&
+                              _processingOfferId == latestOffer.id
+                          ? null
+                          : () => _acceptOffer(latestOffer),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                      ),
+                      child:
+                          _isOfferActionInProgress &&
+                              _processingOfferId == latestOffer.id
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Accept'),
+                    ),
+                  ),
+                ],
+              ),
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
@@ -2175,9 +2908,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     _isOfferActionInProgress &&
                         _processingOfferId == latestOffer.id
                     ? null
+                    : isServiceChat
+                    ? () => _openServiceProposalEditor(latestOffer)
                     : () => _showCounterOfferDialog(latestOffer),
-                icon: const Icon(Icons.swap_horiz),
-                label: const Text('Counter Offer'),
+                icon: Icon(
+                  isServiceChat ? Icons.edit_calendar : Icons.swap_horiz,
+                ),
+                label: Text(isServiceChat ? 'Edit Slot' : 'Counter Offer'),
               ),
             ),
           ],
@@ -2202,6 +2939,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     myOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final latestOffer = myOffers.last;
+    final isServiceChat =
+        (_currentChat.serviceId != null &&
+            _currentChat.serviceId!.isNotEmpty) ||
+        _currentChat.service != null;
 
     final statusText = latestOffer.offerStatus.value;
     final statusColor = latestOffer.isPending
@@ -2226,18 +2967,26 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.access_time, color: Colors.orange.shade700),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Your Offer ($statusText)',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: statusColor,
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(Icons.access_time, color: Colors.orange.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Your Offer ($statusText)',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: statusColor,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                    if (isServiceChat) ...[
+                      const SizedBox(width: 8),
+                      _buildServiceProposalBadge(),
+                    ],
+                  ],
+                ),
               ),
               //   if (latestOffer.isPending)
               // IconButton(
@@ -2250,9 +2999,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           const SizedBox(height: 8),
 
           if (latestOffer.isPriceOffer) ...[
-            Text(
-              'Price: ${latestOffer.currency ?? '\$'} ${latestOffer.price!.toStringAsFixed(2)}',
-              style: const TextStyle(fontWeight: FontWeight.w500),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Price: ${latestOffer.currency ?? '\$'} ${latestOffer.price!.toStringAsFixed(2)}',
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
             ),
           ] else if (latestOffer.isBarterOffer || latestOffer.isBothOffer) ...[
             Text(
@@ -2414,73 +3169,101 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Widget build(BuildContext context) {
     final otherUser = _getOtherUser();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundImage: otherUser.profileImage != null
-                  ? NetworkImage(otherUser.profileImage!)
-                  : null,
-              child: otherUser.profileImage == null
-                  ? Text(otherUser.firstName[0].toUpperCase())
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(otherUser.firstName),
-                Text(
-                  (_currentChat.isActive && _isOtherUserOnline)
-                      ? 'Active'
-                      : 'Inactive',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
+    return WillPopScope(
+      onWillPop: () async {
+        if (!widget.returnToTradeChatOnBack) {
+          return true;
+        }
+
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const TradeChatScreen()),
+          (route) => route.isFirst,
+        );
+        return false;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: widget.returnToTradeChatOnBack
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TradeChatScreen(),
+                      ),
+                      (route) => route.isFirst,
+                    );
+                  },
+                )
+              : null,
+          title: Row(
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundImage: otherUser.profileImage != null
+                    ? NetworkImage(otherUser.profileImage!)
+                    : null,
+                child: otherUser.profileImage == null
+                    ? Text(otherUser.firstName[0].toUpperCase())
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(otherUser.firstName),
+                  Text(
+                    (_currentChat.isActive && _isOtherUserOnline)
+                        ? 'Active'
+                        : 'Inactive',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.more_vert),
+              onPressed: _showMoreOptions,
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: _showMoreOptions,
-          ),
-        ],
-      ),
 
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(child: LoadingWidget())
-            : Column(
-                children: [
-                  Expanded(
-                    child: RefreshIndicator(
-                      onRefresh: _refreshChat,
-                      color: const Color(0xFF2E5BFF),
-                      backgroundColor: Colors.transparent,
-                      elevation: 0,
-                      strokeWidth: 2.2,
-                      child: ListView(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 8,
+        body: SafeArea(
+          child: _isLoading
+              ? const Center(child: LoadingWidget())
+              : Column(
+                  children: [
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _refreshChat,
+                        color: const Color(0xFF2E5BFF),
+                        backgroundColor: Colors.transparent,
+                        elevation: 0,
+                        strokeWidth: 2.2,
+                        child: ListView(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
+                          ),
+                          children: [
+                            _buildOfferBanner(),
+                            _buildMyOfferBanner(),
+                            _buildDealCompletionBanner(),
+                            ..._messages.map((msg) => _buildMessageBubble(msg)),
+                          ],
                         ),
-                        children: [
-                          _buildOfferBanner(),
-                          _buildMyOfferBanner(),
-                          _buildDealCompletionBanner(),
-                          ..._messages.map((msg) => _buildMessageBubble(msg)),
-                        ],
                       ),
                     ),
-                  ),
 
-                  if (_currentChat.isActive) _buildMessageInput(),
-                ],
-              ),
+                    if (_currentChat.isActive) _buildMessageInput(),
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -2548,8 +3331,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
 class _DealCompletionDialog extends StatefulWidget {
   final bool isPriceOffer;
+  final double? acceptedPrice;
 
-  const _DealCompletionDialog({required this.isPriceOffer});
+  const _DealCompletionDialog({required this.isPriceOffer, this.acceptedPrice});
 
   @override
   State<_DealCompletionDialog> createState() => __DealCompletionDialogState();
@@ -2559,6 +3343,15 @@ class __DealCompletionDialogState extends State<_DealCompletionDialog> {
   bool _isDealCompleted = true;
   final TextEditingController _remarksController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    final acceptedPrice = widget.acceptedPrice;
+    if (acceptedPrice != null && acceptedPrice > 0) {
+      _priceController.text = acceptedPrice.toStringAsFixed(2);
+    }
+  }
 
   @override
   void dispose() {
@@ -2627,21 +3420,49 @@ class __DealCompletionDialogState extends State<_DealCompletionDialog> {
               TextField(
                 controller: _remarksController,
                 maxLines: 3,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Remarks',
                   hintText: 'Enter any remarks about the deal',
-                  border: OutlineInputBorder(),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey.shade400),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey.shade400),
+                  ),
+                  focusedBorder: const OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(8)),
+                    borderSide: BorderSide(color: Color(0xFF2E5BFF), width: 2),
+                  ),
                 ),
               ),
               if (_isDealCompleted && widget.isPriceOffer) ...[
                 const SizedBox(height: 16),
                 TextField(
                   controller: _priceController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Selling Price (Required)',
+                  readOnly: true,
+                  enableInteractiveSelection: false,
+                  decoration: InputDecoration(
+                    labelText: 'Selling Price',
                     prefixText: '\$ ',
-                    border: OutlineInputBorder(),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey.shade400),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey.shade400),
+                    ),
+                    focusedBorder: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(8)),
+                      borderSide: BorderSide(
+                        color: Color(0xFF2E5BFF),
+                        width: 2,
+                      ),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey.shade100,
                   ),
                 ),
               ],
@@ -2652,6 +3473,14 @@ class __DealCompletionDialogState extends State<_DealCompletionDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF2E5BFF),
+            side: const BorderSide(color: Color(0xFF2E5BFF), width: 1.2),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          ),
           child: const Text('Cancel'),
         ),
         ElevatedButton(
@@ -2661,7 +3490,7 @@ class __DealCompletionDialogState extends State<_DealCompletionDialog> {
                 _priceController.text.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Please enter the selling price'),
+                  content: Text('Accepted offer price is unavailable'),
                   backgroundColor: Colors.orange,
                 ),
               );

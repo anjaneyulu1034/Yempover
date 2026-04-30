@@ -130,9 +130,9 @@ class ProfileService {
   }
 
   Future<void> updatePrivacySettings({
-    required bool shareEmail,
-    required bool sharePhone,
-    required bool notificationEnabled,
+    bool? shareEmail,
+    bool? sharePhone,
+    bool? notificationEnabled,
   }) async {
     try {
       final token = await _getToken();
@@ -140,13 +140,20 @@ class ProfileService {
         throw Exception('Authentication token not found. Please login again.');
       }
 
+      final Map<String, dynamic> payload = {};
+      if (shareEmail != null) payload['shareEmail'] = shareEmail;
+      if (sharePhone != null) payload['sharePhone'] = sharePhone;
+      if (notificationEnabled != null) {
+        payload['notificationEnabled'] = notificationEnabled;
+      }
+
+      if (payload.isEmpty) {
+        return;
+      }
+
       final response = await _apiService.patch(
         ApiConstants.mePrivacy,
-        body: {
-          'shareEmail': shareEmail,
-          'sharePhone': sharePhone,
-          'notificationEnabled': notificationEnabled,
-        },
+        body: payload,
       );
 
       if (response.statusCode == 200) {

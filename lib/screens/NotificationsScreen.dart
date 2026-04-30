@@ -96,7 +96,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _refreshNotifications() async {
     final provider = Provider.of<NotificationProvider>(context, listen: false);
-    await provider.refreshNotifications();
+    await provider.loadNotifications();
+    await provider.loadUnreadCount();
   }
 
   @override

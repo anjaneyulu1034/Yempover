@@ -13,6 +13,7 @@ class NotificationProvider extends ChangeNotifier {
   int _unreadCount = 0;
   bool _isLoading = false;
   String? _error;
+  bool? _currentIsReadFilter;
 
   // Getters
   List<AppNotification> get notifications => _notifications;
@@ -26,6 +27,7 @@ class NotificationProvider extends ChangeNotifier {
 
   // Load notifications
   Future<void> loadNotifications({bool? isRead}) async {
+    _currentIsReadFilter = isRead;
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -59,6 +61,7 @@ class NotificationProvider extends ChangeNotifier {
       final response = await _service.getNotifications(
         page: currentPage + 1,
         limit: 20,
+        isRead: _currentIsReadFilter,
       );
 
       _notifications.addAll(response.data.notifications);
@@ -73,7 +76,7 @@ class NotificationProvider extends ChangeNotifier {
 
   // Refresh notifications
   Future<void> refreshNotifications() async {
-    await loadNotifications();
+    await loadNotifications(isRead: _currentIsReadFilter);
   }
 
   // Load unread count

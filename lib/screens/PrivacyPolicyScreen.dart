@@ -90,11 +90,11 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: _loadPrivacyPolicy,
-            tooltip: 'Refresh',
-          ),
+          // IconButton(
+          //   icon: const Icon(Icons.refresh, color: Colors.white),
+          //   onPressed: _loadPrivacyPolicy,
+          //   tooltip: 'Refresh',
+          // ),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),

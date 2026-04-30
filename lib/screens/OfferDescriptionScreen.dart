@@ -5,6 +5,7 @@ import 'package:YemPover_app/models/ProductPostmain.dart';
 import 'package:YemPover_app/payment/SubscriptionScreen.dart';
 import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 import 'package:YemPover_app/utils/error_message_utils.dart';
 
 enum OfferSubmissionMode { price, barter, both }
@@ -266,24 +267,31 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
       print('✅ Offer created successfully!');
       print('   Offer ID: ${createdOffer.id}');
 
-      // Show success message
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('Your offer has been sent!'),
           backgroundColor: Colors.green,
+          duration: Duration(seconds: 5),
         ),
       );
 
-      // FIXED NAVIGATION: Clear the entire stack and navigate to TradeChatScreen
+      await Future.delayed(const Duration(seconds: 5));
       if (!mounted) return;
 
-      // Navigate to TradeChatScreen and remove all previous routes
-      Navigator.pushAndRemoveUntil(
+      await Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const TradeChatScreen()),
-        (route) => false, // This removes all previous routes
+        MaterialPageRoute(
+          builder: (context) => ChatDetailScreen(
+            chat: chat,
+            currentUserId: widget.currentUserId,
+            onChatUpdated: (_) {},
+            returnToTradeChatOnBack: true,
+          ),
+        ),
       );
     } catch (e) {
       if (mounted) {
@@ -607,6 +615,23 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                   errorText: _priceError,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade400),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade400),
+                  ),
+                  focusedBorder: const OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    borderSide: BorderSide(color: Color(0xFF2E5BFF), width: 2),
+                  ),
+                  errorBorder: const OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    borderSide: BorderSide(color: Colors.red, width: 1.4),
+                  ),
+                  focusedErrorBorder: const OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    borderSide: BorderSide(color: Colors.red, width: 2),
                   ),
                   filled: true,
                   fillColor: Colors.grey.shade50,
@@ -637,6 +662,11 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                 errorText: _descriptionError,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade400),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade400),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -644,6 +674,14 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                     color: Color(0xFF2E5BFF),
                     width: 2,
                   ),
+                ),
+                errorBorder: const OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                  borderSide: BorderSide(color: Colors.red, width: 1.4),
+                ),
+                focusedErrorBorder: const OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                  borderSide: BorderSide(color: Colors.red, width: 2),
                 ),
                 filled: true,
                 fillColor: Colors.grey.shade50,

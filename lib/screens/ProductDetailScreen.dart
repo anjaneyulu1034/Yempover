@@ -499,11 +499,17 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                Text(
-                                  _post.description,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    height: 1.5,
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 110,
+                                  child: SingleChildScrollView(
+                                    child: Text(
+                                      _post.description,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        height: 1.5,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -573,22 +579,22 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 12),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: ElevatedButton.icon(
-                                      onPressed: _markAsSold,
-                                      icon: const Icon(Icons.check_circle),
-                                      label: const Text('Mark as Sold'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.green,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 14,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+                                  // const SizedBox(height: 12),
+                                  // SizedBox(
+                                  //   width: double.infinity,
+                                  //   child: ElevatedButton.icon(
+                                  //     onPressed: _markAsSold,
+                                  //     icon: const Icon(Icons.check_circle),
+                                  //     label: const Text('Mark as Sold'),
+                                  //     style: ElevatedButton.styleFrom(
+                                  //       backgroundColor: Colors.green,
+                                  //       foregroundColor: Colors.white,
+                                  //       padding: const EdgeInsets.symmetric(
+                                  //         vertical: 14,
+                                  //       ),
+                                  //     ),
+                                  //   ),
+                                  // ),
                                 ],
                               ),
                             ),

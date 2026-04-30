@@ -53,6 +53,10 @@ class MyPost {
   final DateTime postedDate;
   final int viewCount;
   final bool isListed;
+  final DateTime? validFrom;
+  final DateTime? validUntil;
+  final String? remainingTime;
+  final bool hasExpired;
   final DateTime createdAt;
   final DateTime updatedAt;
   final Category category;
@@ -78,6 +82,10 @@ class MyPost {
     required this.postedDate,
     required this.viewCount,
     required this.isListed,
+    this.validFrom,
+    this.validUntil,
+    this.remainingTime,
+    this.hasExpired = false,
     required this.createdAt,
     required this.updatedAt,
     required this.category,
@@ -111,6 +119,13 @@ class MyPost {
       ),
       viewCount: json['viewCount'] ?? 0,
       isListed: json['isListed'] ?? true,
+      validFrom: _parseOptionalDateTime(json['validFrom']),
+      validUntil: _parseOptionalDateTime(json['validUntil']),
+      remainingTime: _parseRemainingTime(json['remainingTime']),
+      hasExpired: _parseFlexibleBool(json, const [
+        'hasExpired',
+        'isExpired',
+      ], defaultValue: false),
       createdAt: DateTime.parse(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
       ),
@@ -152,6 +167,19 @@ class MyPost {
       }
     }
     return defaultValue;
+  }
+
+  static DateTime? _parseOptionalDateTime(dynamic value) {
+    if (value == null) return null;
+    final raw = value.toString().trim();
+    if (raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
+  }
+
+  static String? _parseRemainingTime(dynamic value) {
+    if (value == null) return null;
+    final text = value.toString().trim();
+    return text.isEmpty ? null : text;
   }
 
   bool get isForSale => status == 'FOR_SALE';

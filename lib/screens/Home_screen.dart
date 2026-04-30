@@ -4094,7 +4094,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         strokeWidth: 2.2,
                         child: ListView.builder(
                           controller: _scrollController,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                           itemCount: _filteredPosts.length + 1,
                           itemBuilder: (context, index) {
                             if (index == _filteredPosts.length) {
@@ -4226,165 +4226,207 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: _navigateToMyProfile,
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.blue, width: 2.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.blue.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A5AA8),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFF2A7BC9)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0A5AA8).withOpacity(0.22),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: _navigateToMyProfile,
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.7),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: _isLoadingProfile
+                    ? const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        ),
+                      )
+                    : CircleAvatar(
+                        radius: 23,
+                        backgroundColor: Colors.grey.shade200,
+                        backgroundImage: profileData?.profileImage != null
+                            ? NetworkImage(profileData!.profileImage!)
+                            : null,
+                        child: profileData?.profileImage == null
+                            ? Text(
+                                profileData?.firstName?.isNotEmpty == true
+                                    ? profileData!.firstName![0].toUpperCase()
+                                    : 'U',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF0A5AA8),
+                                ),
+                              )
+                            : null,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _isLoadingProfile
+                        ? 'Hi, User'
+                        : "${profileData?.firstName ?? ''} ${profileData?.lastName ?? ''}"
+                              .trim(),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 19,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const Text(
+                    'Welcome to YemPover',
+                    style: TextStyle(
+                      color: Color(0xFFE1EEFF),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
-              child: _isLoadingProfile
-                  ? const Center(
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.blue,
+            ),
+            const SizedBox(width: 6),
+            Consumer<NotificationProvider>(
+              builder: (context, provider, child) {
+                return Stack(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.26),
                         ),
                       ),
-                    )
-                  : CircleAvatar(
-                      radius: 23,
-                      backgroundColor: Colors.grey.shade200,
-                      backgroundImage: profileData?.profileImage != null
-                          ? NetworkImage(profileData!.profileImage!)
-                          : null,
-                      child: profileData?.profileImage == null
-                          ? Text(
-                              profileData?.firstName?.isNotEmpty == true
-                                  ? profileData!.firstName![0].toUpperCase()
-                                  : 'U',
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.notifications_none_outlined,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                        onPressed: _showNotificationScreen,
+                      ),
+                    ),
+                    if (provider.unreadCount > 0)
+                      Positioned(
+                        right: -2,
+                        top: -2,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE53935),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: const Color(0xFF0A5AA8),
+                              width: 1.5,
+                            ),
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 18,
+                            minHeight: 16,
+                          ),
+                          child: Center(
+                            child: Text(
+                              provider.unreadCount > 9
+                                  ? '9+'
+                                  : '${provider.unreadCount}',
                               style: const TextStyle(
-                                fontSize: 20,
+                                color: Colors.white,
+                                fontSize: 9,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.blue,
                               ),
-                            )
-                          : null,
-                    ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _isLoadingProfile
-                      ? 'Loading...'
-                      : "${profileData?.firstName ?? ''} ${profileData?.lastName ?? ''}"
-                            .trim(),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-                const Text(
-                  'Welcome to YemPover',
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-          Consumer<NotificationProvider>(
-            builder: (context, provider, child) {
-              return Stack(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.notifications_none_outlined,
-                        color: Colors.blue.shade700,
-                        size: 26,
-                      ),
-                      onPressed: _showNotificationScreen,
-                    ),
-                  ),
-                  if (provider.unreadCount > 0)
-                    Positioned(
-                      right: 8,
-                      top: 5,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 20,
-                          minHeight: 20,
-                        ),
-                        child: Center(
-                          child: Text(
-                            provider.unreadCount > 9
-                                ? '9+'
-                                : '${provider.unreadCount}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: _navigateToHamburgerMenu,
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Icon(Icons.menu, size: 24, color: Colors.grey.shade700),
+                  ],
+                );
+              },
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _navigateToHamburgerMenu,
+              child: Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withOpacity(0.26)),
+                ),
+                child: const Icon(Icons.menu, size: 24, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildLocationRow() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
       child: InkWell(
         onTap: _showLocationOptions,
         borderRadius: BorderRadius.circular(14),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFFFFFF), Color(0xFFF7FAFF)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.grey.shade200),
+            border: Border.all(color: const Color(0xFFDDE6FF)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
+                color: Colors.blue.withOpacity(0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
               ),
             ],
           ),
@@ -4445,7 +4487,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Row(
         children: [
           Expanded(
@@ -4491,38 +4533,53 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(width: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
+          Builder(
+            builder: (context) {
+              final hasActiveFilters =
+                  _selectedTradeType != null ||
+                  _selectedPostType != null ||
+                  _selectedCategory != null;
+
+              return Container(
+                decoration: BoxDecoration(
+                  gradient: hasActiveFilters
+                      ? const LinearGradient(
+                          colors: [Color(0xFF2E5BFF), Color(0xFF4A7AFF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : null,
+                  color: hasActiveFilters ? null : Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: hasActiveFilters
+                          ? Colors.blue.withOpacity(0.25)
+                          : Colors.black.withOpacity(0.03),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(18),
-              child: InkWell(
-                onTap: _showFilterDialog,
-                borderRadius: BorderRadius.circular(18),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  child: Icon(
-                    Icons.tune,
-                    color:
-                        _selectedTradeType != null ||
-                            _selectedPostType != null ||
-                            _selectedCategory != null
-                        ? Colors.blue
-                        : Colors.grey.shade500,
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(18),
+                  child: InkWell(
+                    onTap: _showFilterDialog,
+                    borderRadius: BorderRadius.circular(18),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      child: Icon(
+                        Icons.tune,
+                        color: hasActiveFilters
+                            ? Colors.white
+                            : Colors.grey.shade500,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ],
       ),
@@ -4545,11 +4602,12 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: const Color(0xFFE6ECFF), width: 1.1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+              color: const Color(0x332E5BFF),
+              blurRadius: 22,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
@@ -4804,6 +4862,38 @@ class _HomeScreenState extends State<HomeScreen> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (post.post.price > 0) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.sell_outlined,
+                            size: 14,
+                            color: Colors.blue.shade700,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Price: ${post.formattedPrice}',
+                            style: TextStyle(
+                              color: Colors.blue.shade700,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -4822,6 +4912,23 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       const SizedBox(width: 10),
+                      if (post.formattedDistance.isNotEmpty) ...[
+                        Icon(
+                          Icons.near_me_outlined,
+                          size: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          post.formattedDistance,
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                      ],
                       Icon(
                         Icons.location_on_outlined,
                         size: 14,
@@ -4842,37 +4949,39 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  // Return type
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.swap_horiz,
-                          size: 14,
-                          color: Colors.green.shade700,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'In Return: ${_getReturnType(post)}',
-                          style: TextStyle(
+                  if (_getReturnType(post).trim() != post.formattedPrice) ...[
+                    const SizedBox(height: 10),
+                    // Return type (shown only when different from the main price)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.swap_horiz,
+                            size: 14,
                             color: Colors.green.shade700,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 6),
+                          Text(
+                            'In Return: ${_getReturnType(post)}',
+                            style: TextStyle(
+                              color: Colors.green.shade700,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -4917,6 +5026,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         'Chat',
                         false,
                         badge: provider.unreadCount,
+                        iconAssetPath: 'assets/chat_icons.png',
                       );
                     },
                   ),
@@ -4954,7 +5064,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Trade',
+                        'Trade Booth',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey,
@@ -4972,7 +5082,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _navItem(IconData icon, String label, bool isActive, {int badge = 0}) {
+  Widget _navItem(
+    IconData icon,
+    String label,
+    bool isActive, {
+    int badge = 0,
+    String? iconAssetPath,
+  }) {
     return GestureDetector(
       onTap: label == 'Chat' ? _navigateToTradeChat : null,
       child: Column(
@@ -4980,11 +5096,21 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Stack(
             children: [
-              Icon(
-                icon,
-                color: isActive ? Colors.blue : Colors.grey.shade400,
-                size: 28,
-              ),
+              iconAssetPath != null
+                  ? Opacity(
+                      opacity: isActive ? 1 : 0.7,
+                      child: Image.asset(
+                        iconAssetPath,
+                        width: 28,
+                        height: 28,
+                        fit: BoxFit.contain,
+                      ),
+                    )
+                  : Icon(
+                      icon,
+                      color: isActive ? Colors.blue : Colors.grey.shade400,
+                      size: 28,
+                    ),
               if (badge > 0)
                 Positioned(
                   right: -4,

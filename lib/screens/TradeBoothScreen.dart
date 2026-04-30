@@ -1,4 +1,6 @@
 // screens/TradeBoothScreen.dart
+import 'dart:async';
+
 import 'package:YemPover_app/screens/ProductDetailScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -25,19 +27,30 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
   int _totalPages = 1;
   bool _isLoadingMore = false;
   final ScrollController _scrollController = ScrollController();
+  Timer? _countdownTimer;
 
   @override
   void initState() {
     super.initState();
     _fetchMyPosts();
+    _startCountdownTimer();
     _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     _scrollController.dispose();
     // _postsService.dispose();
     super.dispose();
+  }
+
+  void _startCountdownTimer() {
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {});
+    });
   }
 
   void _onScroll() {
@@ -253,12 +266,68 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
   }
 
   String _getReturnDetails(MyPost post) {
-    if (post.isOpenForBarter) {
-      return 'Open for barter';
-    } else if (post.price != null && post.price! > 0) {
+    if (post.price != null && post.price! > 0) {
       return _formatPrice(post);
     }
-    return 'No barter';
+    return '';
+  }
+
+  String _getExpiryCountdownLabel(MyPost post) {
+    final validUntil = post.validUntil;
+    if (validUntil == null) {
+      return 'No expiry timeline';
+    }
+
+    final now = DateTime.now();
+    if (!validUntil.isAfter(now)) {
+      return 'Expired';
+    }
+
+    final difference = validUntil.difference(now);
+
+    if (difference.inHours < 24) {
+      final totalMinutes = difference.inMinutes;
+      final hours = totalMinutes ~/ 60;
+      final minutes = totalMinutes % 60;
+      final seconds = difference.inSeconds % 60;
+      return 'Expires in ${hours}h:${minutes.toString().padLeft(2, '0')}m:${seconds.toString().padLeft(2, '0')}s';
+    }
+
+    if (difference.inDays < 30) {
+      final days = difference.inDays;
+      final remHours = difference.inHours % 24;
+      return remHours > 0
+          ? 'Expires in ${days}d ${remHours}h'
+          : 'Expires in ${days}d';
+    }
+
+    final days = difference.inDays;
+    final months = (days / 30).floor();
+    final remDays = days % 30;
+    return remDays > 0
+        ? 'Expires in ${months}mo ${remDays}d'
+        : 'Expires in ${months}mo';
+  }
+
+  Color _getExpiryCountdownColor(MyPost post) {
+    final validUntil = post.validUntil;
+    if (validUntil == null) {
+      return Colors.blueGrey.shade700;
+    }
+
+    final now = DateTime.now();
+    if (!validUntil.isAfter(now)) {
+      return Colors.red.shade700;
+    }
+
+    final difference = validUntil.difference(now);
+    if (difference.inHours < 1) {
+      return Colors.red.shade700;
+    }
+    if (difference.inHours < 24) {
+      return Colors.orange.shade700;
+    }
+    return Colors.green.shade700;
   }
 
   String _truncateLocation(String location, {int maxLength = 25}) {
@@ -674,14 +743,41 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                           maxLines: 1,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      if (returnDetails.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            returnDetails,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.timer_outlined,
+                        size: 14,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          returnDetails,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
+                          _getExpiryCountdownLabel(post),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: _getExpiryCountdownColor(post),
+                            fontWeight: FontWeight.w600,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

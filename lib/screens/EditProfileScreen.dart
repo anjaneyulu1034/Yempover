@@ -27,9 +27,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _emailController;
   late TextEditingController _homeAddressController;
 
-  bool _shareEmail = true;
-  bool _sharePhone = true;
-  bool _notificationEnabled = true;
   bool _isLoading = false;
   bool _isUploadingImage = false;
 
@@ -56,10 +53,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _homeAddressController = TextEditingController(
       text: _profile?.homeAddress?.toString() ?? '',
     );
-
-    _shareEmail = _profile?.shareEmail ?? true;
-    _sharePhone = _profile?.sharePhone ?? true;
-    _notificationEnabled = _profile?.notificationEnabled ?? true;
   }
 
   @override
@@ -302,11 +295,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
 
       await _profileService.updateProfile(request);
-      await _profileService.updatePrivacySettings(
-        shareEmail: _shareEmail,
-        sharePhone: _sharePhone,
-        notificationEnabled: _notificationEnabled,
-      );
       final updatedProfile = await _profileService.fetchProfile();
 
       if (mounted) {
@@ -623,73 +611,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
 
                 const SizedBox(height: 24),
-
-                // Privacy & Preferences Section
-                const Text(
-                  'Privacy & Preferences',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-
-                const SizedBox(height: 12),
-
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade200),
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.white,
-                  ),
-                  child: Column(
-                    children: [
-                      SwitchListTile.adaptive(
-                        value: _shareEmail,
-                        onChanged: _isBusy
-                            ? null
-                            : (value) {
-                                setState(() => _shareEmail = value);
-                              },
-                        title: const Text('Share my email'),
-                        subtitle: const Text(
-                          'Visible to users you have completed a deal with',
-                        ),
-                        activeColor: AppConstants.primaryColor,
-                      ),
-                      Divider(height: 1, color: Colors.grey.shade200),
-                      SwitchListTile.adaptive(
-                        value: _sharePhone,
-                        onChanged: _isBusy
-                            ? null
-                            : (value) {
-                                setState(() => _sharePhone = value);
-                              },
-                        title: const Text('Share my phone number'),
-                        subtitle: const Text(
-                          'Visible to users you have completed a deal with',
-                        ),
-                        activeColor: AppConstants.primaryColor,
-                      ),
-                      Divider(height: 1, color: Colors.grey.shade200),
-                      SwitchListTile.adaptive(
-                        value: _notificationEnabled,
-                        onChanged: _isBusy
-                            ? null
-                            : (value) {
-                                setState(() => _notificationEnabled = value);
-                              },
-                        title: const Text('Enable notifications'),
-                        subtitle: const Text(
-                          'Receive trade and booking updates',
-                        ),
-                        activeColor: AppConstants.primaryColor,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-                Text(
-                  'Your contact details are only shown when your sharing preference is ON.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
 
                 const SizedBox(height: 24),
 

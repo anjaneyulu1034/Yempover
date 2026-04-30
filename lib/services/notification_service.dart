@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:YemPover_app/constants/api_constants.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:YemPover_app/services/token_service.dart';
 import '../models/notification_model.dart';
 import '../models/notification_preferences_model.dart';
 
@@ -12,6 +13,7 @@ class NotificationService {
   NotificationService._internal();
 
   String? _authToken;
+  final TokenService _tokenService = TokenService();
 
   // Initialize with auth token
   Future<void> init() async {
@@ -26,8 +28,13 @@ class NotificationService {
 
   // Get headers with auth token
   Future<Map<String, String>> _getHeaders() async {
-    if (_authToken == null) {
-      await init();
+    // Prefer TokenService so token refresh/expiry logic is reused.
+    _authToken = await _tokenService.getToken();
+
+    if (_authToken == null || _authToken!.isEmpty) {
+      if (_authToken == null) {
+        await init();
+      }
     }
 
     return {...ApiConstants.headers, 'Authorization': 'Bearer $_authToken'};
@@ -42,14 +49,20 @@ class NotificationService {
     try {
       final headers = await _getHeaders();
 
-      String url =
-          '${ApiConstants.baseUrl}/notifications?page=$page&limit=$limit';
+      final queryParams = <String, String>{
+        'page': page.toString(),
+        'limit': limit.toString(),
+      };
       if (isRead != null) {
-        url += '&isRead=$isRead';
+        queryParams['isRead'] = isRead.toString();
       }
 
+      final uri = Uri.parse(
+        ApiConstants.notifications,
+      ).replace(queryParameters: queryParams);
+
       final response = await http
-          .get(Uri.parse(url), headers: headers)
+          .get(uri, headers: headers)
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {

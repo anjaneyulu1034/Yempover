@@ -311,32 +311,31 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
 
         // Service Appointments Dashboard
         if (!_isGuestUser)
-          _buildMenuItem(
-            icon: Icons.calendar_month_outlined,
-            title: 'Appointments',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AppointmentsDashboardScreen(),
-                ),
-              );
-            },
-          ),
-
-        if (!_isGuestUser)
-          _buildMenuItem(
-            icon: Icons.visibility_off_outlined,
-            title: 'Hidden Posts',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const HiddenPostsScreen(),
-                ),
-              );
-            },
-          ),
+          // _buildMenuItem(
+          //   icon: Icons.calendar_month_outlined,
+          //   title: 'Appointments',
+          //   onTap: () {
+          //     Navigator.push(
+          //       context,
+          //       MaterialPageRoute(
+          //         builder: (context) => const AppointmentsDashboardScreen(),
+          //       ),
+          //     );
+          //   },
+          // ),
+          if (!_isGuestUser)
+            _buildMenuItem(
+              icon: Icons.visibility_off_outlined,
+              title: 'Hidden Posts',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const HiddenPostsScreen(),
+                  ),
+                );
+              },
+            ),
 
         // Subscription
         if (!_isGuestUser)
