@@ -1,4 +1,3 @@
-import 'package:YemPover_app/screens/service/AppointmentsDashboardScreen.dart';
 import 'package:YemPover_app/screens/service/ServiceAvailabilityScreen.dart';
 import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 import 'package:YemPover_app/services/service_booking_service.dart';
@@ -1590,74 +1589,36 @@ class _ServiceDetailBookingScreenState
     }
 
     if (_isOwner) {
-      return Column(
-        children: [
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      ServiceAvailabilityScreen(serviceId: widget.serviceId),
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.deepPurple,
-                side: const BorderSide(color: Colors.deepPurple),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.schedule),
-                  SizedBox(width: 8),
-                  Text(
-                    'Manage Availability',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
+      return SizedBox(
+        width: double.infinity,
+        child: OutlinedButton(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ServiceAvailabilityScreen(serviceId: widget.serviceId),
             ),
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const AppointmentsDashboardScreen(
-                    initialProviderTab: true,
-                  ),
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                elevation: 0,
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.calendar_month),
-                  SizedBox(width: 8),
-                  Text(
-                    'View Appointments',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.deepPurple,
+            side: const BorderSide(color: Colors.deepPurple),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30),
             ),
           ),
-        ],
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.schedule),
+              SizedBox(width: 8),
+              Text(
+                'Manage Availability',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
       );
     }
 

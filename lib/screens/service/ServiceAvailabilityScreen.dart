@@ -1,4 +1,3 @@
-import 'package:YemPover_app/screens/service/AppointmentsDashboardScreen.dart';
 import 'package:YemPover_app/services/service_booking_service.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
@@ -159,6 +158,11 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
       if (!mounted) return;
       setState(() => _published = widget.isInitialSetup);
       SnackbarUtils.showSuccess(context, 'Availability saved successfully');
+
+      Future.microtask(() {
+        if (!mounted) return;
+        Navigator.popUntil(context, (route) => route.isFirst);
+      });
     } catch (error) {
       if (!mounted) return;
       SnackbarUtils.showError(context, _service.extractMessage(error));
@@ -365,43 +369,6 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
                 ),
               ),
               const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const AppointmentsDashboardScreen(
-                        initialProviderTab: true,
-                      ),
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.calendar_month),
-                      SizedBox(width: 8),
-                      Text(
-                        'View Appointments',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(

@@ -1107,29 +1107,58 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   ),
                 ),
                 const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: selectedCurrency,
-                  decoration: InputDecoration(
-                    labelText: 'Currency',
-                    border: border,
-                    enabledBorder: border,
-                    focusedBorder: border.copyWith(
-                      borderSide: const BorderSide(
-                        color: Color(0xFF2E5BFF),
-                        width: 1.8,
+                InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () async {
+                    final selected = await showModalBottomSheet<String>(
+                      context: context,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(16),
+                        ),
                       ),
-                    ),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'USD', child: Text('USD')),
-                    DropdownMenuItem(value: 'INR', child: Text('INR')),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
+                      builder: (sheetContext) => SafeArea(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ListTile(
+                              title: const Text('USD'),
+                              onTap: () => Navigator.pop(sheetContext, 'USD'),
+                            ),
+                            ListTile(
+                              title: const Text('INR'),
+                              onTap: () => Navigator.pop(sheetContext, 'INR'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+
+                    if (selected == null) return;
                     setDialogState(() {
-                      selectedCurrency = value;
+                      selectedCurrency = selected;
                     });
                   },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Currency',
+                      border: border,
+                      enabledBorder: border,
+                      focusedBorder: border.copyWith(
+                        borderSide: const BorderSide(
+                          color: Color(0xFF2E5BFF),
+                          width: 1.8,
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(selectedCurrency),
+                        const Icon(Icons.arrow_drop_down),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),

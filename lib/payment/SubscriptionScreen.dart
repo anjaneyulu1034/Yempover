@@ -145,8 +145,54 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     return selectedName == currentName;
   }
 
+  bool _hasActiveCurrentPlan() {
+    return currentPlan != null && currentPlan!.isValid == true;
+  }
+
+  int _planNameRank(String? name) {
+    final normalized = (name ?? '').trim().toLowerCase();
+    if (normalized.contains('annual') || normalized.contains('year')) return 4;
+    if (normalized.contains('semi')) return 3;
+    if (normalized.contains('quarter')) return 2;
+    if (normalized.contains('month')) return 1;
+    if (normalized.contains('free') || normalized.contains('trial')) return 0;
+    return 1;
+  }
+
+  bool _isDowngradePlan(Plans plan) {
+    if (!_hasActiveCurrentPlan()) return false;
+
+    final currentId = currentPlan?.planId?.trim() ?? '';
+    final targetId = plan.id?.trim() ?? '';
+    if (currentId.isNotEmpty && targetId.isNotEmpty && currentId == targetId) {
+      return false;
+    }
+
+    final currentAmount = currentPlan?.planAmount ?? 0;
+    final targetAmount = plan.amount ?? 0;
+
+    if (targetAmount < currentAmount) return true;
+    if (targetAmount > currentAmount) return false;
+
+    return _planNameRank(plan.name) < _planNameRank(currentPlan?.planName);
+  }
+
+  bool _isPlanSelectable(Plans plan) {
+    return !_isDowngradePlan(plan);
+  }
+
   Future<void> _subscribeToSelectedPlan() async {
     if (_selectedPlan == null || _isSubscribing) return;
+
+    if (_isDowngradePlan(_selectedPlan!)) {
+      final fromPlan = currentPlan?.planName ?? 'Current plan';
+      final toPlan = _selectedPlan?.name ?? 'selected plan';
+      SnackbarUtils.showError(
+        context,
+        'Downgrade is not allowed. You cannot move from $fromPlan to $toPlan. Please choose an equal or higher plan.',
+      );
+      return;
+    }
 
     final planId = _selectedPlan!.id?.trim() ?? '';
     if (planId.isEmpty) {
@@ -376,6 +422,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         onPressed:
                             _selectedPlan == null ||
                                 _isSelectedPlanCurrent() ||
+                                (_selectedPlan != null &&
+                                    _isDowngradePlan(_selectedPlan!)) ||
                                 _isSubscribing
                             ? null
                             : _subscribeToSelectedPlan,
@@ -393,6 +441,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                               ? 'Select a Plan'
                               : _isSelectedPlanCurrent()
                               ? 'Current Plan Selected'
+                              : (_selectedPlan != null &&
+                                    _isDowngradePlan(_selectedPlan!))
+                              ? 'Downgrade Not Allowed'
                               : currentPlan != null
                               ? 'Upgrade Plan'
                               : 'Subscribe Now',
@@ -535,79 +586,85 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   Widget _buildPlanOption(Plans plan) {
     final isSelected = _selectedPlan?.id == plan.id;
+    final isDisabled = !_isPlanSelectable(plan);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
       child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _selectedPlan = plan;
-          });
-        },
+        onTap: isDisabled
+            ? null
+            : () {
+                setState(() {
+                  _selectedPlan = plan;
+                });
+              },
         child: Stack(
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: isSelected
-                    ? const LinearGradient(
-                        colors: [Color(0xFF2E5BFF), Color(0xFF6A8DFF)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null,
-                color: isSelected ? null : Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: isSelected
-                      ? const Color(0xFF2E5BFF)
-                      : Colors.grey.shade300,
-                  width: isSelected ? 2.5 : 1,
+            Opacity(
+              opacity: isDisabled ? 0.55 : 1,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: isSelected
+                      ? const LinearGradient(
+                          colors: [Color(0xFF2E5BFF), Color(0xFF6A8DFF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : null,
+                  color: isSelected ? null : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isSelected
+                        ? const Color(0xFF2E5BFF)
+                        : Colors.grey.shade300,
+                    width: isSelected ? 2.5 : 1,
+                  ),
+                  boxShadow: const [],
                 ),
-                boxShadow: const [],
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    plan.name ?? '',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: isSelected ? Colors.white : Colors.black87,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      plan.name ?? '',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isSelected ? Colors.white : Colors.black87,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    plan.formattedAmount,
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: isSelected ? Colors.white : Colors.black,
+                    const SizedBox(height: 10),
+                    Text(
+                      plan.formattedAmount,
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: isSelected ? Colors.white : Colors.black,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    '${plan.durationDays ?? 0} Days',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isSelected ? Colors.white70 : Colors.grey,
+                    const SizedBox(height: 10),
+                    Text(
+                      '${plan.durationDays ?? 0} Days',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isSelected ? Colors.white70 : Colors.grey,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    plan.description ?? '',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isSelected ? Colors.white70 : Colors.grey,
+                    const SizedBox(height: 4),
+                    Text(
+                      plan.description ?? '',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isSelected ? Colors.white70 : Colors.grey,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
@@ -634,6 +691,31 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       color: Colors.white,
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            if (isDisabled)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFE53935),
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(14),
+                      bottomRight: Radius.circular(14),
+                    ),
+                  ),
+                  child: const Text(
+                    'Not allowed',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),

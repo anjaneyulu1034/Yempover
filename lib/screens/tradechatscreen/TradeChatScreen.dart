@@ -27,6 +27,8 @@ class _TradeChatScreenState extends State<TradeChatScreen>
   List<TradeChat> _inboxChats = [];
   List<TradeChat> _outboxChats = [];
   List<String> _userProducts = [];
+  final Map<String, String> _lastMessagePreviewCache = {};
+  final Set<String> _previewFetchInProgress = {};
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -213,6 +215,15 @@ class _TradeChatScreenState extends State<TradeChatScreen>
 
   void _updateChatInLists(TradeChat updatedChat) {
     setState(() {
+      if (_shouldHideChat(updatedChat)) {
+        _allChats.removeWhere((c) => c.id == updatedChat.id);
+        _inboxChats.removeWhere((c) => c.id == updatedChat.id);
+        _outboxChats.removeWhere((c) => c.id == updatedChat.id);
+        _lastMessagePreviewCache.remove(updatedChat.id);
+        _previewFetchInProgress.remove(updatedChat.id);
+        return;
+      }
+
       final allIndex = _allChats.indexWhere((c) => c.id == updatedChat.id);
       if (allIndex != -1) {
         _allChats[allIndex] = updatedChat;
@@ -233,11 +244,87 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       _sortChatsByRecent(_allChats);
       _sortChatsByRecent(_inboxChats);
       _sortChatsByRecent(_outboxChats);
+
+      if (updatedChat.messages.isNotEmpty) {
+        _lastMessagePreviewCache[updatedChat.id] = _buildMessagePreview(
+          updatedChat.messages,
+        );
+      }
     });
+
+    _hydrateMessagePreviews([updatedChat]);
   }
 
   void _sortChatsByRecent(List<TradeChat> chats) {
     chats.sort((a, b) => b.lastInteraction.compareTo(a.lastInteraction));
+  }
+
+  bool _shouldHideChat(TradeChat chat) {
+    return chat.status == ChatStatus.COMPLETED;
+  }
+
+  String _buildMessagePreview(List<ChatMessage> messages) {
+    if (messages.isEmpty) return 'No messages yet';
+
+    final sorted = [...messages]
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final lastMessage = sorted.last;
+
+    if (lastMessage.isImage ||
+        (lastMessage.imageUrl != null &&
+            lastMessage.imageUrl!.trim().isNotEmpty)) {
+      return '📷 Image';
+    }
+
+    if (lastMessage.isOffer) {
+      return '💰 Offer update';
+    }
+
+    final content = lastMessage.messageText.trim();
+    if (content.isEmpty) {
+      return lastMessage.isSystem ? '🔔 System update' : 'No messages yet';
+    }
+
+    if (lastMessage.isSystem) {
+      return '🔔 $content';
+    }
+
+    return content;
+  }
+
+  void _hydrateMessagePreviews(List<TradeChat> chats) {
+    for (final chat in chats) {
+      if (chat.id.isEmpty) continue;
+      if (_lastMessagePreviewCache.containsKey(chat.id)) continue;
+      if (_previewFetchInProgress.contains(chat.id)) continue;
+
+      if (chat.messages.isNotEmpty) {
+        _lastMessagePreviewCache[chat.id] = _buildMessagePreview(chat.messages);
+        continue;
+      }
+
+      if (chat.lastMessageAt == null) continue;
+      _fetchAndCacheLatestMessagePreview(chat.id);
+    }
+  }
+
+  Future<void> _fetchAndCacheLatestMessagePreview(String chatId) async {
+    if (_previewFetchInProgress.contains(chatId)) return;
+    _previewFetchInProgress.add(chatId);
+
+    try {
+      final chat = await _chatService.getChatById(chatId);
+      final preview = _buildMessagePreview(chat.messages);
+
+      if (!mounted) return;
+      setState(() {
+        _lastMessagePreviewCache[chatId] = preview;
+      });
+    } catch (_) {
+      // Keep graceful fallback when details request fails.
+    } finally {
+      _previewFetchInProgress.remove(chatId);
+    }
   }
 
   void _handleTabChange() {
@@ -338,15 +425,20 @@ class _TradeChatScreenState extends State<TradeChatScreen>
         '📊 TradeChatScreen: Total chats received: ${response.data.chats.length}',
       );
 
+      final visibleChats = response.data.chats
+          .where((chat) => !_shouldHideChat(chat))
+          .cast<TradeChat>()
+          .toList();
+
       setState(() {
         if (refresh) {
-          _allChats = response.data.chats.cast<TradeChat>();
+          _allChats = visibleChats;
           _sortChatsByRecent(_allChats);
           debugPrint(
             '🔄 TradeChatScreen: Refreshed all chats, new count: ${_allChats.length}',
           );
         } else {
-          _allChats.addAll(response.data.chats as Iterable<TradeChat>);
+          _allChats.addAll(visibleChats);
           _sortChatsByRecent(_allChats);
           debugPrint(
             '➕ TradeChatScreen: Added more chats, new total: ${_allChats.length}',
@@ -357,7 +449,8 @@ class _TradeChatScreenState extends State<TradeChatScreen>
         _isLoadingMoreAllChats = false;
       });
 
-      _joinLoadedChatRooms(response.data.chats.cast<TradeChat>());
+      _joinLoadedChatRooms(visibleChats);
+      _hydrateMessagePreviews(visibleChats);
     } catch (e) {
       debugPrint('❌ TradeChatScreen: Error loading all chats: $e');
       setState(() {
@@ -392,15 +485,20 @@ class _TradeChatScreenState extends State<TradeChatScreen>
         '📊 TradeChatScreen: Total inbox chats received: ${response.data.chats.length}',
       );
 
+      final visibleChats = response.data.chats
+          .where((chat) => !_shouldHideChat(chat))
+          .cast<TradeChat>()
+          .toList();
+
       setState(() {
         if (refresh) {
-          _inboxChats = response.data.chats.cast<TradeChat>();
+          _inboxChats = visibleChats;
           _sortChatsByRecent(_inboxChats);
           debugPrint(
             '🔄 TradeChatScreen: Refreshed inbox chats, new count: ${_inboxChats.length}',
           );
         } else {
-          _inboxChats.addAll(response.data.chats as Iterable<TradeChat>);
+          _inboxChats.addAll(visibleChats);
           _sortChatsByRecent(_inboxChats);
           debugPrint(
             '➕ TradeChatScreen: Added more inbox chats, new total: ${_inboxChats.length}',
@@ -411,7 +509,8 @@ class _TradeChatScreenState extends State<TradeChatScreen>
         _loadUserProducts();
       });
 
-      _joinLoadedChatRooms(response.data.chats.cast<TradeChat>());
+      _joinLoadedChatRooms(visibleChats);
+      _hydrateMessagePreviews(visibleChats);
     } catch (e) {
       debugPrint('❌ TradeChatScreen: Error loading inbox chats: $e');
       setState(() {
@@ -441,15 +540,20 @@ class _TradeChatScreenState extends State<TradeChatScreen>
         '📊 TradeChatScreen: Total outbox chats received: ${response.data.chats.length}',
       );
 
+      final visibleChats = response.data.chats
+          .where((chat) => !_shouldHideChat(chat))
+          .cast<TradeChat>()
+          .toList();
+
       setState(() {
         if (refresh) {
-          _outboxChats = response.data.chats.cast<TradeChat>();
+          _outboxChats = visibleChats;
           _sortChatsByRecent(_outboxChats);
           debugPrint(
             '🔄 TradeChatScreen: Refreshed outbox chats, new count: ${_outboxChats.length}',
           );
         } else {
-          _outboxChats.addAll(response.data.chats as Iterable<TradeChat>);
+          _outboxChats.addAll(visibleChats);
           _sortChatsByRecent(_outboxChats);
           debugPrint(
             '➕ TradeChatScreen: Added more outbox chats, new total: ${_outboxChats.length}',
@@ -459,7 +563,8 @@ class _TradeChatScreenState extends State<TradeChatScreen>
         _isLoadingMoreOutbox = false;
       });
 
-      _joinLoadedChatRooms(response.data.chats.cast<TradeChat>());
+      _joinLoadedChatRooms(visibleChats);
+      _hydrateMessagePreviews(visibleChats);
     } catch (e) {
       debugPrint('❌ TradeChatScreen: Error loading outbox chats: $e');
       setState(() {
@@ -598,17 +703,15 @@ class _TradeChatScreenState extends State<TradeChatScreen>
   }
 
   String _getLastMessagePreview(TradeChat chat) {
-    if (chat.messages.isEmpty) {
-      return 'No messages yet';
-    }
-    final lastMessage = chat.messages.last;
-    final content = lastMessage.messageText.trim();
-    if (content.isEmpty) {
-      return 'No messages yet';
-    } else if (content.toLowerCase().contains('image')) {
-      return '📷 Image';
-    }
-    return content.length > 50 ? '${content.substring(0, 50)}...' : content;
+    final preview = chat.messages.isNotEmpty
+        ? _buildMessagePreview(chat.messages)
+        : _lastMessagePreviewCache[chat.id];
+
+    final resolved =
+        preview ??
+        (chat.lastMessageAt != null ? 'Loading message...' : 'No messages yet');
+
+    return resolved.length > 60 ? '${resolved.substring(0, 60)}...' : resolved;
   }
 
   Widget _buildChatItem(TradeChat chat) {

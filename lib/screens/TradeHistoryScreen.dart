@@ -42,7 +42,7 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
 
       setState(() {
         _trades = statsData.trades.getAllTrades();
-        _totalTrades = _trades.length;
+        _totalTrades = statsData.totalTradesCompleted;
         _breakdown = statsData.breakdown;
         _subscription = statsData.subscription;
         _isLoading = false;
@@ -73,7 +73,7 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
       final statsData = await _service.refreshStats();
       setState(() {
         _trades = statsData.trades.getAllTrades();
-        _totalTrades = _trades.length;
+        _totalTrades = statsData.totalTradesCompleted;
         _breakdown = statsData.breakdown;
         _subscription = statsData.subscription;
       });
