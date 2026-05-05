@@ -668,10 +668,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
         'validUntil': validUntilIso,
       };
 
-      // Add price if present
-      if (_priceController.text.isNotEmpty) {
-        requestData['price'] = double.parse(_priceController.text);
-      }
+      // Price is mandatory for edit flows (product/service).
+      requestData['price'] = double.parse(_priceController.text.trim());
 
       requestData['location'] = _locationController.text.trim();
 
@@ -734,7 +732,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: Text(
-          _postType == 'service' ? 'Edit Service' : 'Edit Post',
+          _postType == 'service' ? 'Edit Service' : 'Edit Product',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
@@ -840,6 +838,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                       _buildTextField(
                         label: 'Title',
                         controller: _titleController,
+                        isRequired: true,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Please enter a title';
@@ -854,6 +853,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                         label: 'Description',
                         controller: _descriptionController,
                         maxLines: 4,
+                        isRequired: true,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Please enter a description';
@@ -866,6 +866,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
                       _buildDropdownField(
                         label: 'Category',
+                        isRequired: true,
                         value: _selectedMainCategoryId,
                         items: _mainCategories.map<DropdownMenuItem<String>>((
                           category,
@@ -938,12 +939,22 @@ class _EditProductScreenState extends State<EditProductScreen> {
                         controller: _priceController,
                         keyboardType: TextInputType.number,
                         prefix: '\$ ',
+                        isRequired: true,
                         validator: (value) {
-                          if (value != null && value.isNotEmpty) {
-                            if (double.tryParse(value) == null) {
-                              return 'Please enter a valid number';
-                            }
+                          final priceText = value?.trim() ?? '';
+                          if (priceText.isEmpty) {
+                            return 'Price is required';
                           }
+
+                          final parsedPrice = double.tryParse(priceText);
+                          if (parsedPrice == null) {
+                            return 'Please enter a valid number';
+                          }
+
+                          if (parsedPrice <= 0) {
+                            return 'Price must be greater than 0';
+                          }
+
                           return null;
                         },
                       ),
@@ -997,9 +1008,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
                       const SizedBox(height: 16),
 
                       _buildTextField(
-                        label: 'Location *',
+                        label: 'Location',
                         controller: _locationController,
                         maxLines: 2,
+                        isRequired: true,
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
                             return 'Location is required';
@@ -1412,6 +1424,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     TextInputType? keyboardType,
     String? prefix,
     Widget? suffixIcon,
+    bool isRequired = false,
     String? Function(String?)? validator,
   }) {
     return Container(
@@ -1430,12 +1443,27 @@ class _EditProductScreenState extends State<EditProductScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey,
+          RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey,
+                  ),
+                ),
+                if (isRequired)
+                  const TextSpan(
+                    text: ' *',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.red,
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 8),
@@ -1476,6 +1504,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     required List<DropdownMenuItem<String>> items,
     required Function(String?) onChanged,
     String? hint,
+    bool isRequired = false,
   }) {
     final hasMatchingValue =
         value != null && items.any((item) => item.value == value);
@@ -1496,12 +1525,27 @@ class _EditProductScreenState extends State<EditProductScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey,
+          RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey,
+                  ),
+                ),
+                if (isRequired)
+                  const TextSpan(
+                    text: ' *',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.red,
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 8),

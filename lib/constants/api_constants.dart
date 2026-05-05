@@ -50,6 +50,10 @@ class ApiConstants {
       '$baseUrl/trade-chat/$id/block-user';
   static String tradeChatDealCompleted(String id) =>
       '$baseUrl/trade-chat/$id/deal-completed';
+  static const String tradeChatBlockedUsers =
+      '$baseUrl/trade-chat/blocked-users';
+  static String tradeChatUnblockUser(String blockedUserId) =>
+      '$baseUrl/trade-chat/blocked-users/$blockedUserId';
 
   // Inbox/Outbox endpoints
   static const String tradeChatInbox = '$baseUrl/trade-chat/inbox';

@@ -146,7 +146,22 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 
   bool _hasActiveCurrentPlan() {
-    return currentPlan != null && currentPlan!.isValid == true;
+    if (currentPlan == null) return false;
+
+    if (currentPlan!.isValid == true) return true;
+
+    final endDateRaw = currentPlan!.endDate?.trim();
+    if (endDateRaw != null && endDateRaw.isNotEmpty) {
+      final parsedEndDate = DateTime.tryParse(endDateRaw);
+      if (parsedEndDate != null) {
+        return parsedEndDate.isAfter(DateTime.now());
+      }
+    }
+
+    final hasKnownPlan =
+        (currentPlan!.planId?.trim().isNotEmpty ?? false) ||
+        ((currentPlan!.planName ?? '').trim().isNotEmpty);
+    return hasKnownPlan;
   }
 
   int _planNameRank(String? name) {
@@ -155,8 +170,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     if (normalized.contains('semi')) return 3;
     if (normalized.contains('quarter')) return 2;
     if (normalized.contains('month')) return 1;
-    if (normalized.contains('free') || normalized.contains('trial')) return 0;
-    return 1;
+    if (normalized.contains('free') ||
+        normalized.contains('trial') ||
+        normalized.contains('trail')) {
+      return 0;
+    }
+    return -1;
   }
 
   bool _isDowngradePlan(Plans plan) {
@@ -168,13 +187,21 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       return false;
     }
 
+    final currentRank = _planNameRank(currentPlan?.planName);
+    final targetRank = _planNameRank(plan.name);
+    final hasKnownRanks = currentRank >= 0 && targetRank >= 0;
+
+    if (hasKnownRanks) {
+      if (targetRank < currentRank) return true;
+      if (targetRank > currentRank) return false;
+    }
+
     final currentAmount = currentPlan?.planAmount ?? 0;
     final targetAmount = plan.amount ?? 0;
 
     if (targetAmount < currentAmount) return true;
     if (targetAmount > currentAmount) return false;
-
-    return _planNameRank(plan.name) < _planNameRank(currentPlan?.planName);
+    return false;
   }
 
   bool _isPlanSelectable(Plans plan) {

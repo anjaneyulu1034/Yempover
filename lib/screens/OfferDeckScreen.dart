@@ -36,6 +36,23 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   bool _isLoadingMore = false;
   final ScrollController _scrollController = ScrollController();
 
+  bool _isPostExpired(MyPost myPost) {
+    if (myPost.hasExpired) return true;
+
+    final status = myPost.status.trim().toUpperCase();
+    if (status == 'EXPIRED') return true;
+
+    final validUntil = myPost.validUntil;
+    if (validUntil != null && !validUntil.isAfter(DateTime.now())) {
+      return true;
+    }
+
+    final remainingTime = (myPost.remainingTime ?? '').trim().toLowerCase();
+    if (remainingTime.contains('expired')) return true;
+
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -48,12 +65,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         .where((myPost) => myPost.postedById == widget.currentUserId)
         .where((myPost) => myPost.type.toLowerCase() == 'product')
         .where((myPost) => myPost.isListed == true)
-        .where((myPost) => myPost.hasExpired == false)
+        .where((myPost) => !_isPostExpired(myPost))
         .where(
           (myPost) =>
-              myPost.status != 'SOLD' &&
-              myPost.status != 'ARCHIVED' &&
-              myPost.status != 'DELETED',
+              myPost.status.toUpperCase() != 'SOLD' &&
+              myPost.status.toUpperCase() != 'ARCHIVED' &&
+              myPost.status.toUpperCase() != 'DELETED',
         )
         .map((myPost) {
           return UserItem(

@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:math';
 import 'package:YemPover_app/utils/notification_provider.dart';
@@ -2223,6 +2222,39 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: Colors.blue.shade700,
                             fontWeight: FontWeight.w600,
                           ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFECEFF1),
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              post.post.type == PostType.service
+                                  ? Icons.handyman_outlined
+                                  : Icons.inventory_2_outlined,
+                              size: 14,
+                              color: const Color(0xFF37474F),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              post.post.type == PostType.service
+                                  ? 'Service'
+                                  : 'Product',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF37474F),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       if (_getBarterStatus(post).isNotEmpty)

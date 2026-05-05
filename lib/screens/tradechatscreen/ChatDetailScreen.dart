@@ -1107,57 +1107,40 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   ),
                 ),
                 const SizedBox(height: 16),
-                InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: () async {
-                    final selected = await showModalBottomSheet<String>(
-                      context: context,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(16),
-                        ),
-                      ),
-                      builder: (sheetContext) => SafeArea(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ListTile(
-                              title: const Text('USD'),
-                              onTap: () => Navigator.pop(sheetContext, 'USD'),
-                            ),
-                            ListTile(
-                              title: const Text('INR'),
-                              onTap: () => Navigator.pop(sheetContext, 'INR'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-
-                    if (selected == null) return;
-                    setDialogState(() {
-                      selectedCurrency = selected;
-                    });
-                  },
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: 'Currency',
-                      border: border,
-                      enabledBorder: border,
-                      focusedBorder: border.copyWith(
-                        borderSide: const BorderSide(
-                          color: Color(0xFF2E5BFF),
-                          width: 1.8,
-                        ),
+                InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'Currency',
+                    border: border,
+                    enabledBorder: border,
+                    focusedBorder: border.copyWith(
+                      borderSide: const BorderSide(
+                        color: Color(0xFF2E5BFF),
+                        width: 1.8,
                       ),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(selectedCurrency),
-                        const Icon(Icons.arrow_drop_down),
-                      ],
-                    ),
+                  ),
+                  child: Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('USD'),
+                        selected: selectedCurrency == 'USD',
+                        onSelected: (_) {
+                          setDialogState(() {
+                            selectedCurrency = 'USD';
+                          });
+                        },
+                      ),
+                      ChoiceChip(
+                        label: const Text('INR'),
+                        selected: selectedCurrency == 'INR',
+                        onSelected: (_) {
+                          setDialogState(() {
+                            selectedCurrency = 'INR';
+                          });
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -2013,6 +1996,32 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
   }
 
+  String _formatServiceProposalText(String rawText) {
+    final lines = rawText.split('\n');
+    bool changed = false;
+
+    final normalizedLines = lines.map((line) {
+      final trimmed = line.trim();
+      if (!trimmed.startsWith('Date/Time:')) {
+        return line;
+      }
+
+      final rawDate = trimmed.replaceFirst('Date/Time:', '').trim();
+      final parsed = DateTime.tryParse(rawDate);
+      if (parsed == null) {
+        return line;
+      }
+
+      changed = true;
+      final displayDate = DateFormat(
+        'dd MMM yyyy, h:mm a',
+      ).format(parsed.toLocal());
+      return 'Date/Time: $displayDate';
+    }).toList();
+
+    return changed ? normalizedLines.join('\n') : rawText;
+  }
+
   bool _hasRecentSystemMessage(
     String messageText, {
     Duration within = const Duration(seconds: 10),
@@ -2157,7 +2166,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     )
                   else
                     Text(
-                      message.messageText,
+                      _formatServiceProposalText(message.messageText),
                       style: const TextStyle(fontSize: 14),
                     ),
 
@@ -2664,10 +2673,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                                 try {
                                   final payloadDate = _serviceBookingService
                                       .isoWithOffset(slotDateTime);
+                                  final displayDate = DateFormat(
+                                    'dd MMM yyyy, h:mm a',
+                                  ).format(slotDateTime.toLocal());
 
                                   final lines = <String>[
                                     'Return service proposal',
-                                    'Date/Time: $payloadDate',
+                                    'Date/Time: $displayDate',
                                     'Duration: $duration minutes',
                                   ];
 
@@ -3177,7 +3189,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const TradeChatScreen()),
-          (route) => route.isFirst,
+          (route) => false,
         );
         return false;
       },
@@ -3192,7 +3204,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       MaterialPageRoute(
                         builder: (_) => const TradeChatScreen(),
                       ),
-                      (route) => route.isFirst,
+                      (route) => false,
                     );
                   },
                 )

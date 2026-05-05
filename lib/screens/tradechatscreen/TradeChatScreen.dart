@@ -260,7 +260,10 @@ class _TradeChatScreenState extends State<TradeChatScreen>
   }
 
   bool _shouldHideChat(TradeChat chat) {
-    return chat.status == ChatStatus.COMPLETED;
+    return chat.status == ChatStatus.COMPLETED ||
+        chat.status == ChatStatus.INACTIVE ||
+        chat.status == ChatStatus.CANCELLED ||
+        chat.status == ChatStatus.ARCHIVED;
   }
 
   String _buildMessagePreview(List<ChatMessage> messages) {
@@ -679,6 +682,17 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       debugPrint(
         '⚠️ TradeChatScreen: Cannot open chat - currentUserId is null',
       );
+      return;
+    }
+
+    if (_shouldHideChat(chat)) {
+      setState(() {
+        _allChats.removeWhere((c) => c.id == chat.id);
+        _inboxChats.removeWhere((c) => c.id == chat.id);
+        _outboxChats.removeWhere((c) => c.id == chat.id);
+        _lastMessagePreviewCache.remove(chat.id);
+        _previewFetchInProgress.remove(chat.id);
+      });
       return;
     }
 

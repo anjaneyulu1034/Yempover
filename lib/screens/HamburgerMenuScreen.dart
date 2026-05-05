@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:YemPover_app/payment/SubscriptionScreen.dart';
 import 'package:YemPover_app/screens/FavoritesScreen.dart';
+import 'package:YemPover_app/screens/BlockedUsersScreen.dart';
 import 'package:YemPover_app/screens/HelpSupportScreen.dart';
 import 'package:YemPover_app/screens/HiddenPostsScreen.dart';
 import 'package:YemPover_app/screens/MyProfileScreen.dart';
@@ -336,6 +337,20 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
                 );
               },
             ),
+
+        if (!_isGuestUser)
+          _buildMenuItem(
+            icon: Icons.block_outlined,
+            title: 'Blocked Users',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BlockedUsersScreen(),
+                ),
+              );
+            },
+          ),
 
         // Subscription
         if (!_isGuestUser)

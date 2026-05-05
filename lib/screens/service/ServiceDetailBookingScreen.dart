@@ -534,7 +534,9 @@ class _ServiceDetailBookingScreenState
             : int.tryParse(rawDuration?.toString() ?? '') ?? _duration;
       }
 
-      final payloadDate = _service.isoWithOffset(dateTime);
+      final displayDate = DateFormat(
+        'dd MMM yyyy, h:mm a',
+      ).format(dateTime.toLocal());
 
       final responderId = _serviceOwnerId;
       if (responderId == null || responderId.isEmpty) {
@@ -573,7 +575,7 @@ class _ServiceDetailBookingScreenState
 
       final details = <String>[
         'Service proposal submitted',
-        'Date/Time: $payloadDate',
+        'Date/Time: $displayDate',
         'Duration: $duration minutes',
       ];
 

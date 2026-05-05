@@ -37,6 +37,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   int _currentImageIndex = 0;
   final PageController _imagePageController = PageController();
 
+  bool get _isOwnPost {
+    final current = (_currentUserId ?? '').trim();
+    if (current.isEmpty) return false;
+
+    final postedById = _post.postedById.trim();
+    final postedByNestedId = _post.postedBy.id.trim();
+    return current == postedById || current == postedByNestedId;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -374,6 +383,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   // Show report dialog
   void _showReportDialog() {
+    if (_isOwnPost) {
+      SnackbarUtils.showInfo(context, 'You cannot report your own post');
+      return;
+    }
+
     String selectedReason = 'Spam';
     TextEditingController reportController = TextEditingController();
 
@@ -469,14 +483,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     },
             ),
             const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.report, color: Colors.orange),
-              title: const Text('Report Post'),
-              onTap: () {
-                Navigator.pop(context);
-                _showReportDialog();
-              },
-            ),
+            if (!_isOwnPost)
+              ListTile(
+                leading: const Icon(Icons.report, color: Colors.orange),
+                title: const Text('Report Post'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showReportDialog();
+                },
+              ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,

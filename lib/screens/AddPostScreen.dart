@@ -1356,35 +1356,73 @@ class _AddPostScreenState extends State<AddPostScreen> {
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: ChoiceChip(
-                label: const Text('Not Allowed'),
-                selected: !_barterAllowed,
-                onSelected: (_) {
-                  setState(() {
-                    _barterAllowed = false;
-                  });
-                },
+        InkWell(
+          onTap: _showBarterStatusSelector,
+          borderRadius: BorderRadius.circular(8),
+          child: InputDecorator(
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
+              ),
+              focusedBorder: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(8)),
+                borderSide: BorderSide(color: Color(0xFF2E5BFF), width: 2),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: ChoiceChip(
-                label: const Text('Allowed'),
-                selected: _barterAllowed,
-                onSelected: (_) {
-                  setState(() {
-                    _barterAllowed = true;
-                  });
-                },
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _barterAllowed ? 'Allowed' : 'Not Allowed',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ),
+                const Icon(Icons.arrow_drop_down),
+              ],
             ),
-          ],
+          ),
         ),
       ],
     );
+  }
+
+  void _showBarterStatusSelector() {
+    showModalBottomSheet<bool>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: const Text('Not Allowed'),
+                onTap: () => Navigator.pop(context, false),
+              ),
+              ListTile(
+                title: const Text('Allowed'),
+                onTap: () => Navigator.pop(context, true),
+              ),
+            ],
+          ),
+        );
+      },
+    ).then((value) {
+      if (value == null || !mounted) return;
+      setState(() {
+        _barterAllowed = value;
+      });
+    });
   }
 
   Widget _buildClubbingOptionField() {
@@ -1645,24 +1683,32 @@ class _AddPostScreenState extends State<AddPostScreen> {
         ),
 
         const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: ChoiceChip(
-                label: const Text('Product'),
-                selected: _postType == 'Product',
-                onSelected: (_) => _onCreatePostTypeChanged('Product'),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: ChoiceChip(
-                label: const Text('Service'),
-                selected: _postType == 'Service',
-                onSelected: (_) => _onCreatePostTypeChanged('Service'),
-              ),
-            ),
+        DropdownButtonFormField<String>(
+          initialValue: _postType,
+          items: const [
+            DropdownMenuItem(value: 'Product', child: Text('Product')),
+            DropdownMenuItem(value: 'Service', child: Text('Service')),
           ],
+          onChanged: (value) {
+            if (value == null) return;
+            _onCreatePostTypeChanged(value);
+          },
+          decoration: InputDecoration(
+            hintText: 'Select post type',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
+            ),
+            focusedBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(8)),
+              borderSide: BorderSide(color: Color(0xFF2E5BFF), width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+          ),
         ),
 
         const SizedBox(height: 24),
