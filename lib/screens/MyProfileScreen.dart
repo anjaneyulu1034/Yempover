@@ -24,6 +24,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   bool _isLoading = true;
   bool _isLoadingSubscription = false;
   bool _isUpdatingVisibility = false;
+  String? _updatingVisibilityField;
   String? _error;
 
   @override
@@ -123,8 +124,20 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     bool? sharePhone,
     bool? notificationEnabled,
   }) async {
+    final updatingField = shareEmail != null
+        ? 'shareEmail'
+        : sharePhone != null
+        ? 'sharePhone'
+        : notificationEnabled != null
+        ? 'notificationEnabled'
+        : null;
+
     final currentProfile = _profile;
-    if (currentProfile == null || _isUpdatingVisibility) return;
+    if (currentProfile == null ||
+        _isUpdatingVisibility ||
+        updatingField == null) {
+      return;
+    }
 
     final updatedShareEmail = shareEmail ?? (currentProfile.shareEmail ?? true);
     final updatedSharePhone = sharePhone ?? (currentProfile.sharePhone ?? true);
@@ -137,6 +150,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
     setState(() {
       _isUpdatingVisibility = true;
+      _updatingVisibilityField = updatingField;
       _profile = ProfileData.fromJson({
         ...currentProfile.toJson(),
         'shareEmail': updatedShareEmail,
@@ -176,6 +190,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       if (mounted) {
         setState(() {
           _isUpdatingVisibility = false;
+          _updatingVisibilityField = null;
         });
       }
     }
@@ -503,7 +518,9 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 _buildVisibilityRow(
                   label: 'Share Email',
                   enabled: profile?.shareEmail ?? true,
-                  isLoading: _isUpdatingVisibility,
+                  isLoading:
+                      _isUpdatingVisibility &&
+                      _updatingVisibilityField == 'shareEmail',
                   onChanged: (value) {
                     _updateVisibilitySettings(shareEmail: value);
                   },
@@ -511,7 +528,9 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 _buildVisibilityRow(
                   label: 'Share Phone Number',
                   enabled: profile?.sharePhone ?? true,
-                  isLoading: _isUpdatingVisibility,
+                  isLoading:
+                      _isUpdatingVisibility &&
+                      _updatingVisibilityField == 'sharePhone',
                   onChanged: (value) {
                     _updateVisibilitySettings(sharePhone: value);
                   },

@@ -31,6 +31,12 @@ class ApiConstants {
   static const String currentSubscription = '$baseUrl/me/subscription';
   static const String subscribe = '$baseUrl/me/subscribe';
 
+  // Coin endpoints
+  static const String coinPackages = '$baseUrl/coins/packages';
+  static const String coinWallet = '$baseUrl/me/coins/wallet';
+  static const String coinTransactions = '$baseUrl/me/coins/transactions';
+  static const String coinPurchase = '$baseUrl/me/coins/purchase';
+
   // Trade Chat endpoints
   static const String tradeChats = '$baseUrl/trade-chat/all';
   static String tradeChatDetail(String id) => '$baseUrl/trade-chat/$id';

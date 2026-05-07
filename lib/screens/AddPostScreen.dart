@@ -1356,73 +1356,36 @@ class _AddPostScreenState extends State<AddPostScreen> {
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
-        InkWell(
-          onTap: _showBarterStatusSelector,
-          borderRadius: BorderRadius.circular(8),
-          child: InputDecorator(
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-              ),
-              focusedBorder: const OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(8)),
-                borderSide: BorderSide(color: Color(0xFF2E5BFF), width: 2),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
+        DropdownButtonFormField<bool>(
+          value: _barterAllowed,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _barterAllowed ? 'Allowed' : 'Not Allowed',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                ),
-                const Icon(Icons.arrow_drop_down),
-              ],
+            focusedBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(8)),
+              borderSide: BorderSide(color: Color(0xFF2E5BFF), width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
             ),
           ),
+          items: const [
+            DropdownMenuItem<bool>(value: false, child: Text('Not Allowed')),
+            DropdownMenuItem<bool>(value: true, child: Text('Allowed')),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() {
+              _barterAllowed = value;
+            });
+          },
         ),
       ],
     );
-  }
-
-  void _showBarterStatusSelector() {
-    showModalBottomSheet<bool>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: const Text('Not Allowed'),
-                onTap: () => Navigator.pop(context, false),
-              ),
-              ListTile(
-                title: const Text('Allowed'),
-                onTap: () => Navigator.pop(context, true),
-              ),
-            ],
-          ),
-        );
-      },
-    ).then((value) {
-      if (value == null || !mounted) return;
-      setState(() {
-        _barterAllowed = value;
-      });
-    });
   }
 
   Widget _buildClubbingOptionField() {
@@ -1499,11 +1462,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
               // Scrollable Content
               Expanded(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.only(
-                    left: 16,
-                    right: 16,
-                    bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-                  ),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.only(left: 16, right: 16, bottom: 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

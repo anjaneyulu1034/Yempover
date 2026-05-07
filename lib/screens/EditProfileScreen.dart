@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:YemPover_app/services/api_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:YemPover_app/constants/api_constants.dart';
 import 'package:YemPover_app/models/get_my_profile_response.dart';
 import 'package:YemPover_app/models/profile_update_request.dart';
@@ -18,6 +19,8 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
+  static const int _emailMaxLength = 30;
+
   final _formKey = GlobalKey<FormState>();
   final _profileService = ProfileService();
   final ImagePicker _imagePicker = ImagePicker();
@@ -330,10 +333,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   String? _validateEmail(String? value) {
-    if (value == null || value.isEmpty) {
+    final email = value?.trim() ?? '';
+
+    if (email.isEmpty) {
       return ErrorMessages.emptyField;
     }
-    if (!ValidationRegex.emailRegex.hasMatch(value)) {
+    if (email.length > _emailMaxLength) {
+      return 'Email must be 30 characters or less';
+    }
+    if (!ValidationRegex.emailRegex.hasMatch(email)) {
       return ErrorMessages.invalidEmail;
     }
     return null;
@@ -521,6 +529,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   controller: _emailController,
                   validator: _validateEmail,
                   keyboardType: TextInputType.emailAddress,
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(_emailMaxLength),
+                  ],
                   decoration: InputDecoration(
                     labelText: 'Email',
                     hintText: 'Enter your email',

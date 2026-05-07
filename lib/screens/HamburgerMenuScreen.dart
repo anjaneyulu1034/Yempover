@@ -8,6 +8,7 @@ import 'package:YemPover_app/screens/HelpSupportScreen.dart';
 import 'package:YemPover_app/screens/HiddenPostsScreen.dart';
 import 'package:YemPover_app/screens/MyProfileScreen.dart';
 import 'package:YemPover_app/screens/NotificationsScreen.dart';
+import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
 import 'package:YemPover_app/screens/PrivacyScreen.dart';
 import 'package:YemPover_app/screens/service/AppointmentsDashboardScreen.dart';
 import 'package:YemPover_app/screens/TermsScreen.dart';
@@ -347,6 +348,20 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => const BlockedUsersScreen(),
+                ),
+              );
+            },
+          ),
+
+        if (!_isGuestUser)
+          _buildMenuItem(
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'Barter Coins',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CoinsWalletScreen(),
                 ),
               );
             },
