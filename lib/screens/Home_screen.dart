@@ -17,6 +17,7 @@ import 'package:YemPover_app/screens/TradeBoothScreen.dart';
 import 'package:YemPover_app/screens/HamburgerMenuScreen.dart';
 import 'package:YemPover_app/screens/MyProfileScreen.dart';
 import 'package:YemPover_app/screens/NotificationsScreen.dart';
+import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
 import 'package:YemPover_app/services/my_profile_service.dart';
 import 'package:YemPover_app/services/profile_session_manager.dart';
 import 'package:YemPover_app/services/category_service.dart';
@@ -1415,6 +1416,20 @@ class _HomeScreenState extends State<HomeScreen> {
     ).then((_) => _loadUnreadNotificationCount());
   }
 
+  void _showCoinsWalletScreen() async {
+    final isLoggedIn = await _tokenService.isLoggedIn();
+    if (!mounted) return;
+    if (_isGuestUser || !isLoggedIn) {
+      _showPleaseLoginMessage();
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const CoinsWalletScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -1849,6 +1864,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 );
               },
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withOpacity(0.26)),
+              ),
+              child: IconButton(
+                icon: const Icon(
+                  Icons.attach_money,
+                  color: Colors.white,
+                  size: 24,
+                ),
+                onPressed: _showCoinsWalletScreen,
+              ),
             ),
             const SizedBox(width: 8),
             GestureDetector(
