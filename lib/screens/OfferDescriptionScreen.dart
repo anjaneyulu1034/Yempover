@@ -40,6 +40,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   String? _priceError;
   String? _descriptionError;
 
+  bool get _isFixedProductPriceOffer =>
+      widget.post.type == PostType.product && _requiresPrice;
+
   bool get _requiresPrice =>
       widget.offerMode == OfferSubmissionMode.price ||
       widget.offerMode == OfferSubmissionMode.both;
@@ -47,6 +50,14 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   bool get _requiresBarterItems =>
       widget.offerMode == OfferSubmissionMode.barter ||
       widget.offerMode == OfferSubmissionMode.both;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isFixedProductPriceOffer && widget.post.price > 0) {
+      _priceController.text = widget.post.price.toStringAsFixed(2);
+    }
+  }
 
   String _buildOfferTitle() {
     if (widget.selectedItems.isEmpty) {
@@ -171,7 +182,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
       return;
     }
 
-    final parsedPrice = int.tryParse(_priceController.text.trim())?.toDouble();
+    final parsedPrice = _isFixedProductPriceOffer
+      ? widget.post.price
+      : double.tryParse(_priceController.text.trim());
 
     if (_requiresBarterItems && widget.selectedItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -329,14 +342,21 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   String? _validatePrice(String value) {
     if (!_requiresPrice) return null;
 
+    if (_isFixedProductPriceOffer) {
+      if (widget.post.price <= 0) {
+        return 'Product price is not available';
+      }
+      return null;
+    }
+
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
       return 'Quoted price is required';
     }
 
-    final parsed = int.tryParse(trimmed);
+    final parsed = double.tryParse(trimmed);
     if (parsed == null || parsed <= 0) {
-      return 'Enter a valid integer price';
+      return 'Enter a valid price';
     }
 
     if (trimmed.length > 9) {
@@ -571,7 +591,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                 ),
                             ] else
                               Text(
-                                _priceController.text.trim().isEmpty
+                                _isFixedProductPriceOffer
+                                    ? 'Fixed: \$${widget.post.price.toStringAsFixed(2)}'
+                                    : _priceController.text.trim().isEmpty
                                     ? 'Enter a price below'
                                     : '\$${_priceController.text.trim()}',
                                 style: const TextStyle(
@@ -592,14 +614,25 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
 
             // Description Input
             if (_requiresPrice) ...[
-              const Text(
-                'Quoted Price',
+              Text(
+                _isFixedProductPriceOffer
+                    ? 'Product Price (Fixed)'
+                    : 'Quoted Price',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 8),
+              if (_isFixedProductPriceOffer)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'This product must be bought at the listed price.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ),
               TextField(
                 controller: _priceController,
                 keyboardType: TextInputType.number,
+                readOnly: _isFixedProductPriceOffer,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(9),
@@ -610,7 +643,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                   });
                 },
                 decoration: InputDecoration(
-                  hintText: 'Enter your price quote',
+                  hintText: _isFixedProductPriceOffer
+                      ? 'Price is fixed'
+                      : 'Enter your price quote',
                   prefixText: '\$ ',
                   errorText: _priceError,
                   border: OutlineInputBorder(
@@ -634,7 +669,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                     borderSide: BorderSide(color: Colors.red, width: 2),
                   ),
                   filled: true,
-                  fillColor: Colors.grey.shade50,
+                  fillColor: _isFixedProductPriceOffer
+                      ? Colors.green.shade50
+                      : Colors.grey.shade50,
                 ),
               ),
               const SizedBox(height: 20),

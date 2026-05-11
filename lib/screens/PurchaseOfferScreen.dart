@@ -19,12 +19,15 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
   final TradeChatService _chatService = TradeChatService();
   bool _isLoading = false;
 
+  bool get _isFixedProductPrice =>
+      widget.post.type == PostType.product && widget.post.price > 0;
+
   @override
   void initState() {
     super.initState();
     // Pre-fill with post price if available
     if (widget.post.price > 0) {
-      _priceController.text = widget.post.price.toString();
+      _priceController.text = widget.post.price.toStringAsFixed(2);
     }
   }
 
@@ -44,7 +47,9 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
       return;
     }
 
-    final price = double.tryParse(_priceController.text);
+    final price = _isFixedProductPrice
+      ? widget.post.price
+      : double.tryParse(_priceController.text);
     if (price == null || price <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid price')),
@@ -298,16 +303,25 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
             const SizedBox(height: 24),
 
             // Price Input
-            const Text(
-              'Your Offer Price',
+            Text(
+              _isFixedProductPrice ? 'Product Price (Fixed)' : 'Your Offer Price',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 8),
+            if (_isFixedProductPrice)
+              Text(
+                'This product is purchased at the listed price.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            if (_isFixedProductPrice) const SizedBox(height: 8),
             TextField(
               controller: _priceController,
               keyboardType: TextInputType.number,
+              readOnly: _isFixedProductPrice,
               decoration: InputDecoration(
-                hintText: 'Enter your offer price',
+                hintText: _isFixedProductPrice
+                    ? 'Price is fixed'
+                    : 'Enter your offer price',
                 prefixText: '\$',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -318,6 +332,10 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
                   borderSide: const BorderSide(color: Color(0xFF2E5BFF)),
                 ),
                 contentPadding: const EdgeInsets.all(16),
+                filled: true,
+                fillColor: _isFixedProductPrice
+                    ? Colors.green.shade50
+                    : Colors.white,
               ),
             ),
 
