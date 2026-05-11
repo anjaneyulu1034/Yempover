@@ -96,13 +96,16 @@ class MyApp extends StatelessWidget {
           scaffoldBackgroundColor: Colors.white,
           appBarTheme: const AppBarTheme(
             elevation: 0,
-            centerTitle: true,
+            centerTitle: false,
+            titleSpacing: 0,
             backgroundColor: Colors.white,
             surfaceTintColor: Colors.white,
             foregroundColor: Colors.black,
             titleTextStyle: TextStyle(
               color: Colors.black,
               fontSize: 20,
+              height: 1.2,
+              overflow: TextOverflow.ellipsis,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -172,7 +175,14 @@ class MyApp extends StatelessWidget {
               backgroundColor: const Color(0xFF1A73E8),
               foregroundColor: Colors.white,
               elevation: 0,
+              minimumSize: const Size(0, 50),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              textStyle: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                height: 1.2,
+                overflow: TextOverflow.ellipsis,
+              ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
                 side: BorderSide(color: Colors.white.withValues(alpha: 0.24)),
@@ -183,6 +193,13 @@ class MyApp extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF163A63),
               backgroundColor: Colors.white.withValues(alpha: 0.18),
+              minimumSize: const Size(0, 48),
+              textStyle: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                height: 1.2,
+                overflow: TextOverflow.ellipsis,
+              ),
               side: BorderSide(color: Colors.white.withValues(alpha: 0.48)),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),

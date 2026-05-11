@@ -163,16 +163,17 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       ),
     );
 
-    if (widget.post.price > 0) {
-      chips.add(
-        _buildMetaChip(
-          icon: Icons.attach_money,
-          label: widget.post.formattedPrice,
-          fg: const Color(0xFF1565C0),
-          bg: const Color(0xFFE3F2FD),
-        ),
-      );
-    }
+    // Temporarily hidden: coins/price chip is not needed right now.
+    // if (widget.post.price > 0) {
+    //   chips.add(
+    //     _buildMetaChip(
+    //       icon: Icons.attach_money,
+    //       label: widget.post.formattedPrice,
+    //       fg: const Color(0xFF1565C0),
+    //       bg: const Color(0xFFE3F2FD),
+    //     ),
+    //   );
+    // }
 
     return Wrap(spacing: 8, runSpacing: 8, children: chips);
   }
@@ -507,499 +508,519 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         ),
         centerTitle: true,
       ),
-      body: Column(
-        children: [
-          // -------- USER NAME ----------
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Colors.grey.shade200,
-                  backgroundImage: widget.post.postedBy.profileImage != null
-                      ? NetworkImage(widget.post.postedBy.profileImage!)
-                      : null,
-                  child: widget.post.postedBy.profileImage == null
-                      ? Text(
-                          widget.post.postedBy.firstName.isNotEmpty
-                              ? widget.post.postedBy.firstName[0]
-                              : "U",
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
-                          ),
-                        )
-                      : null,
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // -------- USER NAME ----------
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
                 ),
-                const SizedBox(width: 10),
-                Text(
-                  "${widget.post.postedBy.firstName} ${widget.post.postedBy.lastName}",
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Colors.grey.shade200,
+                      backgroundImage: widget.post.postedBy.profileImage != null
+                          ? NetworkImage(widget.post.postedBy.profileImage!)
+                          : null,
+                      child: widget.post.postedBy.profileImage == null
+                          ? Text(
+                              widget.post.postedBy.firstName.isNotEmpty
+                                  ? widget.post.postedBy.firstName[0]
+                                  : "U",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "${widget.post.postedBy.firstName} ${widget.post.postedBy.lastName}",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 4),
+
+              // -------- TEXT ----------
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Add items to the deck make an offer",
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   ),
                 ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 4),
-
-          // -------- TEXT ----------
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                "Add items to the deck make an offer",
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
               ),
-            ),
-          ),
 
-          const SizedBox(height: 10),
+              const SizedBox(height: 10),
 
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: _buildTargetPostMetaTags(),
-            ),
-          ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _buildTargetPostMetaTags(),
+                ),
+              ),
 
-          const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-          // -------- OFFER DECK ROW ----------
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                // TARGET ITEM
-                Expanded(
-                  child: Container(
-                    height: 140,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.blue.shade200),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: widget.post.images.isNotEmpty
-                          ? Image.network(
-                              widget.post.images.first,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
+              // -------- OFFER DECK ROW ----------
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    // TARGET ITEM
+                    Expanded(
+                      child: Container(
+                        height: 140,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.blue.shade200),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: widget.post.images.isNotEmpty
+                              ? Image.network(
+                                  widget.post.images.first,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      color: Colors.grey.shade200,
+                                      child: const Center(
+                                        child: Icon(Icons.image),
+                                      ),
+                                    );
+                                  },
+                                )
+                              : Container(
                                   color: Colors.grey.shade200,
                                   child: const Center(child: Icon(Icons.image)),
-                                );
-                              },
-                            )
-                          : Container(
-                              color: Colors.grey.shade200,
-                              child: const Center(child: Icon(Icons.image)),
-                            ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // ADD CARD
-                Expanded(
-                  child: InkWell(
-                    onTap: _openAddPostAndRefresh,
-                    child: Container(
-                      height: 140,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.blue.shade200),
-                        color: Colors.white,
-                      ),
-                      child: Center(
-                        child: Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.add, size: 28),
+                                ),
                         ),
                       ),
                     ),
+                    const SizedBox(width: 12),
+
+                    // ADD CARD
+                    Expanded(
+                      child: InkWell(
+                        onTap: _openAddPostAndRefresh,
+                        child: Container(
+                          height: 140,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.blue.shade200),
+                            color: Colors.white,
+                          ),
+                          child: Center(
+                            child: Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.add, size: 28),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'Tap + to add new post',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                'Tap + to add new post',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
-            ),
-          ),
 
-          const SizedBox(height: 14),
+              const SizedBox(height: 14),
 
-          // -------- SWAP ICON ----------
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.blue.shade200, width: 2),
-              color: Colors.white,
-            ),
-            child: const Icon(Icons.swap_vert, color: Colors.blue),
-          ),
+              // -------- SWAP ICON ----------
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.blue.shade200, width: 2),
+                  color: Colors.white,
+                ),
+                child: const Icon(Icons.swap_vert, color: Colors.blue),
+              ),
 
-          const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-          // -------- SELECTED ITEMS (Horizontal deck) ----------
-          if (_selectedItems.isNotEmpty)
-            SizedBox(
-              height: 90,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _selectedItems.length,
-                itemBuilder: (context, index) {
-                  final item = _selectedItems[index];
-                  return Container(
-                    width: 80,
-                    margin: const EdgeInsets.only(right: 10),
-                    child: Stack(
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.blue.shade200),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: item.imageUrl.isNotEmpty
-                                ? Image.network(
-                                    item.imageUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
+              // -------- SELECTED ITEMS (Horizontal deck) ----------
+              if (_selectedItems.isNotEmpty)
+                SizedBox(
+                  height: 90,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _selectedItems.length,
+                    itemBuilder: (context, index) {
+                      final item = _selectedItems[index];
+                      return Container(
+                        width: 80,
+                        margin: const EdgeInsets.only(right: 10),
+                        child: Stack(
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.blue.shade200),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: item.imageUrl.isNotEmpty
+                                    ? Image.network(
+                                        item.imageUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                              return Container(
+                                                color: Colors.grey.shade200,
+                                                child: const Center(
+                                                  child: Icon(Icons.image),
+                                                ),
+                                              );
+                                            },
+                                      )
+                                    : Container(
                                         color: Colors.grey.shade200,
                                         child: const Center(
                                           child: Icon(Icons.image),
                                         ),
-                                      );
-                                    },
-                                  )
-                                : Container(
-                                    color: Colors.grey.shade200,
-                                    child: const Center(
-                                      child: Icon(Icons.image),
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 6,
-                          right: 6,
-                          child: GestureDetector(
-                            onTap: () => _removeSelectedItem(item),
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
+                                      ),
                               ),
-                              child: const Icon(Icons.close, size: 14),
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-
-          const SizedBox(height: 16),
-
-          // -------- MY ITEMS TITLE ----------
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  "My Items",
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                Text(
-                  "Tap to select",
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // -------- MY ITEMS HORIZONTAL SCROLLING LIST ----------
-          _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _errorMessage != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        size: 64,
-                        color: Colors.red.shade300,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _errorMessage!,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade600,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _fetchMyPosts,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
-                        ),
-                        child: const Text('Try Again'),
-                      ),
-                    ],
-                  ),
-                )
-              : _userItems.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No items to offer',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Post items first to make an offer',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : SizedBox(
-                  height: 150,
-                  child: RefreshIndicator(
-                    onRefresh: _refreshPosts,
-                    color: const Color(0xFF2E5BFF),
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                    strokeWidth: 2.2,
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount:
-                          1 + _userItems.length + (_isLoadingMore ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index == 0) {
-                          return GestureDetector(
-                            onTap: _openAddPostAndRefresh,
-                            child: Container(
-                              width: 110,
-                              margin: const EdgeInsets.only(right: 12),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: Colors.blue.shade200,
-                                  width: 1.2,
+                            Positioned(
+                              top: 6,
+                              right: 6,
+                              child: GestureDetector(
+                                onTap: () => _removeSelectedItem(item),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.close, size: 14),
                                 ),
-                                color: Colors.blue.shade50,
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  Icon(
-                                    Icons.add_circle_outline,
-                                    color: Colors.blue,
-                                    size: 28,
-                                  ),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    'Add New',
-                                    style: TextStyle(
-                                      color: Colors.blue,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
                               ),
                             ),
-                          );
-                        }
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
 
-                        final itemIndex = index - 1;
+              const SizedBox(height: 16),
 
-                        if (itemIndex == _userItems.length) {
-                          return Container(
-                            width: 80,
-                            margin: const EdgeInsets.only(right: 12),
-                            child: const Center(
-                              child: CircularProgressIndicator(),
+              // -------- MY ITEMS TITLE ----------
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "My Items",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      "Tap to select",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // -------- MY ITEMS HORIZONTAL SCROLLING LIST ----------
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _errorMessage != null
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 64,
+                            color: Colors.red.shade300,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _errorMessage!,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade600,
                             ),
-                          );
-                        }
-
-                        final item = _userItems[itemIndex];
-                        final selected = _selectedItems.any(
-                          (selectedItem) => selectedItem.id == item.id,
-                        );
-
-                        return GestureDetector(
-                          onTap: () => _toggleItemSelection(item),
-                          child: Container(
-                            width: 110,
-                            margin: const EdgeInsets.only(right: 12),
-                            child: Stack(
-                              children: [
-                                Container(
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: _fetchMyPosts,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                            ),
+                            child: const Text('Try Again'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : _userItems.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.inbox,
+                            size: 64,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No items to offer',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Post items first to make an offer',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : SizedBox(
+                      height: 150,
+                      child: RefreshIndicator(
+                        onRefresh: _refreshPosts,
+                        color: const Color(0xFF2E5BFF),
+                        backgroundColor: Colors.transparent,
+                        elevation: 0,
+                        strokeWidth: 2.2,
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount:
+                              1 + _userItems.length + (_isLoadingMore ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == 0) {
+                              return GestureDetector(
+                                onTap: _openAddPostAndRefresh,
+                                child: Container(
+                                  width: 110,
+                                  margin: const EdgeInsets.only(right: 12),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
-                                      color: selected
-                                          ? Colors.blue
-                                          : Colors.grey.shade200,
-                                      width: selected ? 2 : 1,
+                                      color: Colors.blue.shade200,
+                                      width: 1.2,
                                     ),
+                                    color: Colors.blue.shade50,
                                   ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(14),
-                                    child: item.imageUrl.isNotEmpty
-                                        ? Image.network(
-                                            item.imageUrl,
-                                            fit: BoxFit.cover,
-                                            errorBuilder:
-                                                (context, error, stackTrace) {
-                                                  return Container(
-                                                    color: Colors.grey.shade200,
-                                                    child: const Center(
-                                                      child: Icon(
-                                                        Icons.image,
-                                                        size: 30,
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                          )
-                                        : Container(
-                                            color: Colors.grey.shade200,
-                                            child: const Center(
-                                              child: Icon(
-                                                Icons.image,
-                                                size: 30,
-                                              ),
-                                            ),
-                                          ),
-                                  ),
-                                ),
-
-                                if (selected)
-                                  Positioned(
-                                    top: 6,
-                                    right: 6,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: const [
+                                      Icon(
+                                        Icons.add_circle_outline,
                                         color: Colors.blue,
-                                        shape: BoxShape.circle,
+                                        size: 28,
                                       ),
-                                      child: const Icon(
-                                        Icons.check,
-                                        size: 12,
-                                        color: Colors.white,
+                                      SizedBox(height: 6),
+                                      Text(
+                                        'Add New',
+                                        style: TextStyle(
+                                          color: Colors.blue,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
-                                    ),
-                                  ),
-
-                                Positioned(
-                                  bottom: 0,
-                                  left: 0,
-                                  right: 0,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      borderRadius: const BorderRadius.only(
-                                        bottomLeft: Radius.circular(14),
-                                        bottomRight: Radius.circular(14),
-                                      ),
-                                      color: Colors.black.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      item.name,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+                              );
+                            }
+
+                            final itemIndex = index - 1;
+
+                            if (itemIndex == _userItems.length) {
+                              return Container(
+                                width: 80,
+                                margin: const EdgeInsets.only(right: 12),
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                            }
+
+                            final item = _userItems[itemIndex];
+                            final selected = _selectedItems.any(
+                              (selectedItem) => selectedItem.id == item.id,
+                            );
+
+                            return GestureDetector(
+                              onTap: () => _toggleItemSelection(item),
+                              child: Container(
+                                width: 110,
+                                margin: const EdgeInsets.only(right: 12),
+                                child: Stack(
+                                  children: [
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: selected
+                                              ? Colors.blue
+                                              : Colors.grey.shade200,
+                                          width: selected ? 2 : 1,
+                                        ),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: item.imageUrl.isNotEmpty
+                                            ? Image.network(
+                                                item.imageUrl,
+                                                fit: BoxFit.cover,
+                                                errorBuilder:
+                                                    (
+                                                      context,
+                                                      error,
+                                                      stackTrace,
+                                                    ) {
+                                                      return Container(
+                                                        color: Colors
+                                                            .grey
+                                                            .shade200,
+                                                        child: const Center(
+                                                          child: Icon(
+                                                            Icons.image,
+                                                            size: 30,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                              )
+                                            : Container(
+                                                color: Colors.grey.shade200,
+                                                child: const Center(
+                                                  child: Icon(
+                                                    Icons.image,
+                                                    size: 30,
+                                                  ),
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+
+                                    if (selected)
+                                      Positioned(
+                                        top: 6,
+                                        right: 6,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: Colors.blue,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.check,
+                                            size: 12,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+
+                                    Positioned(
+                                      bottom: 0,
+                                      left: 0,
+                                      right: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          borderRadius: const BorderRadius.only(
+                                            bottomLeft: Radius.circular(14),
+                                            bottomRight: Radius.circular(14),
+                                          ),
+                                          color: Colors.black.withValues(
+                                            alpha: 0.5,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          item.name,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-        ],
+            ],
+          ),
+        ),
       ),
 
       // -------- BOTTOM BUTTONS ----------
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 10,
-            bottom: 5 + MediaQuery.of(context).viewPadding.bottom,
-          ),
+          padding: EdgeInsets.only(left: 16, right: 16, top: 10, bottom: 10),
           decoration: BoxDecoration(
             color: Colors.white,
             boxShadow: [

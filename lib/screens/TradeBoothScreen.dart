@@ -470,6 +470,8 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     final hasImage = post.images.isNotEmpty;
     final displayPrice = _formatPrice(post);
     final returnDetails = _getReturnDetails(post);
+    final maxLocationWidth =
+        (MediaQuery.of(context).size.width * 0.40).clamp(110.0, 170.0);
 
     return GestureDetector(
       onTap: () => _navigateToPostDetail(post),
@@ -630,7 +632,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
@@ -659,29 +661,27 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                       if (post.location != null && post.location!.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(left: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  _truncateLocation(post.location!),
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: maxLocationWidth),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
                               ),
-                            ],
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                _truncateLocation(post.location!),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ),
                         ),
                     ],

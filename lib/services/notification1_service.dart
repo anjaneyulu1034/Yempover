@@ -32,15 +32,33 @@ class NotificationService1 {
   Future<void> init() async {
     if (_isInitialized) return;
 
+    AuthorizationStatus? authStatus;
     try {
-      await _firebaseMessaging.requestPermission(
+      final settings = await _firebaseMessaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
         provisional: false,
       );
+      authStatus = settings.authorizationStatus;
+      debugPrint('🔔 Notification permission status: $authStatus');
     } catch (e) {
       debugPrint('FCM permission request failed: $e');
+    }
+
+    if (Platform.isIOS) {
+      try {
+        await _firebaseMessaging.setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+
+        final apnsToken = await _firebaseMessaging.getAPNSToken();
+        debugPrint('🍎 APNs token available: ${apnsToken != null}');
+      } catch (e) {
+        debugPrint('Failed to configure iOS foreground/APNs state: $e');
+      }
     }
 
     try {
@@ -48,6 +66,9 @@ class NotificationService1 {
         const Duration(seconds: 8),
       );
       debugPrint('🔥 FCM TOKEN: $token');
+      if (Platform.isIOS && (authStatus == null || authStatus == AuthorizationStatus.denied)) {
+        debugPrint('⚠️ iOS push permission is denied, remote notifications will not be shown.');
+      }
       if (token != null && token.isNotEmpty) {
         await _registerTokenWithBackend(token);
       }

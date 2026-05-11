@@ -200,14 +200,27 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
 
   @override
   Widget build(BuildContext context) {
+    final textScale = MediaQuery.of(context).textScaler.scale(1.0);
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: Text(
-          _post.type == 'service' ? 'Service Details' : 'Product Details',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        leadingWidth: 44,
+        titleSpacing: 0,
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _post.type == 'service' ? 'Service Details' : 'Product Details',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20 / textScale.clamp(1.0, 1.25),
+            ),
+          ),
         ),
-        centerTitle: true,
+        centerTitle: false,
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,

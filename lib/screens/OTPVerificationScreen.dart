@@ -430,6 +430,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   @override
   Widget build(BuildContext context) {
     debugPrint('🟡 OTPVerificationScreen: build() called');
+    final textScale = MediaQuery.of(context).textScaler.scale(1.0);
+    final verifyButtonHeight = (56 * textScale.clamp(1.0, 1.25)).toDouble();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -597,13 +599,17 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                     // Verify Button
                     SizedBox(
                       width: double.infinity,
-                      height: 56,
+                      height: verifyButtonHeight,
                       child: _isLoading
                           ? ElevatedButton(
                               onPressed: null,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppConstants.primaryColor
                                     .withValues(alpha: 0.7),
+                                minimumSize: Size.fromHeight(verifyButtonHeight),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(28),
                                 ),
@@ -621,6 +627,10 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                               onPressed: _verifyOTP,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppConstants.primaryColor,
+                                minimumSize: Size.fromHeight(verifyButtonHeight),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(28),
                                 ),
@@ -631,9 +641,12 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                                     : 'Verify & Login',
                                 style: const TextStyle(
                                   fontSize: 18,
+                                  height: 1.2,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                     ),

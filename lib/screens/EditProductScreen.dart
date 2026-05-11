@@ -727,6 +727,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final textScale = MediaQuery.of(context).textScaler.scale(1.0);
+    final saveButtonHeight = (50 * textScale.clamp(1.0, 1.25)).toDouble();
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: Colors.grey[100],
@@ -1091,12 +1094,14 @@ class _EditProductScreenState extends State<EditProductScreen> {
                       // Save Button
                       SizedBox(
                         width: double.infinity,
-                        height: 50,
+                        height: saveButtonHeight,
                         child: ElevatedButton(
                           onPressed: _isSaving ? null : _saveChanges,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             foregroundColor: Colors.white,
+                            minimumSize: Size.fromHeight(saveButtonHeight),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -1114,8 +1119,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
                                   'Save Changes',
                                   style: TextStyle(
                                     fontSize: 16,
+                                    height: 1.2,
                                     fontWeight: FontWeight.bold,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                         ),
                       ),

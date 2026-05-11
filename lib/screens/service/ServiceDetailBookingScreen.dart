@@ -42,6 +42,7 @@ class _ServiceDetailBookingScreenState
   Map<String, dynamic>? _selectedSlot;
 
   int _duration = 30;
+  bool _showDurationOptions = false;
   ServiceDetailUiState _serviceUiState = ServiceDetailUiState.loadingService;
 
   final DateFormat _dateFormat = DateFormat('EEEE, MMMM d, yyyy');
@@ -769,6 +770,8 @@ class _ServiceDetailBookingScreenState
                             Expanded(
                               child: Text(
                                 service['title']?.toString() ?? 'Service',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
@@ -780,6 +783,7 @@ class _ServiceDetailBookingScreenState
                         ),
                         const SizedBox(height: 16),
                         Container(
+                          width: double.infinity,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 6,
@@ -789,7 +793,6 @@ class _ServiceDetailBookingScreenState
                             borderRadius: BorderRadius.circular(30),
                           ),
                           child: Row(
-                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
                                 _isValid ? Icons.check_circle : Icons.warning,
@@ -799,9 +802,13 @@ class _ServiceDetailBookingScreenState
                                     : Colors.orange[300],
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                _isValid ? 'Available' : _invalidReason,
-                                style: const TextStyle(color: Colors.white),
+                              Expanded(
+                                child: Text(
+                                  _isValid ? 'Available' : _invalidReason,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white),
+                                ),
                               ),
                             ],
                           ),
@@ -1382,46 +1389,156 @@ class _ServiceDetailBookingScreenState
 
                         const SizedBox(height: 16),
 
-                        // Duration Dropdown
-                        DropdownButtonFormField<int>(
-                          initialValue: _duration,
-                          items: const [15, 30, 45, 60]
-                              .map(
-                                (e) => DropdownMenuItem(
-                                  value: e,
-                                  child: Text('$e minutes'),
+                        // Duration dropdown rendered inline so it always opens below.
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () {
+                                setState(() {
+                                  _showDurationOptions = !_showDurationOptions;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 14,
                                 ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setState(() => _duration = value);
-                          },
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade400,
-                                width: 1.2,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: _showDurationOptions
+                                        ? Colors.deepPurple
+                                        : Colors.grey.shade400,
+                                    width: _showDurationOptions ? 1.6 : 1.2,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.timer,
+                                      size: 20,
+                                      color: Colors.grey[700],
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            'Duration',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '$_duration minutes',
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Icon(
+                                      _showDurationOptions
+                                          ? Icons.keyboard_arrow_up
+                                          : Icons.keyboard_arrow_down,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade400,
-                                width: 1.2,
+                            if (_showDurationOptions) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.grey.shade300,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.grey.withValues(alpha: 0.14),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  children: List.generate(4, (index) {
+                                    final options = [15, 30, 45, 60];
+                                    final value = options[index];
+                                    final isSelected = _duration == value;
+                                    return Column(
+                                      children: [
+                                        InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              _duration = value;
+                                              _showDurationOptions = false;
+                                            });
+                                          },
+                                          child: Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 14,
+                                              vertical: 12,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isSelected
+                                                  ? Colors.deepPurple.withValues(
+                                                      alpha: 0.08,
+                                                    )
+                                                  : Colors.transparent,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    '$value minutes',
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight: isSelected
+                                                          ? FontWeight.w600
+                                                          : FontWeight.w500,
+                                                      color: isSelected
+                                                          ? Colors.deepPurple
+                                                          : Colors.black87,
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (isSelected)
+                                                  const Icon(
+                                                    Icons.check,
+                                                    color: Colors.deepPurple,
+                                                    size: 18,
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        if (index != options.length - 1)
+                                          Divider(
+                                            height: 1,
+                                            color: Colors.grey.shade200,
+                                          ),
+                                      ],
+                                    );
+                                  }),
+                                ),
                               ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: Colors.deepPurple,
-                                width: 1.6,
-                              ),
-                            ),
-                            labelText: 'Duration',
-                            prefixIcon: const Icon(Icons.timer, size: 20),
-                          ),
+                            ],
+                          ],
                         ),
 
                         const SizedBox(height: 16),
@@ -1668,17 +1785,22 @@ class _ServiceDetailBookingScreenState
                     size: 20,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    !canBook
-                        ? _invalidReason
-                        : !_isLookingForService && _selectedSlot == null
-                        ? 'Select a Time Slot'
-                        : _isLookingForService
-                        ? 'Send Proposal'
-                        : 'Book Appointment',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      !canBook
+                          ? _invalidReason
+                          : !_isLookingForService && _selectedSlot == null
+                          ? 'Select a Time Slot'
+                          : _isLookingForService
+                          ? 'Send Proposal'
+                          : 'Book Appointment',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],

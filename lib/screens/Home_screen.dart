@@ -3019,37 +3019,56 @@ class _FilterScreenState extends State<FilterScreen> {
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: options.map((option) {
-            final isSelected =
-                optionSelectedByValue?.call(option) ?? selectedValue == option;
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: options.map((option) {
+                final isSelected =
+                    optionSelectedByValue?.call(option) ??
+                    selectedValue == option;
+                final label = optionLabelBuilder?.call(option) ?? option;
+                final isLongLabel = label.length > 24;
 
-            return FilterChip(
-              label: Text(
-                optionLabelBuilder?.call(option) ?? option,
-                style: TextStyle(
-                  color: isSelected ? Colors.blue : Colors.grey.shade700,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                ),
-              ),
-              selected: isSelected,
-              onSelected: (selected) {
-                onChanged(selected ? option : null);
-              },
-              selectedColor: Colors.blue.shade50,
-              checkmarkColor: Colors.blue,
-              backgroundColor: Colors.grey.shade50,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
-                side: BorderSide(
-                  color: isSelected ? Colors.blue : Colors.grey.shade200,
-                  width: isSelected ? 1.5 : 1,
-                ),
-              ),
+                return ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: isLongLabel
+                        ? constraints.maxWidth
+                        : constraints.maxWidth * 0.9,
+                  ),
+                  child: FilterChip(
+                    label: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
+                      style: TextStyle(
+                        color: isSelected ? Colors.blue : Colors.grey.shade700,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                    ),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      onChanged(selected ? option : null);
+                    },
+                    selectedColor: Colors.blue.shade50,
+                    checkmarkColor: Colors.blue,
+                    backgroundColor: Colors.grey.shade50,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      side: BorderSide(
+                        color: isSelected ? Colors.blue : Colors.grey.shade200,
+                        width: isSelected ? 1.5 : 1,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             );
-          }).toList(),
+          },
         ),
       ],
     );

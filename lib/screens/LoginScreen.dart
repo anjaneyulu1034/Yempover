@@ -187,6 +187,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     // Get screen size for responsive calculations
     final keyboardSpace = MediaQuery.of(context).viewInsets.bottom;
+    final textScale = MediaQuery.of(context).textScaler.scale(1.0);
+    final loginButtonHeight = (56 * textScale.clamp(1.0, 1.25)).toDouble();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -307,13 +309,19 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Login Button
                         SizedBox(
                           width: double.infinity,
-                          height: 56,
+                          height: loginButtonHeight,
                           child: _isLoading
                               ? ElevatedButton(
                                   onPressed: null,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppConstants.primaryColor
                                         .withValues(alpha: 0.7),
+                                    minimumSize: Size.fromHeight(
+                                      loginButtonHeight,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(28),
                                     ),
@@ -331,6 +339,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                   onPressed: _handleLogin,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppConstants.primaryColor,
+                                    minimumSize: Size.fromHeight(
+                                      loginButtonHeight,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(28),
                                     ),
@@ -339,9 +353,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                     'Login',
                                     style: TextStyle(
                                       fontSize: 18,
+                                      height: 1.2,
                                       fontWeight: FontWeight.w600,
                                       color: Colors.white,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                         ),

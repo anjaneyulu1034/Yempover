@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:YemPover_app/models/ProductPostmain.dart';
 import 'package:YemPover_app/screens/OfferDeckScreen.dart';
 import 'package:YemPover_app/screens/OfferDescriptionScreen.dart';
-import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
 import 'package:YemPover_app/screens/service/ServiceDetailBookingScreen.dart';
 import 'package:YemPover_app/services/api_service.dart';
-import 'package:YemPover_app/services/coin_service.dart';
 import 'package:YemPover_app/services/post_action_service.dart';
 import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/utils/loading_widget.dart';
@@ -28,7 +26,6 @@ class PostDetailScreen extends StatefulWidget {
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final ApiService _apiService = ApiService();
   final TokenService _tokenService = TokenService();
-  final CoinService _coinService = CoinService();
   final PostActionService _postActionService = PostActionService();
 
   late Post _post;
@@ -224,80 +221,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   Future<bool> _ensureSufficientWalletBalance() async {
-    if (_post.type != PostType.product || _post.price <= 0) {
-      return true;
-    }
-
-    final requiredAmount = _post.price;
-
-    try {
-      final wallet = await _coinService.getWallet();
-      final rawBalance = wallet['balance'] ?? 0;
-      final balance = rawBalance is num
-          ? rawBalance.toDouble()
-          : double.tryParse(rawBalance.toString()) ?? 0.0;
-
-      if (balance >= requiredAmount) {
-        return true;
-      }
-
-      final needed = requiredAmount - balance;
-      if (!mounted) return false;
-
-      final shouldOpenWallet =
-          await showDialog<bool>(
-            context: context,
-            builder: (dialogContext) => AlertDialog(
-              title: const Text('Insufficient Wallet Balance'),
-              content: Text(
-                'Product price is \$${requiredAmount.toStringAsFixed(2)}. '
-                'Your wallet has \$${balance.toStringAsFixed(2)}.\n\n'
-                'Please add \$${needed.toStringAsFixed(2)} more to continue.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                  child: const Text('Not Now'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(dialogContext, true),
-                  child: const Text('Add Coins'),
-                ),
-              ],
-            ),
-          ) ??
-          false;
-
-      if (!mounted) return false;
-
-      if (shouldOpenWallet) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => CoinsWalletScreen(requiredAmount: needed),
-          ),
-        );
-
-        final refreshedWallet = await _coinService.getWallet();
-        final refreshedRawBalance = refreshedWallet['balance'] ?? 0;
-        final refreshedBalance = refreshedRawBalance is num
-            ? refreshedRawBalance.toDouble()
-            : double.tryParse(refreshedRawBalance.toString()) ?? 0.0;
-
-        return refreshedBalance >= requiredAmount;
-      }
-
-      return false;
-    } catch (e) {
-      if (!mounted) return false;
-      SnackbarUtils.showError(
-        context,
-        e,
-        title: 'Wallet Error',
-        fallback: 'Unable to verify wallet balance. Please try again.',
-      );
-      return false;
-    }
+    // Temporarily bypass wallet/coins checks; no insufficient-balance popup.
+    return true;
   }
 
   Future<OfferSubmissionMode?> _showOfferTypeSelector() async {
@@ -519,7 +444,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             TextField(
               controller: reportController,
               decoration: const InputDecoration(
-                hintText: 'Additional details (optional)...',
+                hintText: 'Additional details (required)...',
                 border: OutlineInputBorder(),
               ),
               maxLines: 3,
@@ -533,9 +458,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           ),
           ElevatedButton(
             onPressed: () {
+              final description = reportController.text.trim();
+              if (description.isEmpty) {
+                SnackbarUtils.showInfo(
+                  context,
+                  'Additional details are required to submit report.',
+                );
+                return;
+              }
+
               _reportPost(
                 selectedReason,
-                reportController.text.isNotEmpty ? reportController.text : null,
+                description,
               );
               Navigator.pop(context);
             },

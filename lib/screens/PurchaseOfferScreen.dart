@@ -118,51 +118,58 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
       if (!mounted) return;
       setState(() => _isLoading = false);
 
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Icon(Icons.check_circle, color: Colors.green, size: 60),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Purchase Offer Submitted!',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Your purchase offer of \$${_priceController.text} for "${widget.post.title}" has been sent to ${widget.post.postedBy.firstName}.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'You can track the status in the Trade Chat section.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
-          ),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const TradeChatScreen(),
-                    ),
-                    (route) => false,
-                  );
-                },
-                child: const Text('Go to Trade Chat'),
-              ),
-            ),
-          ],
-        ),
+      // Temporarily hidden: success popup includes price/coins context, not needed now.
+      // showDialog(
+      //   context: context,
+      //   barrierDismissible: false,
+      //   builder: (context) => AlertDialog(
+      //     title: const Icon(Icons.check_circle, color: Colors.green, size: 60),
+      //     content: Column(
+      //       mainAxisSize: MainAxisSize.min,
+      //       children: [
+      //         const Text(
+      //           'Purchase Offer Submitted!',
+      //           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      //           textAlign: TextAlign.center,
+      //         ),
+      //         const SizedBox(height: 12),
+      //         Text(
+      //           'Your purchase offer of \$${_priceController.text} for "${widget.post.title}" has been sent to ${widget.post.postedBy.firstName}.',
+      //           textAlign: TextAlign.center,
+      //           style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+      //         ),
+      //         const SizedBox(height: 8),
+      //         const Text(
+      //           'You can track the status in the Trade Chat section.',
+      //           textAlign: TextAlign.center,
+      //           style: TextStyle(fontSize: 12, color: Colors.grey),
+      //         ),
+      //       ],
+      //     ),
+      //     actions: [
+      //       SizedBox(
+      //         width: double.infinity,
+      //         child: ElevatedButton(
+      //           onPressed: () {
+      //             Navigator.pushAndRemoveUntil(
+      //               context,
+      //               MaterialPageRoute(
+      //                 builder: (context) => const TradeChatScreen(),
+      //               ),
+      //               (route) => false,
+      //             );
+      //           },
+      //           child: const Text('Go to Trade Chat'),
+      //         ),
+      //       ),
+      //     ],
+      //   ),
+      // );
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const TradeChatScreen()),
+        (route) => false,
       );
     } catch (e) {
       if (!mounted) return;
