@@ -6,15 +6,15 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'utils/notification_provider.dart';
 import 'screens/SplashScreen.dart';
- 
+
 // Global notification plugin instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
- 
+
 class _NoAnimationPageTransitionsBuilder extends PageTransitionsBuilder {
   const _NoAnimationPageTransitionsBuilder();
- 
+
   @override
   Widget buildTransitions<T>(
     PageRoute<T> route,
@@ -26,7 +26,7 @@ class _NoAnimationPageTransitionsBuilder extends PageTransitionsBuilder {
     return child;
   }
 }
- 
+
 /// 🔥 Background message handler
 /// MUST be top-level function
 @pragma('vm:entry-point')
@@ -35,34 +35,34 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   debugPrint("📩 Background message received: ${message.messageId}");
 }
- 
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
- 
+
   // 🔥 STEP 1: Initialize Firebase FIRST
   await Firebase.initializeApp();
- 
+
   // 🔥 STEP 2: Set background handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
- 
+
   // 🔥 STEP 3: Initialize notification service
   try {
     await NotificationService1().init();
   } catch (e) {
     debugPrint('Notification init failed (continuing app launch): $e');
   }
- 
+
   // 🔥 STEP 4: Run app
   runApp(const MyApp());
- 
+
   WidgetsBinding.instance.addPostFrameCallback((_) {
     NotificationService1.flushPendingNavigation();
   });
 }
- 
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
- 
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -228,7 +228,18 @@ class MyApp extends StatelessWidget {
           ),
         ),
         builder: (context, child) {
-          return child ?? const SizedBox.shrink();
+          final content = child ?? const SizedBox.shrink();
+
+          return Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) {
+              final currentFocus = FocusManager.instance.primaryFocus;
+              if (currentFocus != null && !currentFocus.hasPrimaryFocus) {
+                currentFocus.unfocus();
+              }
+            },
+            child: content,
+          );
         },
         home: const SplashScreen(),
       ),
