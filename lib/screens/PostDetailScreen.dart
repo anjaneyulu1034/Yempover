@@ -408,10 +408,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
     String selectedReason = 'Spam';
     TextEditingController reportController = TextEditingController();
+    const reportFieldBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10)),
+      borderSide: BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
+    );
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Report Post'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -440,22 +445,46 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               onChanged: (value) {
                 selectedReason = value ?? 'Spam';
               },
-              decoration: const InputDecoration(border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                border: reportFieldBorder,
+                enabledBorder: reportFieldBorder,
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(10)),
+                  borderSide: BorderSide(color: Color(0xFF3B82F6), width: 1.4),
+                ),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+              ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: reportController,
               decoration: const InputDecoration(
                 hintText: 'Additional details (required)...',
-                border: OutlineInputBorder(),
+                border: reportFieldBorder,
+                enabledBorder: reportFieldBorder,
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(10)),
+                  borderSide: BorderSide(color: Color(0xFF3B82F6), width: 1.4),
+                ),
+                contentPadding: EdgeInsets.all(12),
               ),
               maxLines: 3,
             ),
           ],
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(context),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF334155),
+              side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
@@ -469,10 +498,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 return;
               }
 
-              _reportPost(
-                selectedReason,
-                description,
-              );
+              _reportPost(selectedReason, description);
               Navigator.pop(context);
             },
             child: const Text('Submit Report'),
