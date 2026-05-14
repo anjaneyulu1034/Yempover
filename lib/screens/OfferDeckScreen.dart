@@ -1,5 +1,6 @@
 import 'package:YemPover_app/screens/LoginScreen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:YemPover_app/models/ProductPostmain.dart';
 import 'package:YemPover_app/models/my_post_model.dart';
 import 'package:YemPover_app/services/token_service.dart';
@@ -26,9 +27,11 @@ class OfferDeckScreen extends StatefulWidget {
 
 class _OfferDeckScreenState extends State<OfferDeckScreen> {
   final MyPostsService _postsService = MyPostsService();
+  final TextEditingController _quotedPriceController = TextEditingController();
 
   List<UserItem> _userItems = [];
   final List<UserItem> _selectedItems = [];
+  String? _quotedPriceError;
   bool _isLoading = false;
   String? _errorMessage;
   int _currentPage = 1;
@@ -180,8 +183,31 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
   @override
   void dispose() {
+    _quotedPriceController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  bool get _requiresQuotedPrice => widget.offerMode == OfferSubmissionMode.both;
+
+  String? _validateQuotedPrice(String value) {
+    if (!_requiresQuotedPrice) return null;
+
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return 'Quoted price is required for Both offer';
+    }
+
+    final parsed = double.tryParse(trimmed);
+    if (parsed == null || parsed <= 0) {
+      return 'Enter a valid price';
+    }
+
+    if (trimmed.length > 9) {
+      return 'Price is too large';
+    }
+
+    return null;
   }
 
   void _onScroll() {
@@ -457,6 +483,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   }
 
   void _navigateToDescriptionScreen() {
+    final quotedPriceError = _validateQuotedPrice(_quotedPriceController.text);
+
+    setState(() {
+      _quotedPriceError = quotedPriceError;
+    });
+
     if ((widget.offerMode == OfferSubmissionMode.barter ||
             widget.offerMode == OfferSubmissionMode.both) &&
         _selectedItems.isEmpty) {
@@ -464,6 +496,11 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         context,
         'Please select at least one item to continue.',
       );
+      return;
+    }
+
+    if (quotedPriceError != null) {
+      SnackbarUtils.showInfo(context, quotedPriceError);
       return;
     }
 
@@ -486,6 +523,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
           currentUserId: widget.currentUserId,
           isService: isService, // Pass the correct type
           offerMode: widget.offerMode,
+          initialQuotedPrice: _quotedPriceController.text.trim(),
         ),
       ),
     );
@@ -577,6 +615,62 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
               ),
 
               const SizedBox(height: 12),
+
+              if (_requiresQuotedPrice) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Quoted Price',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _quotedPriceController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(9),
+                        ],
+                        onChanged: (_) {
+                          setState(() {
+                            _quotedPriceError = _validateQuotedPrice(
+                              _quotedPriceController.text,
+                            );
+                          });
+                        },
+                        decoration: InputDecoration(
+                          hintText: 'Enter your price quote',
+                          prefixText: '\$ ',
+                          errorText: _quotedPriceError,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade400),
+                          ),
+                          focusedBorder: const OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(12)),
+                            borderSide: BorderSide(
+                              color: Color(0xFF2E5BFF),
+                              width: 2,
+                            ),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
 
               // -------- OFFER DECK ROW ----------
               Padding(
@@ -905,6 +999,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                               onTap: () => _toggleItemSelection(item),
                               child: Container(
                                 width: 110,
+                                height: 140,
                                 margin: const EdgeInsets.only(right: 12),
                                 child: Stack(
                                   children: [
@@ -920,38 +1015,43 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                                       ),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(14),
-                                        child: item.imageUrl.isNotEmpty
-                                            ? Image.network(
-                                                item.imageUrl,
-                                                fit: BoxFit.cover,
-                                                errorBuilder:
-                                                    (
-                                                      context,
-                                                      error,
-                                                      stackTrace,
-                                                    ) {
-                                                      return Container(
-                                                        color: Colors
-                                                            .grey
-                                                            .shade200,
-                                                        child: const Center(
-                                                          child: Icon(
-                                                            Icons.image,
-                                                            size: 30,
+                                        child: Container(
+                                          color: Colors.grey.shade100,
+                                          child: item.imageUrl.isNotEmpty
+                                              ? Image.network(
+                                                  item.imageUrl,
+                                                  width: double.infinity,
+                                                  height: double.infinity,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder:
+                                                      (
+                                                        context,
+                                                        error,
+                                                        stackTrace,
+                                                      ) {
+                                                        return Container(
+                                                          color: Colors
+                                                              .grey
+                                                              .shade200,
+                                                          child: const Center(
+                                                            child: Icon(
+                                                              Icons.image,
+                                                              size: 30,
+                                                            ),
                                                           ),
-                                                        ),
-                                                      );
-                                                    },
-                                              )
-                                            : Container(
-                                                color: Colors.grey.shade200,
-                                                child: const Center(
-                                                  child: Icon(
-                                                    Icons.image,
-                                                    size: 30,
+                                                        );
+                                                      },
+                                                )
+                                              : Container(
+                                                  color: Colors.grey.shade200,
+                                                  child: const Center(
+                                                    child: Icon(
+                                                      Icons.image,
+                                                      size: 30,
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
+                                        ),
                                       ),
                                     ),
 

@@ -17,6 +17,8 @@ class OfferDescriptionScreen extends StatefulWidget {
   final String currentUserId;
   final bool isService;
   final OfferSubmissionMode offerMode;
+  final String? initialQuotedPrice;
+  final bool isFixedPriceOffer;
 
   const OfferDescriptionScreen({
     super.key,
@@ -26,6 +28,8 @@ class OfferDescriptionScreen extends StatefulWidget {
     required this.currentUserId,
     this.isService = false,
     required this.offerMode,
+    this.initialQuotedPrice,
+    this.isFixedPriceOffer = false,
   });
 
   @override
@@ -41,7 +45,10 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   String? _descriptionError;
 
   bool get _isFixedProductPriceOffer =>
-      widget.post.type == PostType.product && _requiresPrice;
+      widget.isFixedPriceOffer &&
+      widget.post.type == PostType.product &&
+      _requiresPrice &&
+      widget.post.price > 0;
 
   bool get _requiresPrice =>
       widget.offerMode == OfferSubmissionMode.price ||
@@ -54,6 +61,12 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   @override
   void initState() {
     super.initState();
+
+    final initialQuotedPrice = widget.initialQuotedPrice?.trim() ?? '';
+    if (!_isFixedProductPriceOffer && initialQuotedPrice.isNotEmpty) {
+      _priceController.text = initialQuotedPrice;
+    }
+
     if (_isFixedProductPriceOffer && widget.post.price > 0) {
       _priceController.text = widget.post.price.toStringAsFixed(2);
     }

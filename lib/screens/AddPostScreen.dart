@@ -419,7 +419,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
-                'Choose Image Source',
+                'Choose Image',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -437,7 +437,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.photo_library, color: Colors.blue),
-              title: const Text('Choose from Gallery (max 5 total)'),
+              title: const Text('Choose from Gallery'),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(ImageSource.gallery);
@@ -1440,7 +1440,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
             children: [
               // Header
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 52, 16, 22),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -1468,25 +1468,19 @@ class _AddPostScreenState extends State<AddPostScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Select Your Post Type',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
+                     
+                      //const SizedBox(height: 16),
 
-                      _buildOptionCard(
-                        1,
-                        'Add your post in Marketplace (Product or Service).',
-                      ),
+                      // _buildOptionCard(
+                      //   1,
+                      //   'Add your post in Marketplace (Product or Service).',
+                      // ),
                       // const SizedBox(height: 12),
                       // _buildOptionCard(
                       //   2,
                       //   'Looking for a service in Marketplace.',
                       // ),
-                      const SizedBox(height: 24),
+                      //const SizedBox(height: 24),
 
                       if (_selectedOption == 1) _buildStep1(),
                       if (_selectedOption == 2) _buildLookingForStep1(),
@@ -1495,77 +1489,69 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 ),
               ),
 
-              // Bottom Buttons (SAFE FIX)
-              SafeArea(
-                top: false,
-                child: Container(
-                  padding: EdgeInsets.only(
-                    left: 16,
-                    right: 16,
-                    top: 16,
-                    bottom: 16 + MediaQuery.of(context).viewPadding.bottom,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withValues(alpha: 0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, -3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: const Color(0xFFEFF4FF),
-                            foregroundColor: const Color(0xFF1F3D7A),
-                            side: const BorderSide(
-                              color: Color(0xFF9AB4FF),
-                              width: 1.4,
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+              // Bottom Buttons
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withValues(alpha: 0.2),
+                      blurRadius: 10,
+                      offset: const Offset(0, -3),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: const Color(0xFFEFF4FF),
+                          foregroundColor: const Color(0xFF1F3D7A),
+                          side: const BorderSide(
+                            color: Color(0xFF9AB4FF),
+                            width: 1.4,
                           ),
-                          child: const Text(
-                            'Cancel',
-                            style: TextStyle(fontWeight: FontWeight.w600),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: _isSubmitting ? null : _validateAndSubmit,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2E5BFF),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isSubmitting ? null : _validateAndSubmit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2E5BFF),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: _isSubmitting
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Text(
-                                  'Post',
-                                  style: TextStyle(color: Colors.white),
+                        ),
+                        child: _isSubmitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
                                 ),
-                        ),
+                              )
+                            : const Text(
+                                'Post',
+                                style: TextStyle(color: Colors.white),
+                              ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1597,27 +1583,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: _selectedOption == option
-                        ? const Color(0xFF2E5BFF)
-                        : Colors.grey,
-                    width: 2,
-                  ),
-                ),
-                child: _selectedOption == option
-                    ? const Icon(
-                        Icons.circle,
-                        size: 12,
-                        color: Color(0xFF2E5BFF),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 16),
               Expanded(
                 child: Text(description, style: const TextStyle(fontSize: 14)),
               ),
@@ -1632,10 +1597,10 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Create a New Post',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
+        // const Text(
+        //   'Create a New Post',
+        //   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        // ),
         const SizedBox(height: 24),
 
         const Text(
