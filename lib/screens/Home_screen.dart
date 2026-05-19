@@ -540,8 +540,6 @@ class _HomeScreenState extends State<HomeScreen> {
       String? status;
       if (_selectedTradeType == 'Barter') {
         status = 'FOR_BARTER';
-      } else if (_selectedTradeType == 'Sales') {
-        status = 'FOR_SALE';
       }
 
       String? backendPostType;
@@ -711,9 +709,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void _applyFilters() {
     setState(() {
       _filteredPosts = _posts.where((post) {
-        if (_selectedTradeType != null) {
-          if (_selectedTradeType == 'Barter' && !post.isForBarter) return false;
-          if (_selectedTradeType == 'Sales' && !post.isForSale) return false;
+        if (_selectedTradeType == 'Barter' && !post.isForBarter) {
+          return false;
         }
 
         if (_selectedPostType != null) {
@@ -721,10 +718,9 @@ class _HomeScreenState extends State<HomeScreen> {
               post.post.status != PostStatus.LOOKING_FOR_SERVICE) {
             return false;
           }
-          if (_selectedPostType == 'Barter/selling a product/service' &&
+          if (_selectedPostType == 'Offering for barter' &&
               post.post.status != PostStatus.PROVIDE_SERVICE &&
-              !post.isForBarter &&
-              !post.isForSale) {
+              !post.isForBarter) {
             return false;
           }
         }
@@ -2723,6 +2719,10 @@ class FilterScreen extends StatefulWidget {
 }
 
 class _FilterScreenState extends State<FilterScreen> {
+  static const Color _accent = Color(0xFF2E5BFF);
+  static const Color _surface = Color(0xFFF7F9FF);
+  static const Color _border = Color(0xFFE6ECFF);
+
   late String? _selectedTradeType;
   late String? _selectedPostType;
   late String? _selectedCategory;
@@ -2735,20 +2735,35 @@ class _FilterScreenState extends State<FilterScreen> {
     'Nearest',
     'Newest',
     'Oldest',
-    'Price: Low to High',
-    'Price: High to Low',
   ];
-  final List<String> _tradeTypes = ['Barter', 'Sales'];
   final List<String> _postTypes = [
     'Looking for a product/service',
-    'Barter/selling a product/service',
+    'Offering for barter',
   ];
+
+  bool get _barterOnly => _selectedTradeType == 'Barter';
+
+  int get _activeFilterCount {
+    var count = 0;
+    if (_barterOnly) count++;
+    if (_selectedPostType != null) count++;
+    if (_selectedCategory != null) count++;
+    if (_selectedWishListCategory != null) count++;
+    if (_isRadiusFilterEnabled) count++;
+    if (_selectedSortBy != 'Nearest') count++;
+    return count;
+  }
 
   @override
   void initState() {
     super.initState();
-    _selectedTradeType = widget.selectedTradeType;
-    _selectedPostType = widget.selectedPostType;
+    _selectedTradeType =
+        widget.selectedTradeType == 'Barter' ? 'Barter' : null;
+    if (widget.selectedPostType == 'Barter/selling a product/service') {
+      _selectedPostType = 'Offering for barter';
+    } else {
+      _selectedPostType = widget.selectedPostType;
+    }
     _selectedCategory = widget.selectedCategory;
     _selectedWishListCategory = widget.selectedWishListCategory;
     _selectedSortBy = widget.selectedSortBy;
@@ -2771,84 +2786,86 @@ class _FilterScreenState extends State<FilterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewPadding.bottom;
+
     return SafeArea(
       child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-        height: MediaQuery.of(context).size.height * 0.75,
+        height: MediaQuery.of(context).size.height * 0.82,
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Filters',
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      shape: BoxShape.circle,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Filters',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                        letterSpacing: -0.3,
+                      ),
                     ),
-                    child: Icon(Icons.close, color: Colors.grey.shade700),
                   ),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
+                  if (_activeFilterCount > 0)
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _accent.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '$_activeFilterCount active',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _accent,
+                        ),
+                      ),
+                    ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.close_rounded, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 20),
             Expanded(
               child: ListView(
-                padding: EdgeInsets.only(
-                  bottom: 120 + MediaQuery.of(context).viewPadding.bottom,
-                ),
+                padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + bottomInset),
                 children: [
+                  _buildBarterOnlyFilter(),
+                  const SizedBox(height: 14),
                   _buildFilterSection(
-                    title: 'Sort By',
-                    options: _sortOptions,
-                    selectedValue: _selectedSortBy,
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _selectedSortBy = value);
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  _buildFilterSection(
-                    title: 'Trade Type',
-                    options: _tradeTypes,
-                    selectedValue: _selectedTradeType,
-                    onChanged: (value) {
-                      setState(() => _selectedTradeType = value);
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  _buildFilterSection(
-                    title: 'Post Type',
+                    icon: Icons.article_outlined,
+                    title: 'Post type',
                     options: _postTypes,
                     selectedValue: _selectedPostType,
                     onChanged: (value) {
                       setState(() => _selectedPostType = value);
                     },
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 14),
                   _buildFilterSection(
+                    icon: Icons.category_outlined,
                     title: 'Category',
                     options: widget.mainCategories
                         .map((category) => category['name'] ?? '')
@@ -2876,99 +2893,151 @@ class _FilterScreenState extends State<FilterScreen> {
                   ),
                   if (widget.isLoadingCategories)
                     const Padding(
-                      padding: EdgeInsets.only(top: 16, bottom: 20),
+                      padding: EdgeInsets.symmetric(vertical: 20),
                       child: Center(
-                        child: CircularProgressIndicator(color: Colors.blue),
+                        child: CircularProgressIndicator(
+                          color: _accent,
+                          strokeWidth: 2.5,
+                        ),
                       ),
                     ),
                   if (!widget.isLoadingCategories &&
                       widget.mainCategories.isEmpty)
                     Padding(
-                      padding: const EdgeInsets.only(top: 16, bottom: 20),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Unable to load categories',
-                              style: TextStyle(color: Colors.grey.shade600),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: _surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: _border),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Unable to load categories',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 14,
+                                ),
+                              ),
                             ),
-                          ),
-                          TextButton(
-                            onPressed: widget.onRetryLoadCategories,
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.blue,
+                            TextButton(
+                              onPressed: widget.onRetryLoadCategories,
+                              style: TextButton.styleFrom(
+                                foregroundColor: _accent,
+                              ),
+                              child: const Text('Retry'),
                             ),
-                            child: const Text('Retry'),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  if (_selectedCategory != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 24),
-                      child: _buildFilterSection(
-                        title: 'Subcategory',
-                        options:
+                  if (_selectedCategory != null) ...[
+                    const SizedBox(height: 14),
+                    _buildFilterSection(
+                      icon: Icons.subdirectory_arrow_right_rounded,
+                      title: 'Subcategory',
+                      options:
+                          (widget.subCategoriesByMain[_selectedCategory] ??
+                                  const <Map<String, String>>[])
+                              .map((subCategory) => subCategory['name'] ?? '')
+                              .where((name) => name.isNotEmpty)
+                              .toList(),
+                      selectedValue: _selectedWishListCategory,
+                      onChanged: (value) {
+                        final selectedSub =
                             (widget.subCategoriesByMain[_selectedCategory] ??
                                     const <Map<String, String>>[])
-                                .map((subCategory) => subCategory['name'] ?? '')
-                                .where((name) => name.isNotEmpty)
-                                .toList(),
-                        selectedValue: _selectedWishListCategory,
-                        onChanged: (value) {
-                          final selectedSub =
-                              (widget.subCategoriesByMain[_selectedCategory] ??
-                                      const <Map<String, String>>[])
-                                  .firstWhere(
-                                    (subCategory) =>
-                                        subCategory['name'] == value,
-                                    orElse: () => {},
-                                  );
-                          setState(() {
-                            _selectedWishListCategory = selectedSub['id'];
-                          });
-                        },
-                        optionLabelBuilder: (value) => value,
-                        optionSelectedByValue: (value) {
-                          final selectedSub =
-                              (widget.subCategoriesByMain[_selectedCategory] ??
-                                      const <Map<String, String>>[])
-                                  .firstWhere(
-                                    (subCategory) =>
-                                        subCategory['id'] ==
-                                        _selectedWishListCategory,
-                                    orElse: () => {},
-                                  );
-                          return selectedSub['name'] == value;
-                        },
-                      ),
+                                .firstWhere(
+                                  (subCategory) => subCategory['name'] == value,
+                                  orElse: () => {},
+                                );
+                        setState(() {
+                          _selectedWishListCategory = selectedSub['id'];
+                        });
+                      },
+                      optionLabelBuilder: (value) => value,
+                      optionSelectedByValue: (value) {
+                        final selectedSub =
+                            (widget.subCategoriesByMain[_selectedCategory] ??
+                                    const <Map<String, String>>[])
+                                .firstWhere(
+                                  (subCategory) =>
+                                      subCategory['id'] ==
+                                      _selectedWishListCategory,
+                                  orElse: () => {},
+                                );
+                        return selectedSub['name'] == value;
+                      },
                     ),
-                  const SizedBox(height: 24),
+                  ],
+                  const SizedBox(height: 14),
                   _buildRadiusFilter(),
+                  const SizedBox(height: 14),
+                  _buildFilterSection(
+                    icon: Icons.sort_rounded,
+                    title: 'Sort by',
+                    options: _sortOptions,
+                    selectedValue: _selectedSortBy,
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _selectedSortBy = value);
+                    },
+                  ),
                 ],
               ),
             ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _clearFilters,
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          side: BorderSide(color: Colors.grey.shade300),
+            Container(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + bottomInset),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: _border)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 12,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _clearFilters,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Text('Clear All'),
+                        side: const BorderSide(color: _border),
+                        foregroundColor: const Color(0xFF374151),
+                      ),
+                      child: const Text(
+                        'Clear all',
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF2E5BFF), Color(0xFF4A7AFF)],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _accent.withOpacity(0.28),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
                       child: ElevatedButton(
                         onPressed: () {
                           widget.onApply(
@@ -2982,19 +3051,23 @@ class _FilterScreenState extends State<FilterScreen> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 15),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                          backgroundColor: Colors.blue,
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
                           foregroundColor: Colors.white,
                           elevation: 0,
                         ),
-                        child: const Text('Apply'),
+                        child: const Text(
+                          'Apply filters',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -3003,7 +3076,70 @@ class _FilterScreenState extends State<FilterScreen> {
     );
   }
 
+  Widget _buildBarterOnlyFilter() {
+    return _buildFilterCard(
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _accent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.swap_horiz_rounded, color: _accent, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Barter only',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _barterOnly
+                      ? 'Open-for-barter listings'
+                      : 'All listing types',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: _barterOnly,
+            activeColor: _accent,
+            onChanged: (enabled) {
+              setState(() {
+                _selectedTradeType = enabled ? 'Barter' : null;
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterCard({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+      ),
+      child: child,
+    );
+  }
+
   Widget _buildFilterSection({
+    required IconData icon,
     required String title,
     required List<String> options,
     required String? selectedValue,
@@ -3011,163 +3147,186 @@ class _FilterScreenState extends State<FilterScreen> {
     String Function(String value)? optionLabelBuilder,
     bool Function(String value)? optionSelectedByValue,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            return Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: options.map((option) {
-                final isSelected =
-                    optionSelectedByValue?.call(option) ??
-                    selectedValue == option;
-                final label = optionLabelBuilder?.call(option) ?? option;
-                final isLongLabel = label.length > 24;
+    if (options.isEmpty) return const SizedBox.shrink();
 
-                return ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: isLongLabel
-                        ? constraints.maxWidth
-                        : constraints.maxWidth * 0.9,
-                  ),
-                  child: FilterChip(
-                    label: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      softWrap: false,
-                      style: TextStyle(
-                        color: isSelected ? Colors.blue : Colors.grey.shade700,
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.normal,
+    return _buildFilterCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20, color: _accent),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF111827),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: options.map((option) {
+                  final isSelected =
+                      optionSelectedByValue?.call(option) ??
+                      selectedValue == option;
+                  final label = optionLabelBuilder?.call(option) ?? option;
+                  final isLongLabel = label.length > 22;
+
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: isLongLabel
+                          ? constraints.maxWidth
+                          : constraints.maxWidth,
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => onChanged(isSelected ? null : option),
+                        borderRadius: BorderRadius.circular(24),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? _accent.withOpacity(0.12)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: isSelected ? _accent : _border,
+                              width: isSelected ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isSelected) ...[
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  size: 16,
+                                  color: _accent,
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              Flexible(
+                                child: Text(
+                                  label,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                    color: isSelected
+                                        ? _accent
+                                        : const Color(0xFF4B5563),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      onChanged(selected ? option : null);
-                    },
-                    selectedColor: Colors.blue.shade50,
-                    checkmarkColor: Colors.blue,
-                    backgroundColor: Colors.grey.shade50,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                      side: BorderSide(
-                        color: isSelected ? Colors.blue : Colors.grey.shade200,
-                        width: isSelected ? 1.5 : 1,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            );
-          },
-        ),
-      ],
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildRadiusFilter() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Distance Radius',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Column(
+    return _buildFilterCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Enable radius filter',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  Switch(
-                    value: _isRadiusFilterEnabled,
-                    onChanged: (value) {
-                      setState(() => _isRadiusFilterEnabled = value);
-                    },
-                    activeColor: Colors.blue,
-                  ),
-                ],
+              const Icon(Icons.place_outlined, size: 20, color: _accent),
+              const SizedBox(width: 8),
+              const Text(
+                'Distance',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF111827),
+                ),
               ),
-              if (!_isRadiusFilterEnabled)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Showing all posts regardless of distance',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
-              if (_isRadiusFilterEnabled) ...[
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Within ${_selectedRadius.toStringAsFixed(0)} km',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${_selectedRadius.toStringAsFixed(0)} km',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blue.shade700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                Slider(
-                  value: _selectedRadius,
-                  min: 1,
-                  max: 50,
-                  divisions: 49,
-                  label: '${_selectedRadius.toStringAsFixed(0)} km',
-                  onChanged: (value) {
-                    setState(() => _selectedRadius = value);
-                  },
-                  activeColor: Colors.blue,
-                  inactiveColor: Colors.grey.shade300,
-                ),
-              ],
+              const Spacer(),
+              Switch.adaptive(
+                value: _isRadiusFilterEnabled,
+                activeColor: _accent,
+                onChanged: (value) {
+                  setState(() => _isRadiusFilterEnabled = value);
+                },
+              ),
             ],
           ),
-        ),
-      ],
+          Text(
+            _isRadiusFilterEnabled
+                ? 'Within ${_selectedRadius.toStringAsFixed(0)} km of your location'
+                : 'Show posts from any distance',
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+          ),
+          if (_isRadiusFilterEnabled) ...[
+            const SizedBox(height: 12),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: _accent,
+                inactiveTrackColor: _border,
+                thumbColor: _accent,
+                overlayColor: _accent.withOpacity(0.12),
+              ),
+              child: Slider(
+                value: _selectedRadius,
+                min: 1,
+                max: 50,
+                divisions: 49,
+                label: '${_selectedRadius.toStringAsFixed(0)} km',
+                onChanged: (value) {
+                  setState(() => _selectedRadius = value);
+                },
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('1 km', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _accent.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_selectedRadius.toStringAsFixed(0)} km',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _accent,
+                    ),
+                  ),
+                ),
+                Text('50 km', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

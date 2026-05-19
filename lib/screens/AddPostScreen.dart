@@ -97,6 +97,255 @@ class _AddPostScreenState extends State<AddPostScreen> {
       _selectedOption == 1 &&
       (_postType == 'Product' || _postType == 'Service');
 
+  static const Color _accent = Color(0xFF2E5BFF);
+  static const Color _bg = Color(0xFFF8F9FF);
+  static const Color _cardBorder = Color(0xFFE6ECFF);
+  static const Color _surface = Color(0xFFF4F6FC);
+
+  InputDecoration _inputDecoration({
+    String? hintText,
+    String? errorText,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+    String? prefixText,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      errorText: errorText,
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      prefixText: prefixText,
+      filled: true,
+      fillColor: Colors.white,
+      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _cardBorder),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _accent, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.red),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.red, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    );
+  }
+
+  Widget _fieldLabel(String text, {bool required = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF374151),
+            ),
+          ),
+          if (required)
+            const Text(
+              ' *',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionCard({
+    required String title,
+    required Widget child,
+    IconData? icon,
+    String? subtitle,
+  }) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 20, color: _accent),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _listingModeChips() {
+    return Row(
+      children: [
+        _listingModeChip(
+          option: 1,
+          label: 'List item',
+          icon: Icons.storefront_outlined,
+        ),
+        const SizedBox(width: 8),
+        _listingModeChip(
+          option: 2,
+          label: 'Looking for',
+          icon: Icons.search_outlined,
+        ),
+      ],
+    );
+  }
+
+  Widget _listingModeChip({
+    required int option,
+    required String label,
+    required IconData icon,
+  }) {
+    final selected = _selectedOption == option;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _onOptionSelected(option),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          decoration: BoxDecoration(
+            color: selected ? _accent.withOpacity(0.1) : _surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? _accent : _cardBorder,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: selected ? _accent : const Color(0xFF6B7280),
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? _accent : const Color(0xFF4B5563),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _postTypeChips() {
+    return Row(
+      children: ['Product', 'Service'].map((type) {
+        final selected = _postType == type;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: type == 'Product' ? 8 : 0),
+            child: GestureDetector(
+              onTap: () => _onCreatePostTypeChanged(type),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: selected ? _accent.withOpacity(0.1) : _surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected ? _accent : _cardBorder,
+                    width: selected ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      type == 'Product'
+                          ? Icons.inventory_2_outlined
+                          : Icons.handyman_outlined,
+                      size: 18,
+                      color: selected ? _accent : const Color(0xFF6B7280),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      type,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: selected ? _accent : const Color(0xFF4B5563),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -467,74 +716,50 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
   // Image upload section
   Widget _buildImageUploadSection() {
+    final hasError =
+        _isImageRequiredForPost &&
+        _showImageValidationError &&
+        _selectedImages.isEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              'Upload Photos',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color:
-                    _isImageRequiredForPost &&
-                        _showImageValidationError &&
-                        _selectedImages.isEmpty
-                    ? Colors.red
-                    : Colors.black,
-              ),
-            ),
-            if (_isImageRequiredForPost)
-              Text(
-                ' *',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.red,
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // Selected Images Grid
         if (_selectedImages.isNotEmpty)
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
               childAspectRatio: 1,
             ),
             itemCount: _selectedImages.length,
             itemBuilder: (context, index) {
               return Stack(
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      image: DecorationImage(
-                        image: FileImage(_selectedImages[index]),
-                        fit: BoxFit.cover,
-                      ),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(
+                      _selectedImages[index],
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
                     ),
                   ),
                   Positioned(
-                    top: 4,
-                    right: 4,
+                    top: 6,
+                    right: 6,
                     child: GestureDetector(
                       onTap: () => _removeImage(index),
                       child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.55),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          Icons.close,
+                          Icons.close_rounded,
                           size: 16,
                           color: Colors.white,
                         ),
@@ -545,61 +770,52 @@ class _AddPostScreenState extends State<AddPostScreen> {
               );
             },
           ),
-
-        if (_selectedImages.isNotEmpty) const SizedBox(height: 8),
-
-        // Upload Button
+        if (_selectedImages.isNotEmpty) const SizedBox(height: 12),
         GestureDetector(
           onTap: _showImageSourceDialog,
           child: Container(
             width: double.infinity,
-            constraints: const BoxConstraints(minHeight: 120),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            constraints: const BoxConstraints(minHeight: 110),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
+              color: _surface,
               border: Border.all(
-                color:
-                    _isImageRequiredForPost &&
-                        _showImageValidationError &&
-                        _selectedImages.isEmpty
-                    ? Colors.red
-                    : Colors.grey.shade300,
-                width:
-                    _isImageRequiredForPost &&
-                        _showImageValidationError &&
-                        _selectedImages.isEmpty
-                    ? 2
-                    : 1.5,
+                color: hasError ? Colors.red : _cardBorder,
+                width: hasError ? 1.5 : 1,
               ),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.cloud_upload, size: 40, color: Colors.grey),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.add_photo_alternate_outlined,
+                  size: 36,
+                  color: hasError ? Colors.red : _accent,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _selectedImages.isEmpty
+                      ? 'Tap to add photos'
+                      : 'Add more photos',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: hasError ? Colors.red : const Color(0xFF374151),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_selectedImages.length}/$_maxAllowedImages uploaded',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+                if (hasError) ...[
                   const SizedBox(height: 8),
-                  const Text(
-                    'Upload your Images',
-                    style: TextStyle(color: Colors.grey),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 4),
                   Text(
-                    'Tap to upload (max $_maxAllowedImages)',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                    textAlign: TextAlign.center,
+                    'At least $_minRequiredProductImages image required',
+                    style: const TextStyle(fontSize: 12, color: Colors.red),
                   ),
-                  if (_isImageRequiredForPost) const SizedBox(height: 8),
-                  if (_isImageRequiredForPost &&
-                      _showImageValidationError &&
-                      _selectedImages.isEmpty)
-                    Text(
-                      '*At least $_minRequiredProductImages image required',
-                      style: const TextStyle(fontSize: 11, color: Colors.red),
-                      textAlign: TextAlign.center,
-                    ),
                 ],
-              ),
+              ],
             ),
           ),
         ),
@@ -612,49 +828,42 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Upload Photos (Optional)',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 8),
-
-        // Selected Images Grid
         if (_selectedImages.isNotEmpty)
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
               childAspectRatio: 1,
             ),
             itemCount: _selectedImages.length,
             itemBuilder: (context, index) {
               return Stack(
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      image: DecorationImage(
-                        image: FileImage(_selectedImages[index]),
-                        fit: BoxFit.cover,
-                      ),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(
+                      _selectedImages[index],
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
                     ),
                   ),
                   Positioned(
-                    top: 4,
-                    right: 4,
+                    top: 6,
+                    right: 6,
                     child: GestureDetector(
                       onTap: () => _removeImage(index),
                       child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.55),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          Icons.close,
+                          Icons.close_rounded,
                           size: 16,
                           color: Colors.white,
                         ),
@@ -665,35 +874,38 @@ class _AddPostScreenState extends State<AddPostScreen> {
               );
             },
           ),
-
-        if (_selectedImages.isNotEmpty) const SizedBox(height: 8),
-
-        // Upload Button
+        if (_selectedImages.isNotEmpty) const SizedBox(height: 12),
         GestureDetector(
           onTap: _showImageSourceDialog,
           child: Container(
-            height: 120,
+            height: 110,
             width: double.infinity,
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
+              color: _surface,
+              border: Border.all(color: _cardBorder),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.cloud_upload, size: 40, color: Colors.grey),
+                const Icon(
+                  Icons.add_photo_alternate_outlined,
+                  size: 36,
+                  color: _accent,
+                ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Add reference images (optional)',
-                  style: TextStyle(color: Colors.grey),
-                ),
-                if (_selectedImages.isEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Tap to upload (max $_maxAllowedImages)',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  'Add reference images',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF374151),
                   ),
-                ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_selectedImages.length}/$_maxAllowedImages',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
               ],
             ),
           ),
@@ -707,30 +919,11 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Text(
-              'Category',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // Main Category Dropdown
         if (_isLoadingCategories)
           const Center(
             child: Padding(
               padding: EdgeInsets.all(16.0),
-              child: CircularProgressIndicator(),
+              child: CircularProgressIndicator(color: _accent),
             ),
           )
         else if (_categoryError != null)
@@ -783,12 +976,12 @@ class _AddPostScreenState extends State<AddPostScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Main Category Dropdown
+              _fieldLabel('Main category', required: true),
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: _cardBorder),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: DropdownButtonFormField<Map<String, dynamic>>(
                   initialValue: _selectedMainCategoryId != null
@@ -845,17 +1038,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
               // Sub Category Dropdown (shown only after main category is selected)
               if (_selectedMainCategoryId != null) ...[
-                const Text(
-                  'Sub Category',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 8),
-
+                const SizedBox(height: 14),
+                _fieldLabel('Sub category', required: true),
                 if (_isLoadingSubCategories)
                   const Center(
                     child: Padding(
                       padding: EdgeInsets.all(16.0),
-                      child: CircularProgressIndicator(),
+                      child: CircularProgressIndicator(color: _accent),
                     ),
                   )
                 else if (_subCategories.isEmpty)
@@ -876,8 +1065,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: _cardBorder),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: DropdownButtonFormField<Map<String, dynamic>>(
                       initialValue: _selectedSubCategoryId != null
@@ -945,29 +1134,12 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              _postType == 'Product'
-                  ? 'Enter Product Location'
-                  : 'Enter Service Location',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
+        _fieldLabel('Address', required: true),
         Container(
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(8),
+            color: Colors.white,
+            border: Border.all(color: _cardBorder),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: GooglePlaceAutoCompleteTextField(
             textEditingController: _locationController,
@@ -981,18 +1153,21 @@ class _AddPostScreenState extends State<AddPostScreen> {
               hintText: 'Type location (min 4 characters) or use GPS icon',
               border: InputBorder.none,
               errorText: _locationValidationError,
-              prefixIcon: const Icon(Icons.location_on, color: Colors.blue),
+              prefixIcon: const Icon(Icons.location_on_outlined, color: _accent),
               suffixIcon: _isGettingLocation
                   ? const Padding(
                       padding: EdgeInsets.all(12),
                       child: SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _accent,
+                        ),
                       ),
                     )
                   : IconButton(
-                      icon: const Icon(Icons.my_location, color: Colors.blue),
+                      icon: const Icon(Icons.my_location, color: _accent),
                       onPressed: _getCurrentLocation,
                       tooltip: 'Get current location',
                     ),
@@ -1188,39 +1363,23 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Timeline Post Expiry',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 8),
+        _fieldLabel('Expires after'),
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: Colors.grey.shade400, width: 1.2),
-            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _cardBorder),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: DropdownButtonFormField<String>(
             initialValue: _selectedExpiryUnit,
             dropdownColor: Colors.white,
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               filled: true,
               fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
             items: _expiryUnits
                 .map(
@@ -1248,7 +1407,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 });
               }
             },
-            decoration: InputDecoration(
+            decoration: _inputDecoration(
               hintText: _selectedExpiryUnit == 'Minutes'
                   ? 'Enter minutes'
                   : _selectedExpiryUnit == 'Hours'
@@ -1256,22 +1415,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
                   : _selectedExpiryUnit == 'Days'
                   ? 'Enter days'
                   : 'Enter months',
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(
-                  color: Color(0xFF2E5BFF),
-                  width: 1.5,
-                ),
-              ),
               errorText: _expiryValidationError,
             ),
           ),
@@ -1285,23 +1428,10 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              _selectedOption == 1 ? 'Price' : 'Will Pay Amount',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
-              ),
-            ),
-          ],
+        _fieldLabel(
+          _selectedOption == 1 ? 'Amount' : 'Willing to pay',
+          required: true,
         ),
-        const SizedBox(height: 8),
         TextField(
           controller: _selectedOption == 1
               ? _priceController
@@ -1311,35 +1441,17 @@ class _AddPostScreenState extends State<AddPostScreen> {
           ],
           onChanged: (_) {
             if (_priceValidationError != null) {
-              setState(() {
-                _priceValidationError = null;
-              });
+              setState(() => _priceValidationError = null);
             }
           },
-          decoration: InputDecoration(
+          decoration: _inputDecoration(
             hintText: _selectedOption == 1
                 ? _postType == 'Product'
                       ? 'Enter product price'
                       : 'Enter service price'
-                : 'Enter amount you are willing to pay',
+                : 'Enter your budget',
             prefixText: '\$ ',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: Color(0xFF2E5BFF),
-                width: 1.5,
-              ),
-            ),
             errorText: _priceValidationError,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
           ),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
         ),
@@ -1348,246 +1460,233 @@ class _AddPostScreenState extends State<AddPostScreen> {
   }
 
   Widget _buildBarterStatusField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Barter Status',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _barterAllowed ? _accent.withOpacity(0.35) : _cardBorder,
         ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<bool>(
-          value: _barterAllowed,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: _accent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
-            focusedBorder: const OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(8)),
-              borderSide: BorderSide(color: Color(0xFF2E5BFF), width: 2),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 10,
+            child: const Icon(Icons.swap_horiz_rounded, color: _accent, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Open for barter',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                Text(
+                  _barterAllowed
+                      ? 'Others can send barter offers'
+                      : 'Barter offers are disabled',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
             ),
           ),
-          items: const [
-            DropdownMenuItem<bool>(value: false, child: Text('Not Allowed')),
-            DropdownMenuItem<bool>(value: true, child: Text('Allowed')),
-          ],
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() {
-              _barterAllowed = value;
-            });
-          },
-        ),
-      ],
+          Switch.adaptive(
+            value: _barterAllowed,
+            activeColor: _accent,
+            onChanged: (value) {
+              setState(() => _barterAllowed = value);
+            },
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildClubbingOptionField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Clubbing Option',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: SwitchListTile(
-            value: _canBeClubbed,
-            onChanged: (value) {
-              setState(() {
-                _canBeClubbed = value;
-              });
-            },
-            title: const Text(
-              'Can be clubbed with other seller items',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-            ),
-            subtitle: const Text(
-              'If enabled, buyers can add your other items to a bundle offer.',
-              style: TextStyle(fontSize: 12),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _cardBorder),
+      ),
+      child: SwitchListTile(
+        value: _canBeClubbed,
+        activeColor: _accent,
+        onChanged: (value) => setState(() => _canBeClubbed = value),
+        title: const Text(
+          'Allow bundle offers',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF111827),
           ),
         ),
-      ],
+        subtitle: Text(
+          'Buyers can combine this item with your other listings.',
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+      ),
     );
   }
 
-  @override
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        resizeToAvoidBottomInset: true,
-        body: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 52, 16, 22),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Add Post',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+    final bottomInset = MediaQuery.of(context).viewPadding.bottom;
+
+    return Scaffold(
+      backgroundColor: _bg,
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Add Post',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _selectedOption == 1
+                              ? 'List a product or service for barter'
+                              : 'Post what you are looking for',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Scrollable Content
-              Expanded(
-                child: SingleChildScrollView(
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: EdgeInsets.only(left: 16, right: 16, bottom: 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                     
-                      //const SizedBox(height: 16),
-
-                      // _buildOptionCard(
-                      //   1,
-                      //   'Add your post in Marketplace (Product or Service).',
-                      // ),
-                      // const SizedBox(height: 12),
-                      // _buildOptionCard(
-                      //   2,
-                      //   'Looking for a service in Marketplace.',
-                      // ),
-                      //const SizedBox(height: 24),
-
-                      if (_selectedOption == 1) _buildStep1(),
-                      if (_selectedOption == 2) _buildLookingForStep1(),
-                    ],
                   ),
-                ),
-              ),
-
-              // Bottom Buttons
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withValues(alpha: 0.2),
-                      blurRadius: 10,
-                      offset: const Offset(0, -3),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: _cardBorder),
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: Color(0xFF6B7280),
+                      ),
                     ),
-                  ],
-                ),
-                child: Row(
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: const Color(0xFFEFF4FF),
-                          foregroundColor: const Color(0xFF1F3D7A),
-                          side: const BorderSide(
-                            color: Color(0xFF9AB4FF),
-                            width: 1.4,
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ),
+                    _sectionCard(
+                      icon: Icons.post_add_outlined,
+                      title: 'What do you want to do?',
+                      child: _listingModeChips(),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _isSubmitting ? null : _validateAndSubmit,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2E5BFF),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: _isSubmitting
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'Post',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                      ),
-                    ),
+                    if (_selectedOption == 1) _buildStep1(),
+                    if (_selectedOption == 2) _buildLookingForStep1(),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOptionCard(int option, String description) {
-    return Card(
-      color: Colors.white,
-      surfaceTintColor: Colors.white,
-      elevation: 0,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: _selectedOption == option
-              ? const Color(0xFF2E5BFF)
-              : Colors.grey.shade300,
-          width: 2,
-        ),
-      ),
-      child: InkWell(
-        onTap: () => _onOptionSelected(option),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(description, style: const TextStyle(fontSize: 14)),
+            ),
+            Container(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + bottomInset),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 12,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
               ),
-            ],
-          ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
+                        foregroundColor: const Color(0xFF374151),
+                        side: const BorderSide(color: Color(0xFFE5E7EB)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: _isSubmitting ? null : _validateAndSubmit,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
+                        backgroundColor: _accent,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Publish post',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1597,189 +1696,92 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // const Text(
-        //   'Create a New Post',
-        //   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        // ),
-        const SizedBox(height: 24),
-
-        const Text(
-          'Post Type',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-
-        const SizedBox(height: 10),
-        DropdownButtonFormField<String>(
-          initialValue: _postType,
-          items: const [
-            DropdownMenuItem(value: 'Product', child: Text('Product')),
-            DropdownMenuItem(value: 'Service', child: Text('Service')),
-          ],
-          onChanged: (value) {
-            if (value == null) return;
-            _onCreatePostTypeChanged(value);
-          },
-          decoration: InputDecoration(
-            hintText: 'Select post type',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-            ),
-            focusedBorder: const OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(8)),
-              borderSide: BorderSide(color: Color(0xFF2E5BFF), width: 2),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 10,
-            ),
+        _sectionCard(
+          icon: Icons.edit_note_outlined,
+          title: 'Basic details',
+          subtitle: 'What are you listing?',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldLabel('Post type'),
+              _postTypeChips(),
+              const SizedBox(height: 16),
+              _fieldLabel('Title', required: true),
+              TextField(
+                controller: _titleController,
+                onChanged: (_) {
+                  if (_titleValidationError != null) {
+                    setState(() => _titleValidationError = null);
+                  }
+                },
+                decoration: _inputDecoration(
+                  hintText: _postType == 'Product'
+                      ? 'Enter product title'
+                      : 'Enter service title',
+                  errorText: _titleValidationError,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _fieldLabel('Description', required: true),
+              TextField(
+                controller: _descriptionController,
+                maxLines: 4,
+                onChanged: (_) {
+                  if (_descriptionValidationError != null) {
+                    setState(() => _descriptionValidationError = null);
+                  }
+                },
+                decoration: _inputDecoration(
+                  hintText: _postType == 'Product'
+                      ? 'Describe your product'
+                      : 'Describe your service',
+                  errorText: _descriptionValidationError,
+                ),
+              ),
+            ],
           ),
         ),
-
-        const SizedBox(height: 24),
-
-        // Title
-        Row(
-          children: [
-            const Text(
-              'Title',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
-              ),
-            ),
-          ],
+        _sectionCard(
+          icon: Icons.category_outlined,
+          title: 'Category',
+          subtitle: 'Help buyers find your listing',
+          child: _buildCategorySelection(),
         ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _titleController,
-          onChanged: (_) {
-            if (_titleValidationError != null) {
-              setState(() {
-                _titleValidationError = null;
-              });
-            }
-          },
-          decoration: InputDecoration(
-            hintText: _postType == 'Product'
-                ? 'Enter product title'
-                : 'Enter service title',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: Color(0xFF2E5BFF),
-                width: 1.5,
-              ),
-            ),
-            errorText: _titleValidationError,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
+        _sectionCard(
+          icon: Icons.photo_library_outlined,
+          title: 'Photos',
+          subtitle: 'Up to $_maxAllowedImages images',
+          child: _buildImageUploadSection(),
+        ),
+        _sectionCard(
+          icon: Icons.place_outlined,
+          title: 'Location',
+          subtitle: 'Where is this available?',
+          child: _buildLocationField(),
+        ),
+        _sectionCard(
+          icon: Icons.schedule_outlined,
+          title: 'Listing expiry',
+          child: _buildTimelineExpirySection(),
+        ),
+        _sectionCard(
+          icon: Icons.payments_outlined,
+          title: 'Pricing',
+          child: _buildPriceField(),
+        ),
+        _sectionCard(
+          icon: Icons.swap_horiz_rounded,
+          title: 'Barter & bundles',
+          child: Column(
+            children: [
+              _buildBarterStatusField(),
+              if (_postType == 'Product') ...[
+                const SizedBox(height: 12),
+                _buildClubbingOptionField(),
+              ],
+            ],
           ),
         ),
-
-        const SizedBox(height: 24),
-
-        // Category - Two level selection
-        _buildCategorySelection(),
-
-        const SizedBox(height: 24),
-
-        // Description
-        Row(
-          children: [
-            const Text(
-              'Description',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _descriptionController,
-          maxLines: 4,
-          onChanged: (_) {
-            if (_descriptionValidationError != null) {
-              setState(() {
-                _descriptionValidationError = null;
-              });
-            }
-          },
-          decoration: InputDecoration(
-            hintText: _postType == 'Product'
-                ? 'Describe your product'
-                : 'Describe your service',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: Color(0xFF2E5BFF),
-                width: 1.5,
-              ),
-            ),
-            errorText: _descriptionValidationError,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 24),
-
-        // Upload Photos
-        _buildImageUploadSection(),
-
-        if (_selectedOption == 1) ...[
-          const SizedBox(height: 24),
-
-          // Location with current location feature
-          _buildLocationField(),
-        ],
-
-        if (_selectedOption == 1) ...[
-          const SizedBox(height: 24),
-          _buildTimelineExpirySection(),
-        ],
-
-        const SizedBox(height: 24),
-
-        // Price
-        _buildPriceField(),
-
-        const SizedBox(height: 24),
-
-        // Barter status
-        _buildBarterStatusField(),
-
-        if (_selectedOption == 1 && _postType == 'Product') ...[
-          const SizedBox(height: 24),
-          _buildClubbingOptionField(),
-        ],
       ],
     );
   }
@@ -1788,149 +1790,98 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Looking For',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 24),
-
-        const Text(
-          'Post Type: Service',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-
-        const SizedBox(height: 24),
-
-        // Title
-        Row(
-          children: [
-            const Text(
-              'Title',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
+        _sectionCard(
+          icon: Icons.search_outlined,
+          title: 'Looking for',
+          subtitle: 'Service request',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: _accent.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _accent.withOpacity(0.2)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.handyman_outlined, size: 18, color: _accent),
+                    SizedBox(width: 8),
+                    Text(
+                      'Post type: Service',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: _accent,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _titleController,
-          onChanged: (_) {
-            if (_titleValidationError != null) {
-              setState(() {
-                _titleValidationError = null;
-              });
-            }
-          },
-          decoration: InputDecoration(
-            hintText: 'What are you looking for?',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: Color(0xFF2E5BFF),
-                width: 1.5,
+              const SizedBox(height: 16),
+              _fieldLabel('Title', required: true),
+              TextField(
+                controller: _titleController,
+                onChanged: (_) {
+                  if (_titleValidationError != null) {
+                    setState(() => _titleValidationError = null);
+                  }
+                },
+                decoration: _inputDecoration(
+                  hintText: 'What are you looking for?',
+                  errorText: _titleValidationError,
+                ),
               ),
-            ),
-            errorText: _titleValidationError,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
+              const SizedBox(height: 16),
+              _fieldLabel('Description', required: true),
+              TextField(
+                controller: _descriptionController,
+                maxLines: 4,
+                onChanged: (_) {
+                  if (_descriptionValidationError != null) {
+                    setState(() => _descriptionValidationError = null);
+                  }
+                },
+                decoration: _inputDecoration(
+                  hintText: 'Describe what you need',
+                  errorText: _descriptionValidationError,
+                ),
+              ),
+            ],
           ),
         ),
-
-        const SizedBox(height: 24),
-
-        // Category - Two level selection
-        _buildCategorySelection(),
-
-        const SizedBox(height: 24),
-
-        // Description
-        Row(
-          children: [
-            const Text(
-              'Description',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
-              ),
-            ),
-          ],
+        _sectionCard(
+          icon: Icons.category_outlined,
+          title: 'Category',
+          child: _buildCategorySelection(),
         ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _descriptionController,
-          maxLines: 4,
-          onChanged: (_) {
-            if (_descriptionValidationError != null) {
-              setState(() {
-                _descriptionValidationError = null;
-              });
-            }
-          },
-          decoration: InputDecoration(
-            hintText: 'Describe what you are looking for',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: Color(0xFF2E5BFF),
-                width: 1.5,
-              ),
-            ),
-            errorText: _descriptionValidationError,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-          ),
+        _sectionCard(
+          icon: Icons.photo_library_outlined,
+          title: 'Reference photos',
+          subtitle: 'Optional',
+          child: _buildLookingForImageUploadSection(),
         ),
-
-        const SizedBox(height: 24),
-
-        // Upload Photos
-        _buildLookingForImageUploadSection(),
-
-        const SizedBox(height: 24),
-
-        // Location
-        _buildLocationField(),
-
-        const SizedBox(height: 24),
-
-        // Will Pay Amount
-        _buildPriceField(),
-
-        const SizedBox(height: 24),
-
-        // Barter status
-        _buildBarterStatusField(),
-
-        const SizedBox(height: 24),
-
-        // Timeline expiry
-        _buildTimelineExpirySection(),
+        _sectionCard(
+          icon: Icons.place_outlined,
+          title: 'Location',
+          child: _buildLocationField(),
+        ),
+        _sectionCard(
+          icon: Icons.payments_outlined,
+          title: 'Budget',
+          child: _buildPriceField(),
+        ),
+        _sectionCard(
+          icon: Icons.swap_horiz_rounded,
+          title: 'Barter',
+          child: _buildBarterStatusField(),
+        ),
+        _sectionCard(
+          icon: Icons.schedule_outlined,
+          title: 'Request expiry',
+          child: _buildTimelineExpirySection(),
+        ),
       ],
     );
   }
