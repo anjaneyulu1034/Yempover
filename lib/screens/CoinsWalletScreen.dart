@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:YemPover_app/screens/AddCoinsScreen.dart';
+import 'package:YemPover_app/services/coin_service.dart';
 
 class CoinsWalletScreen extends StatefulWidget {
   final double? requiredAmount;
@@ -10,112 +12,218 @@ class CoinsWalletScreen extends StatefulWidget {
 }
 
 class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
-  late final List<_WalletTransaction> _transactions = [
-    _WalletTransaction(
-      title: 'Coins Added',
-      subtitle: 'Order #ORD12345',
-      amount: 500,
-      dateText: 'Today, 09:30 AM',
-      type: _WalletTxnType.added,
-    ),
-    _WalletTransaction(
-      title: 'Spent on Reward',
-      subtitle: 'Amazon Gift Card',
-      amount: 300,
-      dateText: 'Yesterday, 04:20 PM',
-      type: _WalletTxnType.spent,
-    ),
-    _WalletTransaction(
-      title: 'Welcome Bonus',
-      subtitle: 'Bonus',
-      amount: 200,
-      dateText: '22 May 2024',
-      type: _WalletTxnType.reward,
-    ),
-    _WalletTransaction(
-      title: 'Coins Added',
-      subtitle: 'Order #ORD12300',
-      amount: 400,
-      dateText: '20 May 2024',
-      type: _WalletTxnType.added,
-    ),
-    _WalletTransaction(
-      title: 'Spent on Reward',
-      subtitle: 'Flipkart Voucher',
-      amount: 250,
-      dateText: '18 May 2024',
-      type: _WalletTxnType.spent,
-    ),
-    _WalletTransaction(
-      title: 'Coins Added',
-      subtitle: 'Order #ORD12250',
-      amount: 300,
-      dateText: '17 May 2024',
-      type: _WalletTxnType.added,
-    ),
-    _WalletTransaction(
-      title: 'Spent on Reward',
-      subtitle: 'Netflix Gift Card',
-      amount: 500,
-      dateText: '15 May 2024',
-      type: _WalletTxnType.spent,
-    ),
-    _WalletTransaction(
-      title: 'Coins Added',
-      subtitle: 'Order #ORD12200',
-      amount: 600,
-      dateText: '14 May 2024',
-      type: _WalletTxnType.added,
-    ),
-    _WalletTransaction(
-      title: 'Referral Bonus',
-      subtitle: 'Referral Bonus',
-      amount: 150,
-      dateText: '12 May 2024',
-      type: _WalletTxnType.reward,
-    ),
-    _WalletTransaction(
-      title: 'Spent on Reward',
-      subtitle: 'Swiggy Voucher',
-      amount: 200,
-      dateText: '10 May 2024',
-      type: _WalletTxnType.spent,
-    ),
-  ];
+  final CoinService _coinService = CoinService();
+
+  int _balance = 0;
+  String _currencyLabel = 'Barter Coins';
+  bool _isLoading = true;
+  String? _loadError;
+  bool _hasWallet = false;
+
+  final List<_WalletTransaction> _transactions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWallet();
+  }
+
+  Future<void> _loadWallet() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+
+    try {
+      final wallet = await _coinService.getWallet();
+      if (!mounted) return;
+
+      if (wallet == null) {
+        setState(() {
+          _hasWallet = false;
+          _balance = 0;
+          _currencyLabel = 'Barter Coins';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final currency = wallet['currency']?.toString();
+      setState(() {
+        _hasWallet = true;
+        _balance = CoinService.parseCoinAmount(wallet['balance']);
+        _currencyLabel = currency == 'BARTER_COIN' || currency == null
+            ? 'Barter Coins'
+            : currency.replaceAll('_', ' ');
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = e.toString().replaceFirst('Exception: ', '');
+        _isLoading = false;
+      });
+    }
+  }
+
+  _WalletTransaction _transactionFromApi(Map<String, dynamic> txn) {
+    final direction = txn['direction']?.toString().toUpperCase() ?? 'CREDIT';
+    final isCredit = direction == 'CREDIT';
+    final description =
+        txn['description']?.toString().trim() ?? 'Wallet transaction';
+
+    return _WalletTransaction(
+      title: isCredit ? 'Coins Added' : 'Coins Spent',
+      subtitle: description,
+      amount: CoinService.parseCoinAmount(txn['amount']),
+      dateText: _formatTransactionDate(txn['createdAt']?.toString()),
+      type: isCredit ? _WalletTxnType.added : _WalletTxnType.spent,
+    );
+  }
+
+  String _formatTransactionDate(String? isoDate) {
+    if (isoDate == null || isoDate.isEmpty) return 'Just now';
+    try {
+      final date = DateTime.parse(isoDate).toLocal();
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final txnDay = DateTime(date.year, date.month, date.day);
+      final hour = date.hour > 12
+          ? date.hour - 12
+          : (date.hour == 0 ? 12 : date.hour);
+      final period = date.hour >= 12 ? 'PM' : 'AM';
+      final time =
+          '${hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')} $period';
+      if (txnDay == today) return 'Today, $time';
+      if (txnDay == today.subtract(const Duration(days: 1))) {
+        return 'Yesterday, $time';
+      }
+      return '${date.day}/${date.month}/${date.year}, $time';
+    } catch (_) {
+      return 'Just now';
+    }
+  }
+
+  Future<void> _openAddCoins() async {
+    final result = await Navigator.of(context).push<AddCoinsResult>(
+      MaterialPageRoute(builder: (_) => const AddCoinsScreen()),
+    );
+
+    if (result == null || !mounted) return;
+
+    setState(() {
+      _transactions.insert(0, _transactionFromApi(result.transaction));
+    });
+    await _loadWallet();
+  }
 
   @override
   Widget build(BuildContext context) {
-    const totalCoins = 2450;
-    const availableCoins = 1850;
-    const pendingCoins = 600;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8F8FB),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 18),
-              if (widget.requiredAmount != null &&
-                  widget.requiredAmount! > 0) ...[
-                _buildRequiredAmountCard(widget.requiredAmount!),
+        child: RefreshIndicator(
+          onRefresh: _loadWallet,
+          color: const Color(0xFF6549E8),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 18),
+                if (widget.requiredAmount != null &&
+                    widget.requiredAmount! > 0) ...[
+                  _buildRequiredAmountCard(widget.requiredAmount!),
+                  const SizedBox(height: 12),
+                ],
+                if (_isLoading)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 56),
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF6549E8),
+                      ),
+                    ),
+                  )
+                else if (_loadError != null)
+                  _buildErrorState()
+                else ...[
+                  _buildWalletCard(_balance, _currencyLabel, _hasWallet),
+                  const SizedBox(height: 16),
+                  _buildAddCoinsButton(),
+                  if (_transactions.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    _buildRecentTransactionsHeader(),
+                    const SizedBox(height: 10),
+                    ..._transactions.take(5).map(_buildTransactionTile),
+                  ],
+                ],
                 const SizedBox(height: 12),
               ],
-              _buildWalletCard(totalCoins, availableCoins, pendingCoins),
-              const SizedBox(height: 14),
-              _buildActions(),
-              const SizedBox(height: 18),
-              _buildRedeemBanner(),
-              const SizedBox(height: 22),
-              _buildRecentTransactionsHeader(),
-              const SizedBox(height: 10),
-              ..._transactions.take(4).map(_buildTransactionTile),
-              const SizedBox(height: 12),
-            ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFEDEDF2)),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 40),
+          const SizedBox(height: 12),
+          const Text(
+            'Could not load wallet',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _loadError ?? '',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _loadWallet,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6549E8),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddCoinsButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _openAddCoins,
+        icon: const Icon(Icons.add),
+        label: const Text(
+          'Add Coins',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF6549E8),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          elevation: 0,
         ),
       ),
     );
@@ -176,14 +284,10 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
     );
   }
 
-  Widget _buildWalletCard(
-    int totalCoins,
-    int availableCoins,
-    int pendingCoins,
-  ) {
+  Widget _buildWalletCard(int balance, String currencyLabel, bool hasWallet) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
@@ -195,182 +299,52 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Total Coins',
-            style: TextStyle(color: Color(0xFFD8D4FF), fontSize: 15),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Text(
-                '$totalCoins',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 46,
-                  height: 1,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 7),
-              Container(
-                width: 25,
-                height: 25,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFC62B),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(
-                  Icons.monetization_on,
-                  color: Colors.white,
-                  size: 16,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: _buildSmallCoinCard('Available Coins', availableCoins),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildSmallCoinCard('Pending Coins', pendingCoins),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSmallCoinCard(String title, int value) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0x28FFFFFF),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
           Text(
-            title,
-            style: const TextStyle(color: Color(0xFFD8D4FF), fontSize: 12),
+            currencyLabel,
+            style: const TextStyle(color: Color(0xFFD8D4FF), fontSize: 15),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 12),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '$value',
+                '$balance',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 33,
+                  fontSize: 52,
                   height: 1,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(width: 4),
-              const Icon(
-                Icons.monetization_on,
-                color: Color(0xFFFFC62B),
-                size: 16,
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFC62B),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.monetization_on,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActions() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _ActionTile(
-          icon: Icons.add,
-          iconBg: const Color(0xFFEDE8FF),
-          iconColor: const Color(0xFF6549E8),
-          label: 'Add Coins',
-          onTap: () {},
-        ),
-        _ActionTile(
-          icon: Icons.redeem_outlined,
-          iconBg: const Color(0xFFE3F7EA),
-          iconColor: const Color(0xFF26A269),
-          label: 'Redeem',
-          onTap: () {},
-        ),
-        _ActionTile(
-          icon: Icons.receipt_long,
-          iconBg: const Color(0xFFE6F0FF),
-          iconColor: const Color(0xFF3B82F6),
-          label: 'Transactions',
-          onTap: _openTransactions,
-        ),
-        _ActionTile(
-          icon: Icons.star_border,
-          iconBg: const Color(0xFFFFEEE1),
-          iconColor: const Color(0xFFFF7A1A),
-          label: 'Rewards',
-          onTap: () {},
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRedeemBanner() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEDE9FF),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Redeem your coins\nfor exciting rewards',
-                  style: TextStyle(
-                    fontSize: 23,
-                    height: 1.2,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6549E8),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text('Explore Rewards'),
-                ),
-              ],
+          if (!hasWallet) ...[
+            const SizedBox(height: 14),
+            Text(
+              'No wallet yet — tap Add Coins to create one',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.85),
+                fontSize: 13,
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            width: 86,
-            height: 86,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE0D5FF),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.card_giftcard,
-              size: 42,
-              color: Color(0xFF6549E8),
-            ),
-          ),
+          ],
         ],
       ),
     );
@@ -652,67 +626,6 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionTile extends StatelessWidget {
-  final IconData icon;
-  final Color iconBg;
-  final Color iconColor;
-  final String label;
-  final VoidCallback onTap;
-
-  const _ActionTile({
-    required this.icon,
-    required this.iconBg,
-    required this.iconColor,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: SizedBox(
-        width: 78,
-        child: Column(
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE8E8ED)),
-              ),
-              child: Center(
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: iconBg,
-                    borderRadius: BorderRadius.circular(17),
-                  ),
-                  child: Icon(icon, color: iconColor, size: 20),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF374151),
-              ),
-            ),
-          ],
         ),
       ),
     );
