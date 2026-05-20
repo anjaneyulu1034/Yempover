@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:YemPover_app/services/my_posts2_service.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 import '../models/my_post_model.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 
 class PostDetailScreen1 extends StatefulWidget {
   final MyPost post;
@@ -190,9 +191,9 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
   String _formatPrice() {
     if (_post.price != null && _post.price! > 0) {
       if (_post.isForSale) {
-        return '\$${_post.price!.toStringAsFixed(2)}';
+        return CoinFormat.amount(_post.price);
       } else if (_post.isProvidingService) {
-        return '\$${_post.price!.toStringAsFixed(2)}';
+        return CoinFormat.amount(_post.price);
       }
     }
     return '';
@@ -470,8 +471,9 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
                                           ),
                                         ),
                                         const SizedBox(height: 4),
-                                        Text(
-                                          _formatPrice(),
+                                        CoinPriceLabel(
+                                          text: _formatPrice(),
+                                          iconSize: 18,
                                           style: const TextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,

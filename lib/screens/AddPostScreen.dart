@@ -15,6 +15,7 @@ import 'package:YemPover_app/services/service_booking_service.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 
 class AddPostScreen extends StatefulWidget {
   final Function()? onPostAdded;
@@ -159,10 +160,14 @@ class _AddPostScreenState extends State<AddPostScreen> {
     String label, {
     bool required = false,
     IconData? icon,
+    bool useCoinIcon = false,
   }) {
     return Row(
       children: [
-        if (icon != null) ...[
+        if (useCoinIcon) ...[
+          const CoinIcon(size: 18, iconSize: 11),
+          const SizedBox(width: 6),
+        ] else if (icon != null) ...[
           Icon(icon, size: 18, color: _primary),
           const SizedBox(width: 6),
         ],
@@ -1370,9 +1375,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _fieldLabel(
-          _selectedOption == 1 ? 'Price' : 'Will Pay Amount',
+          _selectedOption == 1 ? 'Price (coins)' : 'Will Pay Amount (coins)',
           required: true,
-          icon: Icons.attach_money,
+          useCoinIcon: true,
         ),
         const SizedBox(height: 10),
         TextField(
@@ -1395,7 +1400,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                       ? 'Enter product price'
                       : 'Enter service price'
                 : 'Enter amount you are willing to pay',
-            prefixText: '\$ ',
+            prefixIcon: coinInputPrefix(),
             errorText: _priceValidationError,
           ),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),

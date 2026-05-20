@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/trade_history_model.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 
 class TradeDetailScreen extends StatelessWidget {
   final TradeItem trade;
@@ -209,13 +210,13 @@ class TradeDetailScreen extends StatelessWidget {
                         children: [
                           _buildPriceRow(
                             'Actual Price',
-                            '\$${actualPrice.toStringAsFixed(2)}',
+                            CoinFormat.amount(actualPrice),
                             Colors.grey,
                           ),
                           const SizedBox(height: 12),
                           _buildPriceRow(
                             'Selling Price',
-                            '\$${price.toStringAsFixed(2)}',
+                            CoinFormat.amount(price),
                             Colors.green,
                           ),
                           const SizedBox(height: 12),
@@ -379,9 +380,9 @@ class TradeDetailScreen extends StatelessWidget {
 
   String _formatPriceDifference(double? difference) {
     if (difference == null) return '--';
-    if (difference == 0) return '\$0.00';
+    if (difference == 0) return '0';
     final sign = difference > 0 ? '+' : '-';
-    return '$sign\$${difference.abs().toStringAsFixed(2)}';
+    return '$sign${CoinFormat.amount(difference.abs())}';
   }
 
   Color _priceDifferenceColor(double? difference) {
@@ -506,8 +507,9 @@ class TradeDetailScreen extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(fontSize: 16, color: Colors.grey)),
-        Text(
-          value,
+        CoinPriceLabel(
+          text: value,
+          iconSize: 18,
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,

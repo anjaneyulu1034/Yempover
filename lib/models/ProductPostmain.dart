@@ -394,8 +394,11 @@ class Post {
     }
   }
 
-  String get formattedPrice =>
-      price > 0 ? '\$${price.toStringAsFixed(2)}' : 'Free';
+  String get formattedPrice {
+    if (price <= 0) return 'Free';
+    if (price == price.roundToDouble()) return price.toInt().toString();
+    return price.toStringAsFixed(2);
+  }
 
   List<String> get processedImages {
     if (images.isEmpty) {

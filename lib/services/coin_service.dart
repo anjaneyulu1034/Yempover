@@ -202,4 +202,37 @@ class CoinService {
     final data = payload['data'] as Map<String, dynamic>? ?? {};
     return Map<String, dynamic>.from(data['transaction'] as Map? ?? {});
   }
+
+  /// POST /api/mobile/wallet/pay — transfer coins to another user.
+  Future<Map<String, dynamic>> pay({
+    required String toUserId,
+    required int amount,
+    required String referenceId,
+    required String referenceType,
+    required String description,
+    Map<String, dynamic>? metadata,
+    String? idempotencyKey,
+  }) async {
+    final response = await _api.post(
+      ApiConstants.walletPay,
+      headers: {'Idempotency-Key': idempotencyKey ?? _newIdempotencyKey()},
+      body: {
+        'toUserId': toUserId,
+        'amount': amount,
+        'referenceId': referenceId,
+        'referenceType': referenceType,
+        'description': description,
+        if (metadata != null) 'metadata': metadata,
+      },
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      final message = _messageFromBody(response.body) ?? 'Wallet payment failed';
+      throw Exception(message);
+    }
+
+    final payload = json.decode(response.body) as Map<String, dynamic>;
+    final data = payload['data'] as Map<String, dynamic>? ?? {};
+    return Map<String, dynamic>.from(data);
+  }
 }

@@ -8,6 +8,7 @@ import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 import '../models/my_post_model.dart';
 import '../services/my_posts_service.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 import '../screens/AddPostScreen.dart';
 
 class TradeBoothScreen extends StatefulWidget {
@@ -257,9 +258,9 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
   String _formatPrice(MyPost post) {
     if (post.price != null && post.price! > 0) {
       if (post.isForSale) {
-        return '\$${post.price!.toStringAsFixed(2)}';
+        return CoinFormat.amount(post.price);
       } else if (post.isProvidingService) {
-        return '\$${post.price!.toStringAsFixed(2)}';
+        return CoinFormat.amount(post.price);
       }
     }
     return '';
@@ -819,8 +820,9 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                             color: Colors.green.shade50,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text(
-                            displayPrice,
+                          child: CoinPriceLabel(
+                            text: '$displayPrice coins',
+                            iconSize: 14,
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,

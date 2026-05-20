@@ -6,6 +6,7 @@ import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 
 enum ServiceDetailUiState { loadingService, serviceReady, serviceError }
 
@@ -853,11 +854,9 @@ class _ServiceDetailBookingScreenState
                           padding: EdgeInsets.symmetric(vertical: 12),
                           child: Divider(height: 1),
                         ),
-                        _buildInfoRow(
-                          Icons.attach_money,
+                        _buildCoinPriceRow(
                           'Price',
                           '${service['price'] ?? '-'}',
-                          isPrice: true,
                         ),
                       ],
                     ),
@@ -1572,10 +1571,7 @@ class _ServiceDetailBookingScreenState
                                 ),
                               ),
                               labelText: 'Your Quote Price',
-                              prefixIcon: const Icon(
-                                Icons.currency_rupee,
-                                size: 20,
-                              ),
+                              prefixIcon: coinInputPrefix(),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -1669,6 +1665,32 @@ class _ServiceDetailBookingScreenState
               fontSize: 15,
               fontWeight: isPrice ? FontWeight.w600 : FontWeight.normal,
               color: isPrice ? Colors.deepPurple : Colors.black87,
+            ),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCoinPriceRow(String label, String value) {
+    final display = value == '-' ? value : '$value coins';
+    return Row(
+      children: [
+        const CoinIcon(size: 20, iconSize: 12),
+        const SizedBox(width: 12),
+        Text(
+          '$label:',
+          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            display,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Colors.deepPurple,
             ),
             textAlign: TextAlign.right,
           ),

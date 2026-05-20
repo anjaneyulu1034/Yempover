@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/trade_history_model.dart';
 import '../services/trade_history_service.dart';
 import 'TradeDetailScreen.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 
 class TradeHistoryScreen extends StatefulWidget {
   const TradeHistoryScreen({super.key});
@@ -315,8 +316,9 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                       ),
                       const SizedBox(width: 8),
                       if (price != null)
-                        Text(
-                          '\$${price.toStringAsFixed(2)}',
+                        CoinPriceLabel(
+                          text: '${CoinFormat.amount(price)} coins',
+                          iconSize: 16,
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,

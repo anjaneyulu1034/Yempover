@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:YemPover_app/models/ProductPost.dart';
 import 'package:YemPover_app/utils/image_picker_utils.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final Function(UserItem) onPostCreated;
@@ -59,7 +60,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       isClubbable: _isClubbable,
       isFromExistingPost: false,
       price: _priceController.text.isNotEmpty
-          ? '\$${_priceController.text}'
+          ? '${_priceController.text} coins'
           : null,
       description: _descriptionController.text,
     );
@@ -227,7 +228,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
                         hintText: 'Enter price',
-                        prefixText: '\$',
+                        prefixIcon: coinInputPrefix(),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),

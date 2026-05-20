@@ -18,6 +18,7 @@ import 'package:YemPover_app/screens/HamburgerMenuScreen.dart';
 import 'package:YemPover_app/screens/MyProfileScreen.dart';
 import 'package:YemPover_app/screens/NotificationsScreen.dart';
 import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/services/my_profile_service.dart';
 import 'package:YemPover_app/services/profile_session_manager.dart';
 import 'package:YemPover_app/services/category_service.dart';
@@ -2410,14 +2411,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.sell_outlined,
-                            size: 14,
-                            color: Colors.blue.shade700,
-                          ),
+                          CoinIcon(size: 16, iconSize: 10),
                           const SizedBox(width: 6),
                           Text(
-                            'Price: ${post.formattedPrice}',
+                            'Price: ${post.formattedPrice}${post.formattedPrice == 'Free' ? '' : ' coins'}',
                             style: TextStyle(
                               color: Colors.blue.shade700,
                               fontSize: 13,

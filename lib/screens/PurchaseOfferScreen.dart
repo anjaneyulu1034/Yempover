@@ -3,6 +3,7 @@ import 'package:YemPover_app/models/ProductPostmain.dart';
 import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
 import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:YemPover_app/utils/error_message_utils.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 
 class PurchaseOfferScreen extends StatefulWidget {
   final Post post;
@@ -286,7 +287,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
                             ),
                             if (widget.post.price > 0)
                               Text(
-                                'Original Price: \$${widget.post.price.toStringAsFixed(2)}',
+                                'Original Price: ${CoinFormat.amount(widget.post.price)} coins',
                                 style: const TextStyle(
                                   fontSize: 14,
                                   color: Colors.green,
@@ -329,7 +330,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
                 hintText: _isFixedProductPrice
                     ? 'Price is fixed'
                     : 'Enter your offer price',
-                prefixText: '\$',
+                prefixIcon: coinInputPrefix(),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: Colors.grey.shade300),

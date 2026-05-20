@@ -8,6 +8,7 @@ import 'package:YemPover_app/services/post_action_service.dart';
 import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/utils/loading_widget.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -251,7 +252,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ),
               const SizedBox(height: 14),
               ListTile(
-                leading: const Icon(Icons.attach_money, color: Colors.green),
+                leading: const CoinIcon(size: 36, iconSize: 22),
                 title: const Text('Pure Price'),
                 subtitle: const Text('Quote a cash price only'),
                 onTap: () => Navigator.pop(context, OfferSubmissionMode.price),
@@ -997,8 +998,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 Icons.visibility_outlined,
                 '${_post.viewCount} views',
               ),
-              _buildInfoPill(
-                Icons.sell_outlined,
+              _buildCoinPricePill(
                 _post.price > 0 ? _post.formattedPrice : 'Price on request',
               ),
               _buildInfoPill(
@@ -1055,6 +1055,33 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           const SizedBox(width: 6),
           Text(
             text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.blue.shade900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoinPricePill(String text) {
+    final label = text == 'Price on request' ? text : '$text coins';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.blue.shade100),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CoinIcon(size: 16, iconSize: 10),
+          const SizedBox(width: 6),
+          Text(
+            label,
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -1284,8 +1311,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         const SizedBox(height: 8),
 
                         if (_post.price > 0)
-                          Text(
-                            _post.formattedPrice,
+                          CoinPriceLabel(
+                            text: '${_post.formattedPrice} coins',
+                            iconSize: 22,
                             style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,

@@ -10,6 +10,9 @@ import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
 import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:YemPover_app/utils/loading_widget.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:YemPover_app/services/coin_service.dart';
+import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final TradeChat chat;
@@ -32,6 +35,7 @@ class ChatDetailScreen extends StatefulWidget {
 class _ChatDetailScreenState extends State<ChatDetailScreen>
     with WidgetsBindingObserver {
   final TradeChatService _chatService = TradeChatService();
+  final CoinService _coinService = CoinService();
   final ServiceBookingService _serviceBookingService = ServiceBookingService();
   final SocketService _socketService = SocketService();
   final TokenService _tokenService = TokenService();
@@ -409,7 +413,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           tradeChatId: _currentChat.id,
           sentById: 'system',
           messageText: newOffer.isPriceOffer
-              ? 'Price offer created: ${newOffer.currency} ${newOffer.price!.toStringAsFixed(2)}'
+              ? 'Price offer created: ${CoinFormat.amount(newOffer.price)} coins'
               : 'Barter offer created: ${newOffer.barterItemTitle}',
           messageType: MessageType.SYSTEM,
           isRead: true,
@@ -1043,7 +1047,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.attach_money, color: Colors.green),
+              leading: const CoinIcon(size: 36, iconSize: 22),
               title: const Text('Price Offer'),
               subtitle: const Text('Make a cash offer'),
               onTap: () => Navigator.pop(context, {'type': 'price'}),
@@ -1095,7 +1099,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: 'Price',
-                    prefixText: '\$ ',
+                    prefixIcon: coinInputPrefix(),
                     border: border,
                     enabledBorder: border,
                     focusedBorder: border.copyWith(
@@ -1322,10 +1326,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         content: TextField(
           controller: priceController,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Your Counter Price',
-            prefixText: '\$ ',
-            border: OutlineInputBorder(),
+            prefixIcon: coinInputPrefix(),
+            border: const OutlineInputBorder(),
           ),
         ),
         actions: [
@@ -1498,7 +1502,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             tradeChatId: _currentChat.id,
             sentById: 'system',
             messageText: offerType == 'PRICE'
-                ? 'Counter offer sent: \$${(price ?? 0).toStringAsFixed(2)}'
+                ? 'Counter offer sent: ${CoinFormat.amount(price)} coins'
                 : 'Counter offer sent: ${barterItemTitle ?? 'Barter item'}',
             messageType: MessageType.SYSTEM,
             isRead: true,
@@ -1558,7 +1562,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         tradeChatId: _currentChat.id,
         sentById: 'system',
         messageText:
-            'Price offer created: \$${price.toStringAsFixed(2)} $currency',
+            'Price offer created: ${CoinFormat.amount(price)} coins',
         messageType: MessageType.SYSTEM,
         isRead: true,
         createdAt: DateTime.now(),
@@ -1714,16 +1718,87 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
   }
 
+  bool _acceptedOfferRequiresCoinPayment() {
+    final offer = _currentChat.latestAcceptedOffer;
+    if (offer == null) return false;
+    if (!offer.isPriceOffer && !offer.isBothOffer) return false;
+    return (offer.price ?? 0) > 0;
+  }
+
+  bool _currentUserPaysOnDealComplete() {
+    if (!_acceptedOfferRequiresCoinPayment()) return false;
+    // Buyer (non post owner) pays the seller when completing the deal.
+    return !_currentChat.isPostOwner(widget.currentUserId);
+  }
+
+  int _coinAmountFromPrice(dynamic priceValue) {
+    if (priceValue == null) return 0;
+    if (priceValue is int) return priceValue;
+    if (priceValue is double) return priceValue.round();
+    final parsed = double.tryParse(priceValue.toString().trim());
+    return parsed?.round() ?? 0;
+  }
+
+  Future<bool> _payDealCoins({
+    required int amount,
+    required String toUserId,
+    required String offerId,
+  }) async {
+    final wallet = await _coinService.getWallet();
+    final balance = CoinService.parseCoinAmount(wallet?['balance']);
+
+    if (balance < amount) {
+      if (!mounted) return false;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => CoinsWalletScreen(requiredAmount: amount.toDouble()),
+        ),
+      );
+      if (!mounted) return false;
+
+      final refreshedWallet = await _coinService.getWallet();
+      final refreshedBalance =
+          CoinService.parseCoinAmount(refreshedWallet?['balance']);
+      if (refreshedBalance < amount) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'You need ${CoinFormat.amount(amount)} coins to complete this deal.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return false;
+      }
+    }
+
+    await _coinService.pay(
+      toUserId: toUserId,
+      amount: amount,
+      referenceId: _currentChat.id,
+      referenceType: 'TRADE_CHAT',
+      description: 'Deal payment for ${_currentChat.postTitle}',
+      metadata: {
+        'source': 'mobile-app',
+        'chatId': _currentChat.id,
+        'offerId': offerId,
+      },
+      idempotencyKey: '${_currentChat.id}-$offerId-pay',
+    );
+    return true;
+  }
+
   Future<void> _completeTrade() async {
     if (_isShowingDealCompletionDialog) return;
 
     _isShowingDealCompletionDialog = true;
 
+    final acceptedOffer = _currentChat.latestAcceptedOffer;
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => _DealCompletionDialog(
-        isPriceOffer: _currentChat.latestAcceptedOffer?.isPriceOffer ?? false,
-        acceptedPrice: _currentChat.latestAcceptedOffer?.price,
+        isPriceOffer: _acceptedOfferRequiresCoinPayment(),
+        acceptedPrice: acceptedOffer?.price,
       ),
     );
 
@@ -1738,15 +1813,32 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     try {
       final bool isCompleted = result['isCompleted'] == true;
 
+      if (isCompleted && _currentUserPaysOnDealComplete()) {
+        final amount = _coinAmountFromPrice(
+          result['price'] ?? acceptedOffer?.price,
+        );
+        if (amount <= 0) {
+          throw Exception('Accepted offer price is unavailable');
+        }
+
+        final seller = _getOtherUser();
+        final paid = await _payDealCoins(
+          amount: amount,
+          toUserId: seller.id,
+          offerId: acceptedOffer?.id ?? _currentChat.id,
+        );
+        if (!paid) {
+          setState(() => _isLoading = false);
+          return;
+        }
+      }
+
       final updatedChat = isCompleted
           ? await _chatService.markDealCompleted(
               chatId: _currentChat.id,
               remarks: result['remarks'] ?? 'accepted',
             )
           : await _chatService.cancelTrade(_currentChat.id);
-
-      // Deal completion/cancel state is authoritative from REST response.
-      // Do not emit legacy socket events here because they bypass consent flow.
 
       setState(() {
         _currentChat = updatedChat;
@@ -1767,8 +1859,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         _isLoading = false;
       });
 
-      // Keep user on Chat Details without showing an error toast.
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.toString().replaceFirst('Exception: ', ''),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
         await _refreshChat();
       }
     }
@@ -2850,7 +2949,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               children: [
                 Expanded(
                   child: Text(
-                    'Price: ${latestOffer.currency ?? '\$'} ${latestOffer.price!.toStringAsFixed(2)}',
+                    'Price: ${CoinFormat.amount(latestOffer.price)} coins',
                     style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ),
@@ -3058,7 +3157,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               children: [
                 Expanded(
                   child: Text(
-                    'Price: ${latestOffer.currency ?? '\$'} ${latestOffer.price!.toStringAsFixed(2)}',
+                    'Price: ${CoinFormat.amount(latestOffer.price)} coins',
                     style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ),
@@ -3374,7 +3473,9 @@ class __DealCompletionDialogState extends State<_DealCompletionDialog> {
     super.initState();
     final acceptedPrice = widget.acceptedPrice;
     if (acceptedPrice != null && acceptedPrice > 0) {
-      _priceController.text = acceptedPrice.toStringAsFixed(2);
+      _priceController.text = acceptedPrice == acceptedPrice.roundToDouble()
+          ? acceptedPrice.toInt().toString()
+          : acceptedPrice.toStringAsFixed(2);
     }
   }
 
@@ -3463,14 +3564,23 @@ class __DealCompletionDialogState extends State<_DealCompletionDialog> {
                 ),
               ),
               if (_isDealCompleted && widget.isPriceOffer) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                Text(
+                  'Coins will be deducted from your wallet when you complete this deal.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: _priceController,
                   readOnly: true,
                   enableInteractiveSelection: false,
                   decoration: InputDecoration(
                     labelText: 'Selling Price',
-                    prefixText: '\$ ',
+                    prefixIcon: coinInputPrefix(),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide(color: Colors.grey.shade400),

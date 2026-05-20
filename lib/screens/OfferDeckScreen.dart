@@ -6,6 +6,7 @@ import 'package:YemPover_app/models/my_post_model.dart';
 import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/services/my_posts_service.dart';
 import 'package:YemPover_app/screens/OfferDescriptionScreen.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/screens/AddPostScreen.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 
@@ -646,7 +647,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                         },
                         decoration: InputDecoration(
                           hintText: 'Enter your price quote',
-                          prefixText: '\$ ',
+                          prefixIcon: coinInputPrefix(),
                           errorText: _quotedPriceError,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),

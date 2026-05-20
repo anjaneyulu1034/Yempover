@@ -224,8 +224,11 @@ class ProductInfo {
   }
 
   String get firstImage => images.isNotEmpty ? images.first : '';
-  String get formattedPrice =>
-      price != null && price! > 0 ? '\$${price!.toStringAsFixed(2)}' : 'Free';
+  String get formattedPrice {
+    if (price == null || price! <= 0) return 'Free';
+    if (price! == price!.roundToDouble()) return price!.toInt().toString();
+    return price!.toStringAsFixed(2);
+  }
 }
 
 // Service Info Model
@@ -450,7 +453,10 @@ class TradeOffer {
 
   String get offerSummary {
     if (isPriceOffer && price != null) {
-      return 'Price: ${currency ?? '\$'} ${price!.toStringAsFixed(2)}';
+      final amount = price! == price!.roundToDouble()
+          ? price!.toInt().toString()
+          : price!.toStringAsFixed(2);
+      return 'Price: $amount coins';
     } else if (isBarterOffer || isBothOffer) {
       return 'Barter: ${barterItemTitle ?? 'Item'}';
     } else if (isServiceOffer) {

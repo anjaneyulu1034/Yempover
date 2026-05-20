@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:YemPover_app/screens/AddCoinsScreen.dart';
 import 'package:YemPover_app/services/coin_service.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 
 class CoinsWalletScreen extends StatefulWidget {
   final double? requiredAmount;
@@ -263,7 +264,7 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'You need +\$${requiredAmount.toStringAsFixed(2)} to complete this purchase.',
+              'You need +${CoinFormat.amount(requiredAmount)} coins to complete this purchase.',
               style: const TextStyle(
                 color: Color(0xFF9A3412),
                 fontWeight: FontWeight.w600,
@@ -945,19 +946,23 @@ _WalletTransaction _walletTxnFromApi(Map<String, dynamic> txn) {
 
   _WalletTxnType type;
   String title;
-  switch (transactionType) {
-    case 'ADD_FUNDS':
-      type = _WalletTxnType.added;
-      title = 'Coins Added';
-      break;
-    case 'REWARD':
-      type = _WalletTxnType.reward;
-      title = 'Reward';
-      break;
-    default:
-      type = isCredit ? _WalletTxnType.added : _WalletTxnType.spent;
-      title = isCredit ? 'Coins Added' : 'Coins Spent';
-  }
+    switch (transactionType) {
+      case 'ADD_FUNDS':
+        type = _WalletTxnType.added;
+        title = 'Coins Added';
+        break;
+      case 'REWARD':
+        type = _WalletTxnType.reward;
+        title = 'Reward';
+        break;
+      case 'PAY':
+        type = _WalletTxnType.spent;
+        title = 'Payment';
+        break;
+      default:
+        type = isCredit ? _WalletTxnType.added : _WalletTxnType.spent;
+        title = isCredit ? 'Coins Added' : 'Coins Spent';
+    }
 
   return _WalletTransaction(
     id: txn['id']?.toString(),

@@ -6,6 +6,7 @@ import 'package:YemPover_app/payment/SubscriptionScreen.dart';
 import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
 import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/utils/error_message_utils.dart';
 
 enum OfferSubmissionMode { price, barter, both }
@@ -605,10 +606,10 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                             ] else
                               Text(
                                 _isFixedProductPriceOffer
-                                    ? 'Fixed: \$${widget.post.price.toStringAsFixed(2)}'
+                                    ? 'Fixed: ${CoinFormat.amount(widget.post.price)} coins'
                                     : _priceController.text.trim().isEmpty
                                     ? 'Enter a price below'
-                                    : '\$${_priceController.text.trim()}',
+                                    : '${_priceController.text.trim()} coins',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -659,7 +660,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                   hintText: _isFixedProductPriceOffer
                       ? 'Price is fixed'
                       : 'Enter your price quote',
-                  prefixText: '\$ ',
+                  prefixIcon: coinInputPrefix(),
                   errorText: _priceError,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),

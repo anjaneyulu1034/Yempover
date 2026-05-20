@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:YemPover_app/models/ProductPostmain.dart';
 import 'package:YemPover_app/services/post_action_service.dart';
 import 'package:YemPover_app/screens/PostDetailScreen.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/screens/Home_screen.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 
@@ -547,10 +548,11 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              favorite.price > 0
-                                  ? '\$${favorite.price.toStringAsFixed(2)}'
+                            CoinPriceLabel(
+                              text: favorite.price > 0
+                                  ? '${CoinFormat.amount(favorite.price)} coins'
                                   : 'Free',
+                              iconSize: 18,
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,

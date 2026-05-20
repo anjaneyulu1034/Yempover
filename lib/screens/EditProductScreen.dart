@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/api_constants.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 import '../models/my_post_model.dart';
 import '../services/add_post_service.dart';
 import '../services/category_service.dart';
@@ -941,7 +942,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                         label: 'Price',
                         controller: _priceController,
                         keyboardType: TextInputType.number,
-                        prefix: '\$ ',
+                        prefixIcon: coinInputPrefix(),
                         isRequired: true,
                         validator: (value) {
                           final priceText = value?.trim() ?? '';
@@ -1431,6 +1432,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     int maxLines = 1,
     TextInputType? keyboardType,
     String? prefix,
+    Widget? prefixIcon,
     Widget? suffixIcon,
     bool isRequired = false,
     String? Function(String?)? validator,
@@ -1481,7 +1483,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
             keyboardType: keyboardType,
             validator: validator,
             decoration: InputDecoration(
-              prefixText: prefix,
+              prefixText: prefixIcon == null ? prefix : null,
+              prefixIcon: prefixIcon,
               suffixIcon: suffixIcon,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
