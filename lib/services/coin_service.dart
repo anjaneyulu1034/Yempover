@@ -4,6 +4,20 @@ import 'dart:math';
 import 'package:YemPover_app/constants/api_constants.dart';
 import 'package:YemPover_app/services/api_service.dart';
 
+class WalletTransactionsPage {
+  final List<Map<String, dynamic>> transactions;
+  final int total;
+  final int limit;
+  final bool hasMore;
+
+  const WalletTransactionsPage({
+    required this.transactions,
+    required this.total,
+    required this.limit,
+    required this.hasMore,
+  });
+}
+
 class CoinService {
   static final CoinService _instance = CoinService._internal();
   factory CoinService() => _instance;
@@ -77,23 +91,68 @@ class CoinService {
     return Map<String, dynamic>.from(wallet as Map);
   }
 
-  Future<List<Map<String, dynamic>>> getTransactions({
-    int page = 1,
+  /// GET /api/mobile/wallet/transactions
+  /// [cursor] — id of the last transaction from the previous page (omit on first page).
+  /// [type] — e.g. ADD_FUNDS for add-coin transactions only.
+  Future<WalletTransactionsPage> getTransactions({
     int limit = 20,
+    String? cursor,
+    String? type,
   }) async {
+    final queryParams = <String, dynamic>{'limit': limit};
+    if (cursor != null && cursor.isNotEmpty) {
+      queryParams['cursor'] = cursor;
+    }
+    if (type != null && type.isNotEmpty) {
+      queryParams['type'] = type;
+    }
+
     final response = await _api.get(
-      ApiConstants.coinTransactions,
-      queryParams: {'page': page, 'limit': limit},
+      ApiConstants.walletTransactions,
+      queryParams: queryParams,
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to load coin transactions');
+      final message =
+          _messageFromBody(response.body) ?? 'Failed to load transactions';
+      throw Exception(message);
     }
 
     final payload = json.decode(response.body) as Map<String, dynamic>;
     final data = payload['data'] as Map<String, dynamic>? ?? {};
     final txns = data['transactions'] as List<dynamic>? ?? [];
-    return txns.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final pagination = data['pagination'] as Map<String, dynamic>? ?? {};
+
+    final transactions = txns
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final total = parseCoinAmount(pagination['total']);
+    final pageLimit = parseCoinAmount(pagination['limit']);
+    final effectiveLimit = pageLimit > 0 ? pageLimit : limit;
+
+    return WalletTransactionsPage(
+      transactions: transactions,
+      total: total,
+      limit: effectiveLimit,
+      hasMore: transactions.length >= effectiveLimit && total > transactions.length,
+    );
+  }
+
+  /// GET /api/mobile/wallet/transactions/:id
+  Future<Map<String, dynamic>> getTransactionById(String transactionId) async {
+    final response = await _api.get(
+      ApiConstants.walletTransactionDetail(transactionId),
+    );
+
+    if (response.statusCode != 200) {
+      final message =
+          _messageFromBody(response.body) ?? 'Failed to load transaction';
+      throw Exception(message);
+    }
+
+    final payload = json.decode(response.body) as Map<String, dynamic>;
+    final data = payload['data'] as Map<String, dynamic>? ?? {};
+    return Map<String, dynamic>.from(data['transaction'] as Map? ?? {});
   }
 
   Future<Map<String, dynamic>> purchaseCoins({

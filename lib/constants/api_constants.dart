@@ -38,6 +38,9 @@ class ApiConstants {
   static const String coinPurchase = '$baseUrl/me/coins/purchase';
   static const String wallet = '$baseUrl/wallet';
   static const String walletAdd = '$baseUrl/wallet/add';
+  static const String walletTransactions = '$baseUrl/wallet/transactions';
+  static String walletTransactionDetail(String id) =>
+      '$walletTransactions/$id';
 
   // Trade Chat endpoints
   static const String tradeChats = '$baseUrl/trade-chat/all';
