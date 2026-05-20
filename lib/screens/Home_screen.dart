@@ -1871,10 +1871,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 border: Border.all(color: Colors.white.withOpacity(0.26)),
               ),
               child: IconButton(
-                icon: const Icon(
-                  Icons.attach_money,
-                  color: Colors.white,
-                  size: 24,
+                icon: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFC62B),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.monetization_on,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                 ),
                 onPressed: _showCoinsWalletScreen,
               ),
