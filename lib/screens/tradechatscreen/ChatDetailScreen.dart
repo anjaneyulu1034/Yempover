@@ -1725,10 +1725,34 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return (offer.price ?? 0) > 0;
   }
 
+  bool _dealRequiresCoinPayment() {
+    return (_resolveDealPaymentAmount() ?? 0) > 0;
+  }
+
+  /// Offer price first, then product listing price.
+  int? _resolveDealPaymentAmount({String? dialogPriceText}) {
+    if (dialogPriceText != null && dialogPriceText.trim().isNotEmpty) {
+      final fromDialog = _coinAmountFromPrice(dialogPriceText);
+      if (fromDialog > 0) return fromDialog;
+    }
+
+    final offer = _currentChat.latestAcceptedOffer;
+    if (offer?.price != null && offer!.price! > 0) {
+      return _coinAmountFromPrice(offer.price);
+    }
+
+    final productPrice = _currentChat.product?.price;
+    if (productPrice != null && productPrice > 0) {
+      return _coinAmountFromPrice(productPrice);
+    }
+
+    return null;
+  }
+
   bool _currentUserPaysOnDealComplete() {
-    if (!_acceptedOfferRequiresCoinPayment()) return false;
-    // Buyer (non post owner) pays the seller when completing the deal.
-    return !_currentChat.isPostOwner(widget.currentUserId);
+    if (!_dealRequiresCoinPayment()) return false;
+    // Responder pays initiator (matches wallet/pay API contract).
+    return widget.currentUserId == _currentChat.responderId;
   }
 
   int _coinAmountFromPrice(dynamic priceValue) {
@@ -1741,7 +1765,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   Future<bool> _payDealCoins({
     required int amount,
-    required String toUserId,
     required String offerId,
   }) async {
     final wallet = await _coinService.getWallet();
@@ -1773,14 +1796,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
 
     await _coinService.pay(
-      toUserId: toUserId,
+      toUserId: _currentChat.initiatorId,
       amount: amount,
       referenceId: _currentChat.id,
-      referenceType: 'TRADE_CHAT',
-      description: 'Deal payment for ${_currentChat.postTitle}',
+      referenceType: 'ORDER_PAYMENT',
+      description: 'Wallet payment',
       metadata: {
         'source': 'mobile-app',
         'chatId': _currentChat.id,
+        if (_currentChat.productId != null)
+          'productId': _currentChat.productId!,
         'offerId': offerId,
       },
       idempotencyKey: '${_currentChat.id}-$offerId-pay',
@@ -1797,8 +1822,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => _DealCompletionDialog(
-        isPriceOffer: _acceptedOfferRequiresCoinPayment(),
-        acceptedPrice: acceptedOffer?.price,
+        isPriceOffer: _dealRequiresCoinPayment(),
+        acceptedPrice:
+            acceptedOffer?.price ?? _currentChat.product?.price,
       ),
     );
 
@@ -1814,17 +1840,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       final bool isCompleted = result['isCompleted'] == true;
 
       if (isCompleted && _currentUserPaysOnDealComplete()) {
-        final amount = _coinAmountFromPrice(
-          result['price'] ?? acceptedOffer?.price,
+        final amount = _resolveDealPaymentAmount(
+          dialogPriceText: result['price']?.toString(),
         );
-        if (amount <= 0) {
-          throw Exception('Accepted offer price is unavailable');
+        if (amount == null || amount <= 0) {
+          throw Exception('Deal price is unavailable');
         }
 
-        final seller = _getOtherUser();
         final paid = await _payDealCoins(
           amount: amount,
-          toUserId: seller.id,
           offerId: acceptedOffer?.id ?? _currentChat.id,
         );
         if (!paid) {
