@@ -91,13 +91,24 @@ class CoinService {
     return Map<String, dynamic>.from(wallet as Map);
   }
 
+  static String? _dateQueryParam(DateTime? date) {
+    if (date == null) return null;
+    final y = date.year;
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
   /// GET /api/mobile/wallet/transactions
   /// [cursor] — id of the last transaction from the previous page (omit on first page).
   /// [type] — e.g. ADD_FUNDS for add-coin transactions only.
+  /// [fromDate]/[toDate] — inclusive calendar-day filter (yyyy-MM-dd).
   Future<WalletTransactionsPage> getTransactions({
     int limit = 20,
     String? cursor,
     String? type,
+    DateTime? fromDate,
+    DateTime? toDate,
   }) async {
     final queryParams = <String, dynamic>{'limit': limit};
     if (cursor != null && cursor.isNotEmpty) {
@@ -106,6 +117,10 @@ class CoinService {
     if (type != null && type.isNotEmpty) {
       queryParams['type'] = type;
     }
+    final from = _dateQueryParam(fromDate);
+    final to = _dateQueryParam(toDate);
+    if (from != null) queryParams['from'] = from;
+    if (to != null) queryParams['to'] = to;
 
     final response = await _api.get(
       ApiConstants.walletTransactions,

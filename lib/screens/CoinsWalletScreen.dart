@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:YemPover_app/screens/AddCoinsScreen.dart';
 import 'package:YemPover_app/services/coin_service.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
@@ -486,11 +487,16 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
   final ScrollController _scrollController = ScrollController();
 
   _TransactionsTab _selectedTab = _TransactionsTab.all;
+  _TransactionDateFilter _dateFilter = _TransactionDateFilter.allTime;
+  DateTime? _customFrom;
+  DateTime? _customTo;
   bool _isLoading = true;
   bool _isLoadingMore = false;
   String? _loadError;
   String? _nextCursor;
   bool _hasMore = false;
+
+  static const Color _accent = Color(0xFF6549E8);
 
   @override
   void initState() {
@@ -516,6 +522,141 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
     }
   }
 
+  ({DateTime? from, DateTime? to}) get _activeDateRange {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    switch (_dateFilter) {
+      case _TransactionDateFilter.allTime:
+        return (from: null, to: null);
+      case _TransactionDateFilter.today:
+        return (from: today, to: today);
+      case _TransactionDateFilter.last7Days:
+        return (from: today.subtract(const Duration(days: 6)), to: today);
+      case _TransactionDateFilter.last30Days:
+        return (from: today.subtract(const Duration(days: 29)), to: today);
+      case _TransactionDateFilter.custom:
+        return (from: _customFrom, to: _customTo);
+    }
+  }
+
+  bool get _hasDateFilter => _dateFilter != _TransactionDateFilter.allTime;
+
+  String get _dateFilterSummary {
+    final range = _activeDateRange;
+    final fmt = DateFormat('d MMM yyyy');
+    switch (_dateFilter) {
+      case _TransactionDateFilter.allTime:
+        return 'All time';
+      case _TransactionDateFilter.today:
+        return 'Today';
+      case _TransactionDateFilter.last7Days:
+        return 'Last 7 days';
+      case _TransactionDateFilter.last30Days:
+        return 'Last 30 days';
+      case _TransactionDateFilter.custom:
+        if (range.from != null && range.to != null) {
+          if (_isSameCalendarDay(range.from!, range.to!)) {
+            return fmt.format(range.from!);
+          }
+          return '${fmt.format(range.from!)} – ${fmt.format(range.to!)}';
+        }
+        if (range.from != null) return 'From ${fmt.format(range.from!)}';
+        if (range.to != null) return 'Until ${fmt.format(range.to!)}';
+        return 'Custom range';
+    }
+  }
+
+  bool _isSameCalendarDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  bool _txnMatchesDateFilter(_WalletTransaction txn) {
+    final range = _activeDateRange;
+    if (range.from == null && range.to == null) return true;
+    final createdAt = txn.createdAt;
+    if (createdAt == null) return true;
+
+    final day = DateTime(createdAt.year, createdAt.month, createdAt.day);
+    if (range.from != null) {
+      final fromDay = DateTime(range.from!.year, range.from!.month, range.from!.day);
+      if (day.isBefore(fromDay)) return false;
+    }
+    if (range.to != null) {
+      final toDay = DateTime(range.to!.year, range.to!.month, range.to!.day);
+      if (day.isAfter(toDay)) return false;
+    }
+    return true;
+  }
+
+  List<_WalletTransaction> _applyFilters(List<_WalletTransaction> items) {
+    var filtered = items;
+    if (_selectedTab == _TransactionsTab.spent) {
+      filtered = filtered.where((t) => t.type == _WalletTxnType.spent).toList();
+    }
+    if (_hasDateFilter) {
+      filtered = filtered.where(_txnMatchesDateFilter).toList();
+    }
+    return filtered;
+  }
+
+  void _onDateFilterChanged(_TransactionDateFilter filter) {
+    if (filter == _dateFilter) return;
+    setState(() => _dateFilter = filter);
+    _loadTransactions(reset: true);
+  }
+
+  void _clearDateFilter() {
+    setState(() {
+      _dateFilter = _TransactionDateFilter.allTime;
+      _customFrom = null;
+      _customTo = null;
+    });
+    _loadTransactions(reset: true);
+  }
+
+  Future<void> _pickCustomDateRange() async {
+    final now = DateTime.now();
+    final initialFrom = _customFrom ?? now.subtract(const Duration(days: 30));
+    final initialTo = _customTo ?? now;
+
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: now,
+      initialDateRange: DateTimeRange(start: initialFrom, end: initialTo),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: _accent,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Color(0xFF111827),
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+
+    if (picked == null || !mounted) return;
+
+    setState(() {
+      _dateFilter = _TransactionDateFilter.custom;
+      _customFrom = DateTime(
+        picked.start.year,
+        picked.start.month,
+        picked.start.day,
+      );
+      _customTo = DateTime(
+        picked.end.year,
+        picked.end.month,
+        picked.end.day,
+      );
+    });
+    _loadTransactions(reset: true);
+  }
+
   Future<void> _loadTransactions({required bool reset}) async {
     if (reset) {
       setState(() {
@@ -530,21 +671,18 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
     }
 
     try {
+      final range = _activeDateRange;
       final page = await widget.coinService.getTransactions(
         limit: 20,
         cursor: reset ? null : _nextCursor,
         type: _apiTypeFilter,
+        fromDate: range.from,
+        toDate: range.to,
       );
 
-      var items = page.transactions
-          .map(_walletTxnFromApi)
-          .toList();
-
-      if (_selectedTab == _TransactionsTab.spent) {
-        items = items
-            .where((t) => t.type == _WalletTxnType.spent)
-            .toList();
-      }
+      var items = _applyFilters(
+        page.transactions.map(_walletTxnFromApi).toList(),
+      );
 
       if (!mounted) return;
 
@@ -621,6 +759,16 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
         ),
         centerTitle: true,
         iconTheme: const IconThemeData(color: Color(0xFF111827)),
+        actions: [
+          IconButton(
+            tooltip: 'Filter by date',
+            onPressed: _pickCustomDateRange,
+            icon: Icon(
+              Icons.calendar_month_outlined,
+              color: _hasDateFilter ? _accent : const Color(0xFF111827),
+            ),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () => _loadTransactions(reset: true),
@@ -632,10 +780,34 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
             children: [
               const SizedBox(height: 10),
               _buildTabs(),
-              const SizedBox(height: 24),
-              const Text(
-                'Recent Transactions',
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+              const SizedBox(height: 14),
+              _buildDateFilters(),
+              if (_hasDateFilter) ...[
+                const SizedBox(height: 10),
+                _buildActiveDateBanner(),
+              ],
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Recent Transactions',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (_hasDateFilter)
+                    Text(
+                      _dateFilterSummary,
+                      style: const TextStyle(
+                        color: Color(0xFF6549E8),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 12),
               Expanded(
@@ -650,12 +822,14 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
                     : _transactions.isEmpty
                     ? ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        children: const [
-                          SizedBox(height: 80),
+                        children: [
+                          const SizedBox(height: 80),
                           Center(
                             child: Text(
-                              'No transactions yet',
-                              style: TextStyle(
+                              _hasDateFilter
+                                  ? 'No transactions for selected dates'
+                                  : 'No transactions yet',
+                              style: const TextStyle(
                                 color: Color(0xFF9CA3AF),
                                 fontWeight: FontWeight.w500,
                                 fontSize: 16,
@@ -761,6 +935,103 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
           _buildTabChip('All', _TransactionsTab.all),
           _buildTabChip('Added', _TransactionsTab.added),
           _buildTabChip('Spent', _TransactionsTab.spent),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateFilters() {
+    return SizedBox(
+      height: 38,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _buildDateChip('All time', _TransactionDateFilter.allTime),
+          const SizedBox(width: 8),
+          _buildDateChip('Today', _TransactionDateFilter.today),
+          const SizedBox(width: 8),
+          _buildDateChip('7 days', _TransactionDateFilter.last7Days),
+          const SizedBox(width: 8),
+          _buildDateChip('30 days', _TransactionDateFilter.last30Days),
+          const SizedBox(width: 8),
+          _buildDateChip(
+            _dateFilter == _TransactionDateFilter.custom &&
+                    (_customFrom != null || _customTo != null)
+                ? _dateFilterSummary
+                : 'Custom',
+            _TransactionDateFilter.custom,
+            onTap: _pickCustomDateRange,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateChip(
+    String label,
+    _TransactionDateFilter filter, {
+    VoidCallback? onTap,
+  }) {
+    final isSelected = _dateFilter == filter;
+    return InkWell(
+      onTap: onTap ?? () => _onDateFilterChanged(filter),
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? _accent : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? _accent : const Color(0xFFE5E7EB),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+            color: isSelected ? Colors.white : const Color(0xFF374151),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveDateBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F0FF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE0D8FF)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.filter_alt_outlined, color: _accent, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Showing: $_dateFilterSummary',
+              style: const TextStyle(
+                color: Color(0xFF4B5563),
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: _clearDateFilter,
+            child: const Text(
+              'Clear',
+              style: TextStyle(
+                color: _accent,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -914,6 +1185,8 @@ enum _WalletTxnType { added, spent, reward }
 
 enum _TransactionsTab { all, added, spent }
 
+enum _TransactionDateFilter { allTime, today, last7Days, last30Days, custom }
+
 String _formatWalletTxnDate(String? isoDate) {
   if (isoDate == null || isoDate.isEmpty) return 'Just now';
   try {
@@ -946,30 +1219,39 @@ _WalletTransaction _walletTxnFromApi(Map<String, dynamic> txn) {
 
   _WalletTxnType type;
   String title;
-    switch (transactionType) {
-      case 'ADD_FUNDS':
-        type = _WalletTxnType.added;
-        title = 'Coins Added';
-        break;
-      case 'REWARD':
-        type = _WalletTxnType.reward;
-        title = 'Reward';
-        break;
-      case 'PAY':
-        type = _WalletTxnType.spent;
-        title = 'Payment';
-        break;
-      default:
-        type = isCredit ? _WalletTxnType.added : _WalletTxnType.spent;
-        title = isCredit ? 'Coins Added' : 'Coins Spent';
-    }
+  switch (transactionType) {
+    case 'ADD_FUNDS':
+      type = _WalletTxnType.added;
+      title = 'Coins Added';
+      break;
+    case 'REWARD':
+      type = _WalletTxnType.reward;
+      title = 'Reward';
+      break;
+    case 'PAY':
+      type = _WalletTxnType.spent;
+      title = 'Payment';
+      break;
+    default:
+      type = isCredit ? _WalletTxnType.added : _WalletTxnType.spent;
+      title = isCredit ? 'Coins Added' : 'Coins Spent';
+  }
+
+  DateTime? createdAt;
+  final createdAtRaw = txn['createdAt']?.toString();
+  if (createdAtRaw != null && createdAtRaw.isNotEmpty) {
+    try {
+      createdAt = DateTime.parse(createdAtRaw).toLocal();
+    } catch (_) {}
+  }
 
   return _WalletTransaction(
     id: txn['id']?.toString(),
     title: title,
     subtitle: description,
     amount: CoinService.parseCoinAmount(txn['amount']),
-    dateText: _formatWalletTxnDate(txn['createdAt']?.toString()),
+    dateText: _formatWalletTxnDate(createdAtRaw),
+    createdAt: createdAt,
     type: type,
     raw: txn,
   );
@@ -981,6 +1263,7 @@ class _WalletTransaction {
   final String subtitle;
   final int amount;
   final String dateText;
+  final DateTime? createdAt;
   final _WalletTxnType type;
   final Map<String, dynamic>? raw;
 
@@ -990,6 +1273,7 @@ class _WalletTransaction {
     required this.subtitle,
     required this.amount,
     required this.dateText,
+    this.createdAt,
     required this.type,
     this.raw,
   });
@@ -1093,7 +1377,10 @@ class _TransactionDetailSheetState extends State<_TransactionDetailSheet> {
                 if (_error != null) ...[
                   Text(
                     _error!,
-                    style: const TextStyle(color: Color(0xFFEF4444), fontSize: 13),
+                    style: const TextStyle(
+                      color: Color(0xFFEF4444),
+                      fontSize: 13,
+                    ),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -1140,10 +1427,7 @@ class _TransactionDetailSheetState extends State<_TransactionDetailSheet> {
             width: 120,
             child: Text(
               label,
-              style: const TextStyle(
-                color: Color(0xFF6B7280),
-                fontSize: 14,
-              ),
+              style: const TextStyle(color: Color(0xFF6B7280), fontSize: 14),
             ),
           ),
           Expanded(
