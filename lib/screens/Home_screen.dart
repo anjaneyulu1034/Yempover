@@ -26,6 +26,7 @@ import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/utils/error_message_utils.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 import '../services/post_action_service.dart';
+import 'package:YemPover_app/utils/blocked_users_cache.dart';
 
 // Extended Post class with the required properties
 class ExtendedPost {
@@ -148,14 +149,29 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    BlockedUsersCache.instance.addListener(_onBlockedUsersChanged);
     _startExpiryTicker();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeData();
     });
   }
 
+  void _onBlockedUsersChanged() {
+    if (!mounted) return;
+    setState(() {
+      _posts = BlockedUsersCache.instance.filterByOwner(
+        _posts,
+        (post) => post.post.postedBy.id.isNotEmpty
+            ? post.post.postedBy.id
+            : post.post.postedById,
+      );
+      _applyFilters();
+    });
+  }
+
   @override
   void dispose() {
+    BlockedUsersCache.instance.removeListener(_onBlockedUsersChanged);
     _expiryTicker?.cancel();
     _scrollController.dispose();
     _searchController.dispose();
@@ -202,6 +218,10 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       await Future.wait([
+        if (!_isGuestUser)
+          BlockedUsersCache.instance.ensureLoaded().catchError((e) {
+            debugPrint('🔴 Blocked users load error: $e');
+          }),
         if (!_isGuestUser)
           _fetchMyProfile().catchError((e) {
             debugPrint('🔴 Profile fetch error: $e');
@@ -604,7 +624,14 @@ class _HomeScreenState extends State<HomeScreen> {
             .toList();
 
         setState(() {
-          _posts.addAll(uniquePosts);
+          _posts.addAll(
+            BlockedUsersCache.instance.filterByOwner(
+              uniquePosts,
+              (post) => post.post.postedBy.id.isNotEmpty
+                  ? post.post.postedBy.id
+                  : post.post.postedById,
+            ),
+          );
           _currentPage = requestPage;
           _applyFilters();
           _hasMore = response.pagination.page < response.pagination.pages;
@@ -613,7 +640,12 @@ class _HomeScreenState extends State<HomeScreen> {
         _updatePostDistancesFromGeocoding();
       } else {
         setState(() {
-          _posts = extendedPosts;
+          _posts = BlockedUsersCache.instance.filterByOwner(
+            extendedPosts,
+            (post) => post.post.postedBy.id.isNotEmpty
+                ? post.post.postedBy.id
+                : post.post.postedById,
+          );
           _currentPage = requestPage;
           _applyFilters();
           _hasMore = response.pagination.page < response.pagination.pages;
@@ -714,6 +746,15 @@ class _HomeScreenState extends State<HomeScreen> {
   void _applyFilters() {
     setState(() {
       _filteredPosts = _posts.where((post) {
+        if (!_isGuestUser) {
+          final ownerId = post.post.postedBy.id.isNotEmpty
+              ? post.post.postedBy.id
+              : post.post.postedById;
+          if (BlockedUsersCache.instance.isBlocked(ownerId)) {
+            return false;
+          }
+        }
+
         if (_selectedTradeType == 'Barter' && !post.isForBarter) {
           return false;
         }

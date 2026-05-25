@@ -6,6 +6,8 @@ import 'package:YemPover_app/screens/PostDetailScreen.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/screens/Home_screen.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/utils/blocked_users_cache.dart';
+import 'package:YemPover_app/services/token_service.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -16,6 +18,7 @@ class FavoritesScreen extends StatefulWidget {
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
   final PostActionService _postActionService = PostActionService();
+  final TokenService _tokenService = TokenService();
 
   List<FavoriteItem> _favorites = [];
   bool _isLoading = true;
@@ -31,13 +34,32 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    BlockedUsersCache.instance.addListener(_onBlockedUsersChanged);
     _loadFavorites();
   }
 
   @override
   void dispose() {
+    BlockedUsersCache.instance.removeListener(_onBlockedUsersChanged);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onBlockedUsersChanged() {
+    if (!mounted) return;
+    setState(() {
+      _favorites = BlockedUsersCache.instance.filterFavorites(_favorites);
+    });
+  }
+
+  Future<List<FavoriteItem>> _filterBlockedFavorites(
+    List<FavoriteItem> items,
+  ) async {
+    final isLoggedIn = await _tokenService.isLoggedIn();
+    if (!isLoggedIn) return items;
+
+    await BlockedUsersCache.instance.ensureLoaded();
+    return BlockedUsersCache.instance.filterFavorites(items);
   }
 
   void _onScroll() {
@@ -62,8 +84,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         limit: _limit,
       );
 
+      final filtered = await _filterBlockedFavorites(response.data.favorites);
+
       setState(() {
-        _favorites = response.data.favorites;
+        _favorites = filtered;
         _hasMore =
             response.data.pagination.page < response.data.pagination.pages;
         _isLoading = false;
@@ -94,8 +118,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         limit: _limit,
       );
 
+      final filtered = await _filterBlockedFavorites(response.data.favorites);
+
       setState(() {
-        _favorites.addAll(response.data.favorites);
+        _favorites.addAll(filtered);
         _hasMore =
             response.data.pagination.page < response.data.pagination.pages;
         _isLoadingMore = false;

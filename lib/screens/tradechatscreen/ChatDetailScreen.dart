@@ -11,6 +11,7 @@ import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:YemPover_app/utils/loading_widget.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:YemPover_app/utils/blocked_users_cache.dart';
 import 'package:YemPover_app/services/coin_service.dart';
 import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
 
@@ -2030,6 +2031,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       });
 
       if (success && mounted) {
+        BlockedUsersCache.instance.add(otherUser.id);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${otherUser.firstName} has been blocked.'),
