@@ -538,9 +538,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final int requestPage = loadMore ? _currentPage + 1 : 1;
 
-      String? status;
+      String? tradeType;
       if (_selectedTradeType == 'Barter') {
-        status = 'FOR_BARTER';
+        tradeType = 'barter';
+      } else if (_selectedTradeType == 'For sale') {
+        tradeType = 'sale';
       }
 
       String? backendPostType;
@@ -560,7 +562,7 @@ class _HomeScreenState extends State<HomeScreen> {
         limit: _limit,
         categoryId: _selectedWishListCategory ?? _selectedCategory,
         search: _searchQuery.isNotEmpty ? _searchQuery : null,
-        status: status,
+        tradeType: tradeType,
         postType: backendPostType,
         latitude: latitude,
         longitude: longitude,
@@ -711,6 +713,9 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _filteredPosts = _posts.where((post) {
         if (_selectedTradeType == 'Barter' && !post.isForBarter) {
+          return false;
+        }
+        if (_selectedTradeType == 'For sale' && !post.isForSale) {
           return false;
         }
 
@@ -2741,16 +2746,18 @@ class _FilterScreenState extends State<FilterScreen> {
     'Newest',
     'Oldest',
   ];
+  final List<String> _tradeTypes = [
+    'Barter',
+    'For sale',
+  ];
   final List<String> _postTypes = [
     'Looking for a product/service',
     'Offering for barter',
   ];
 
-  bool get _barterOnly => _selectedTradeType == 'Barter';
-
   int get _activeFilterCount {
     var count = 0;
-    if (_barterOnly) count++;
+    if (_selectedTradeType != null) count++;
     if (_selectedPostType != null) count++;
     if (_selectedCategory != null) count++;
     if (_selectedWishListCategory != null) count++;
@@ -2762,8 +2769,10 @@ class _FilterScreenState extends State<FilterScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedTradeType =
-        widget.selectedTradeType == 'Barter' ? 'Barter' : null;
+    _selectedTradeType = widget.selectedTradeType == 'Barter' ||
+            widget.selectedTradeType == 'For sale'
+        ? widget.selectedTradeType
+        : null;
     if (widget.selectedPostType == 'Barter/selling a product/service') {
       _selectedPostType = 'Offering for barter';
     } else {
@@ -2857,7 +2866,15 @@ class _FilterScreenState extends State<FilterScreen> {
               child: ListView(
                 padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + bottomInset),
                 children: [
-                  _buildBarterOnlyFilter(),
+                  _buildFilterSection(
+                    icon: Icons.swap_horiz_rounded,
+                    title: 'Trade type',
+                    options: _tradeTypes,
+                    selectedValue: _selectedTradeType,
+                    onChanged: (value) {
+                      setState(() => _selectedTradeType = value);
+                    },
+                  ),
                   const SizedBox(height: 14),
                   _buildFilterSection(
                     icon: Icons.article_outlined,
@@ -3077,55 +3094,6 @@ class _FilterScreenState extends State<FilterScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildBarterOnlyFilter() {
-    return _buildFilterCard(
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: _accent.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.swap_horiz_rounded, color: _accent, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Barter only',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _barterOnly
-                      ? 'Open-for-barter listings'
-                      : 'All listing types',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                ),
-              ],
-            ),
-          ),
-          Switch.adaptive(
-            value: _barterOnly,
-            activeColor: _accent,
-            onChanged: (enabled) {
-              setState(() {
-                _selectedTradeType = enabled ? 'Barter' : null;
-              });
-            },
-          ),
-        ],
       ),
     );
   }
