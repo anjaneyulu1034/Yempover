@@ -460,16 +460,138 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     );
   }
 
+  Widget _buildPostThumbnail(MyPost post, {required bool hasImage}) {
+    const size = 108.0;
+    final borderRadius = BorderRadius.circular(12);
+    final placeholderIcon = post.type == 'service'
+        ? Icons.build_circle
+        : Icons.shopping_bag;
+
+    Widget imageContent;
+    if (hasImage) {
+      imageContent = Image.network(
+        post.images.first,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            width: size,
+            height: size,
+            color: Colors.grey[200],
+            child: const Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: size,
+            height: size,
+            color: Colors.grey[300],
+            child: Icon(placeholderIcon, size: 36, color: Colors.grey[500]),
+          );
+        },
+      );
+    } else {
+      imageContent = Container(
+        width: size,
+        height: size,
+        color: Colors.grey[100],
+        child: Icon(placeholderIcon, size: 36, color: Colors.grey[400]),
+      );
+    }
+
+    return Stack(
+      children: [
+        ClipRRect(borderRadius: borderRadius, child: imageContent),
+        if (post.isSold)
+          Positioned(
+            top: 6,
+            left: 6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.green,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'SOLD',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        Positioned(
+          bottom: 6,
+          right: 6,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.remove_red_eye, size: 12, color: Colors.white),
+                const SizedBox(width: 3),
+                Text(
+                  '${post.viewCount}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMetaChip({
+    required String label,
+    required Color bg,
+    required Color fg,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: fg,
+        ),
+      ),
+    );
+  }
+
   Widget _buildPostCard(MyPost post) {
     final hasImage = post.images.isNotEmpty;
     final displayPrice = _formatPrice(post);
-    final maxLocationWidth =
-        (MediaQuery.of(context).size.width * 0.40).clamp(110.0, 170.0);
+    final hasLocation = post.location != null && post.location!.isNotEmpty;
 
     return GestureDetector(
       onTap: () => _navigateToPostDetail(post),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -481,275 +603,117 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
             ),
           ],
         ),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
-            if (hasImage)
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(16),
-                    ),
-                    child: Image.network(
-                      post.images.first,
-                      height: 180,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Container(
-                          height: 180,
-                          width: double.infinity,
-                          color: Colors.grey[200],
-                          child: const Center(
-                            child: CircularProgressIndicator(),
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          height: 180,
-                          width: double.infinity,
-                          color: Colors.grey[300],
-                          child: Center(
-                            child: Icon(
-                              post.type == 'service'
-                                  ? Icons.build_circle
-                                  : Icons.image_not_supported,
-                              size: 48,
-                              color: Colors.grey[500],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  if (post.isSold)
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Text(
-                          'SOLD',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.remove_red_eye,
-                            size: 14,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${post.viewCount}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            else
-              Container(
-                height: 120,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(16),
-                  ),
-                ),
-                child: Center(
-                  child: Icon(
-                    post.type == 'service'
-                        ? Icons.build_circle
-                        : Icons.shopping_bag,
-                    size: 48,
-                    color: Colors.grey[400],
-                  ),
-                ),
-              ),
-
-            // Post Details
-            Padding(
-              padding: const EdgeInsets.all(16),
+            _buildPostThumbnail(post, hasImage: hasImage),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title, Category and Location
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Text(
+                    post.title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF111827),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              post.title,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.shade50,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                post.category.name,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.blue.shade700,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
+                      _buildMetaChip(
+                        label: post.category.name,
+                        bg: Colors.blue.shade50,
+                        fg: Colors.blue.shade700,
                       ),
-                      if (post.location != null && post.location!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(maxWidth: maxLocationWidth),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                _truncateLocation(post.location!),
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
+                      _buildMetaChip(
+                        label: post.type == 'service' ? 'Service' : 'Product',
+                        bg: post.type == 'service'
+                            ? Colors.purple.shade50
+                            : Colors.orange.shade50,
+                        fg: post.type == 'service'
+                            ? Colors.purple.shade700
+                            : Colors.orange.shade700,
+                      ),
+                      _buildMetaChip(
+                        label: post.isOpenForBarter
+                            ? 'Open for Barter'
+                            : 'No Barter',
+                        bg: post.isOpenForBarter
+                            ? const Color(0xFFE8F5E9)
+                            : const Color(0xFFFFEBEE),
+                        fg: post.isOpenForBarter
+                            ? const Color(0xFF2E7D32)
+                            : const Color(0xFFC62828),
+                      ),
+                      if (displayPrice.isNotEmpty)
+                        CoinPriceLabel(
+                          text: '$displayPrice coins',
+                          iconSize: 14,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.green.shade700,
                           ),
                         ),
                     ],
                   ),
-
-                  const SizedBox(height: 12),
-
-                  // Type Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
+                  if (hasLocation) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 16,
+                          color: Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            _truncateLocation(post.location!, maxLength: 40),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade700,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
-                    decoration: BoxDecoration(
-                      color: post.type == 'service'
-                          ? Colors.purple.shade50
-                          : Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(20),
+                  ],
+                  const SizedBox(height: 6),
+                  Text(
+                    post.description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      height: 1.3,
                     ),
-                    child: Text(
-                      post.type == 'service' ? 'Service' : 'Product',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: post.type == 'service'
-                            ? Colors.purple.shade700
-                            : Colors.orange.shade700,
-                      ),
-                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-
-                  const SizedBox(height: 12),
-
-                  // Barter status
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: post.isOpenForBarter
-                          ? const Color(0xFFE8F5E9)
-                          : const Color(0xFFFFEBEE),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      post.isOpenForBarter
-                          ? 'Open for Barter'
-                          : 'No Barter',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: post.isOpenForBarter
-                            ? const Color(0xFF2E7D32)
-                            : const Color(0xFFC62828),
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Icon(
                         Icons.timer_outlined,
                         size: 14,
-                        color: Colors.grey[600],
+                        color: Colors.grey.shade600,
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           _getExpiryCountdownLabel(post),
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             color: _getExpiryCountdownColor(post),
                             fontWeight: FontWeight.w600,
                           ),
@@ -757,52 +721,14 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Description Preview
-                  Text(
-                    post.description,
-                    style: const TextStyle(fontSize: 13, color: Colors.grey),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Posted Date
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
+                      const SizedBox(width: 8),
                       Text(
                         DateFormat('MMM dd, yyyy').format(post.postedDate),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey,
+                          color: Colors.grey.shade500,
                         ),
                       ),
-                      if (displayPrice.isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade50,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: CoinPriceLabel(
-                            text: '$displayPrice coins',
-                            iconSize: 14,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green.shade700,
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 ],
