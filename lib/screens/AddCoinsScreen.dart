@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:YemPover_app/services/coin_service.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/widgets/coin_icon.dart';
 
 class AddCoinsResult {
   final Map<String, dynamic> transaction;
@@ -21,6 +22,10 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
   static const Color _surfaceBg = Color(0xFFF8F8FB);
   static const Color _labelColor = Color(0xFF374151);
   static const Color _borderColor = Color(0xFFEDEDF2);
+  static const Color _coinsFieldBorder = Color(0xFFFFD966);
+  static const Color _coinsFieldFill = Color(0xFFFFFBEB);
+  static const Color _descriptionFieldBorder = Color(0xFFC7D2FE);
+  static const Color _descriptionFieldFill = Color(0xFFF5F7FF);
 
   final CoinService _coinService = CoinService();
   final TextEditingController _amountController = TextEditingController();
@@ -38,25 +43,52 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
   }
 
   InputDecoration _fieldDecoration({
-    required String hintText,
+    String? hintText,
     String? errorText,
     Widget? prefixIcon,
+    BoxConstraints? prefixIconConstraints,
+    required Color enabledBorderColor,
+    required Color fillColor,
   }) {
+    final borderRadius = BorderRadius.circular(12);
+    final hasError = errorText != null && errorText.isNotEmpty;
+
     return InputDecoration(
       hintText: hintText,
       hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: fillColor,
       errorText: errorText,
       prefixIcon: prefixIcon,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      prefixIconConstraints: prefixIconConstraints,
+      border: OutlineInputBorder(
+        borderRadius: borderRadius,
+        borderSide: BorderSide(
+          color: hasError ? Colors.red.shade300 : enabledBorderColor,
+          width: 1.5,
+        ),
+      ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _borderColor, width: 1.2),
+        borderRadius: borderRadius,
+        borderSide: BorderSide(
+          color: hasError ? Colors.red.shade300 : enabledBorderColor,
+          width: 1.5,
+        ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _primary, width: 1.5),
+        borderRadius: borderRadius,
+        borderSide: BorderSide(
+          color: hasError ? Colors.red.shade400 : _primary,
+          width: 2,
+        ),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: borderRadius,
+        borderSide: BorderSide(color: Colors.red.shade400, width: 1.5),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: borderRadius,
+        borderSide: BorderSide(color: Colors.red.shade500, width: 2),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
@@ -71,9 +103,9 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
 
     final amount = int.tryParse(amountText);
     if (amountText.isEmpty) {
-      amountError = 'Amount is required';
+      amountError = 'Coins is required';
     } else if (amount == null || amount <= 0) {
-      amountError = 'Enter a valid amount greater than 0';
+      amountError = 'Enter a valid number of coins greater than 0';
     }
 
     if (description.isEmpty) {
@@ -183,7 +215,7 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Amount',
+                    'Coins',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: _labelColor,
@@ -200,12 +232,12 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                       }
                     },
                     decoration: _fieldDecoration(
-                      hintText: 'e.g. 50',
+                      hintText: 'Add Coins',
                       errorText: _amountError,
-                      prefixIcon: const Icon(
-                        Icons.add_circle_outline,
-                        color: _primary,
-                      ),
+                      prefixIcon: coinInputPrefix(),
+                      prefixIconConstraints: coinPrefixIconConstraints,
+                      enabledBorderColor: _coinsFieldBorder,
+                      fillColor: _coinsFieldFill,
                     ),
                   ),
                   const SizedBox(height: 22),
@@ -227,8 +259,10 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                       }
                     },
                     decoration: _fieldDecoration(
-                      hintText: 'e.g. Promo top-up',
+                      hintText: 'Add Description',
                       errorText: _descriptionError,
+                      enabledBorderColor: _descriptionFieldBorder,
+                      fillColor: _descriptionFieldFill,
                       prefixIcon: const Padding(
                         padding: EdgeInsets.only(bottom: 40),
                         child: Icon(Icons.notes_outlined, color: _primary),

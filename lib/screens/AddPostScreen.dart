@@ -887,6 +887,17 @@ class _AddPostScreenState extends State<AddPostScreen> {
     );
   }
 
+  Map<String, dynamic>? _categoryById(
+    List<Map<String, dynamic>> categories,
+    String? id,
+  ) {
+    if (id == null) return null;
+    for (final category in categories) {
+      if (category['id'] == id) return category;
+    }
+    return null;
+  }
+
   // Category Selection - Two level dropdown
   Widget _buildCategorySelection() {
     return Column(
@@ -955,12 +966,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
             children: [
               // Main Category Dropdown
               DropdownButtonFormField<Map<String, dynamic>>(
-                  initialValue: _selectedMainCategoryId != null
-                      ? _mainCategories.firstWhere(
-                          (cat) => cat['id'] == _selectedMainCategoryId,
-                          orElse: () => _mainCategories.first,
-                        )
-                      : null,
+                  isExpanded: true,
+                  value: _categoryById(_mainCategories, _selectedMainCategoryId),
                   decoration: _fieldDecoration(
                     hintText: 'Select main category',
                   ),
@@ -1027,12 +1034,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
                   )
                 else
                   DropdownButtonFormField<Map<String, dynamic>>(
-                      initialValue: _selectedSubCategoryId != null
-                          ? _subCategories.firstWhere(
-                              (cat) => cat['id'] == _selectedSubCategoryId,
-                              orElse: () => _subCategories.first,
-                            )
-                          : null,
+                      isExpanded: true,
+                      value: _categoryById(_subCategories, _selectedSubCategoryId),
                       decoration: _fieldDecoration(
                         hintText: 'Select sub category',
                       ),

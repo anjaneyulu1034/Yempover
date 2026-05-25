@@ -541,13 +541,15 @@ class _HomeScreenState extends State<HomeScreen> {
       String? tradeType;
       if (_selectedTradeType == 'Barter') {
         tradeType = 'barter';
-      } else if (_selectedTradeType == 'For sale') {
+      } else if (_selectedTradeType == 'Not Barter') {
         tradeType = 'sale';
       }
 
       String? backendPostType;
-      if (_selectedPostType == 'Looking for a product/service') {
-        backendPostType = 'looking_for';
+      if (_selectedPostType == 'Product') {
+        backendPostType = 'product';
+      } else if (_selectedPostType == 'Service') {
+        backendPostType = 'service';
       }
 
       double? latitude;
@@ -715,20 +717,17 @@ class _HomeScreenState extends State<HomeScreen> {
         if (_selectedTradeType == 'Barter' && !post.isForBarter) {
           return false;
         }
-        if (_selectedTradeType == 'For sale' && !post.isForSale) {
+        if (_selectedTradeType == 'Not Barter' && !post.isForSale) {
           return false;
         }
 
-        if (_selectedPostType != null) {
-          if (_selectedPostType == 'Looking for a product/service' &&
-              post.post.status != PostStatus.LOOKING_FOR_SERVICE) {
-            return false;
-          }
-          if (_selectedPostType == 'Offering for barter' &&
-              post.post.status != PostStatus.PROVIDE_SERVICE &&
-              !post.isForBarter) {
-            return false;
-          }
+        if (_selectedPostType == 'Product' &&
+            post.post.type != PostType.product) {
+          return false;
+        }
+        if (_selectedPostType == 'Service' &&
+            post.post.type != PostType.service) {
+          return false;
         }
 
         if (_selectedCategory != null) {
@@ -2748,11 +2747,11 @@ class _FilterScreenState extends State<FilterScreen> {
   ];
   final List<String> _tradeTypes = [
     'Barter',
-    'For sale',
+    'Not Barter',
   ];
   final List<String> _postTypes = [
-    'Looking for a product/service',
-    'Offering for barter',
+    'Product',
+    'Service',
   ];
 
   int get _activeFilterCount {
@@ -2773,11 +2772,12 @@ class _FilterScreenState extends State<FilterScreen> {
             widget.selectedTradeType == 'For sale'
         ? widget.selectedTradeType
         : null;
-    if (widget.selectedPostType == 'Barter/selling a product/service') {
-      _selectedPostType = 'Offering for barter';
-    } else {
-      _selectedPostType = widget.selectedPostType;
-    }
+    _selectedPostType = switch (widget.selectedPostType) {
+      'Product' || 'Service' => widget.selectedPostType,
+      'Looking for a product/service' => 'Service',
+      'Offering for barter' || 'Barter/selling a product/service' => 'Product',
+      _ => null,
+    };
     _selectedCategory = widget.selectedCategory;
     _selectedWishListCategory = widget.selectedWishListCategory;
     _selectedSortBy = widget.selectedSortBy;
@@ -2886,115 +2886,7 @@ class _FilterScreenState extends State<FilterScreen> {
                     },
                   ),
                   const SizedBox(height: 14),
-                  _buildFilterSection(
-                    icon: Icons.category_outlined,
-                    title: 'Category',
-                    options: widget.mainCategories
-                        .map((category) => category['name'] ?? '')
-                        .where((name) => name.isNotEmpty)
-                        .toList(),
-                    selectedValue: _selectedCategory,
-                    onChanged: (value) {
-                      final selected = widget.mainCategories.firstWhere(
-                        (category) => category['name'] == value,
-                        orElse: () => {},
-                      );
-                      setState(() {
-                        _selectedCategory = selected['id'];
-                        _selectedWishListCategory = null;
-                      });
-                    },
-                    optionLabelBuilder: (value) => value,
-                    optionSelectedByValue: (value) {
-                      final selected = widget.mainCategories.firstWhere(
-                        (category) => category['id'] == _selectedCategory,
-                        orElse: () => {},
-                      );
-                      return selected['name'] == value;
-                    },
-                  ),
-                  if (widget.isLoadingCategories)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 20),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          color: _accent,
-                          strokeWidth: 2.5,
-                        ),
-                      ),
-                    ),
-                  if (!widget.isLoadingCategories &&
-                      widget.mainCategories.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: _surface,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: _border),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Unable to load categories',
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: widget.onRetryLoadCategories,
-                              style: TextButton.styleFrom(
-                                foregroundColor: _accent,
-                              ),
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (_selectedCategory != null) ...[
-                    const SizedBox(height: 14),
-                    _buildFilterSection(
-                      icon: Icons.subdirectory_arrow_right_rounded,
-                      title: 'Subcategory',
-                      options:
-                          (widget.subCategoriesByMain[_selectedCategory] ??
-                                  const <Map<String, String>>[])
-                              .map((subCategory) => subCategory['name'] ?? '')
-                              .where((name) => name.isNotEmpty)
-                              .toList(),
-                      selectedValue: _selectedWishListCategory,
-                      onChanged: (value) {
-                        final selectedSub =
-                            (widget.subCategoriesByMain[_selectedCategory] ??
-                                    const <Map<String, String>>[])
-                                .firstWhere(
-                                  (subCategory) => subCategory['name'] == value,
-                                  orElse: () => {},
-                                );
-                        setState(() {
-                          _selectedWishListCategory = selectedSub['id'];
-                        });
-                      },
-                      optionLabelBuilder: (value) => value,
-                      optionSelectedByValue: (value) {
-                        final selectedSub =
-                            (widget.subCategoriesByMain[_selectedCategory] ??
-                                    const <Map<String, String>>[])
-                                .firstWhere(
-                                  (subCategory) =>
-                                      subCategory['id'] ==
-                                      _selectedWishListCategory,
-                                  orElse: () => {},
-                                );
-                        return selectedSub['name'] == value;
-                      },
-                    ),
-                  ],
+                  _buildCategoryDropdowns(),
                   const SizedBox(height: 14),
                   _buildRadiusFilter(),
                   const SizedBox(height: 14),
@@ -3108,6 +3000,174 @@ class _FilterScreenState extends State<FilterScreen> {
         border: Border.all(color: _border),
       ),
       child: child,
+    );
+  }
+
+  InputDecoration _dropdownDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _accent, width: 1.5),
+      ),
+    );
+  }
+
+  Widget _buildCategoryDropdowns() {
+    if (widget.isLoadingCategories) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Center(
+          child: CircularProgressIndicator(
+            color: _accent,
+            strokeWidth: 2.5,
+          ),
+        ),
+      );
+    }
+
+    if (widget.mainCategories.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _border),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Unable to load categories',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: widget.onRetryLoadCategories,
+                style: TextButton.styleFrom(foregroundColor: _accent),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final subCategories = _selectedCategory != null
+        ? (widget.subCategoriesByMain[_selectedCategory!] ??
+            const <Map<String, String>>[])
+        : const <Map<String, String>>[];
+
+    return _buildFilterCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.category_outlined, size: 20, color: _accent),
+              const SizedBox(width: 8),
+              const Text(
+                'Category',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF111827),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            value: _selectedCategory,
+            decoration: _dropdownDecoration('Select category'),
+            items: widget.mainCategories
+                .where(
+                  (category) =>
+                      (category['id'] ?? '').isNotEmpty &&
+                      (category['name'] ?? '').isNotEmpty,
+                )
+                .map(
+                  (category) => DropdownMenuItem<String>(
+                    value: category['id'],
+                    child: Text(category['name']!),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              setState(() {
+                _selectedCategory = value;
+                _selectedWishListCategory = null;
+              });
+            },
+          ),
+          if (_selectedCategory != null) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                const Icon(
+                  Icons.subdirectory_arrow_right_rounded,
+                  size: 20,
+                  color: _accent,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Subcategory',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (subCategories.isEmpty)
+              Text(
+                'No subcategories available',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+              )
+            else
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                value: _selectedWishListCategory,
+                decoration: _dropdownDecoration('Select subcategory'),
+                items: subCategories
+                    .where(
+                      (sub) =>
+                          (sub['id'] ?? '').isNotEmpty &&
+                          (sub['name'] ?? '').isNotEmpty,
+                    )
+                    .map(
+                      (sub) => DropdownMenuItem<String>(
+                        value: sub['id'],
+                        child: Text(sub['name']!),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  setState(() => _selectedWishListCategory = value);
+                },
+              ),
+          ],
+        ],
+      ),
     );
   }
 
