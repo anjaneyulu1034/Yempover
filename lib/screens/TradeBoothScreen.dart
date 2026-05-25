@@ -266,13 +266,6 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     return '';
   }
 
-  String _getReturnDetails(MyPost post) {
-    if (post.price != null && post.price! > 0) {
-      return _formatPrice(post);
-    }
-    return '';
-  }
-
   String _getExpiryCountdownLabel(MyPost post) {
     final validUntil = post.validUntil;
     if (validUntil == null) {
@@ -470,7 +463,6 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
   Widget _buildPostCard(MyPost post) {
     final hasImage = post.images.isNotEmpty;
     final displayPrice = _formatPrice(post);
-    final returnDetails = _getReturnDetails(post);
     final maxLocationWidth =
         (MediaQuery.of(context).size.width * 0.40).clamp(110.0, 170.0);
 
@@ -716,50 +708,31 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
 
                   const SizedBox(height: 12),
 
-                  // Barter Status and Return Details
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: post.isOpenForBarter
-                              ? const Color(0xFFE8F5E9)
-                              : const Color(0xFFFFEBEE),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          post.isOpenForBarter
-                              ? 'Open for Barter'
-                              : 'No Barter',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: post.isOpenForBarter
-                                ? const Color(0xFF2E7D32)
-                                : const Color(0xFFC62828),
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                        ),
+                  // Barter status
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: post.isOpenForBarter
+                          ? const Color(0xFFE8F5E9)
+                          : const Color(0xFFFFEBEE),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      post.isOpenForBarter
+                          ? 'Open for Barter'
+                          : 'No Barter',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: post.isOpenForBarter
+                            ? const Color(0xFF2E7D32)
+                            : const Color(0xFFC62828),
+                        fontWeight: FontWeight.w600,
                       ),
-                      if (returnDetails.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            returnDetails,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.black87,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ],
+                      maxLines: 1,
+                    ),
                   ),
 
                   const SizedBox(height: 10),

@@ -522,36 +522,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
       if (chatId != _currentChat.id) return;
 
-      setState(() {
-        _currentChat = TradeChat(
-          id: _currentChat.id,
-          initiatorId: _currentChat.initiatorId,
-          responderId: _currentChat.responderId,
-          productId: _currentChat.productId,
-          serviceId: _currentChat.serviceId,
-          status: ChatStatus.COMPLETED,
-          lastMessageAt: _currentChat.lastMessageAt,
-          createdAt: _currentChat.createdAt,
-          updatedAt: DateTime.now(),
-          initiator: _currentChat.initiator,
-          responder: _currentChat.responder,
-          product: _currentChat.product,
-          service: _currentChat.service,
-          messages: _messages,
-          offers: _currentChat.offers,
+      final partial = data['partial'] == true;
+      unawaited(_refreshChat());
+
+      if (!partial && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Deal completed successfully'),
+            backgroundColor: Colors.green,
+          ),
         );
-        _appendSystemMessageIfNotDuplicate('Deal completed successfully');
-      });
-
-      _scrollToBottom();
-      widget.onChatUpdated(_currentChat);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Deal completed successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      }
     } catch (e) {
       print('Error handling deal completed: $e');
     }
@@ -1751,10 +1732,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return null;
   }
 
+  /// Product/service owner is always [responderId] in initiate-chat flows.
+  String get _listingOwnerId => _currentChat.responderId;
+
   bool _currentUserPaysOnDealComplete() {
     if (!_dealRequiresCoinPayment()) return false;
-    // Responder pays initiator (matches wallet/pay API contract).
-    return widget.currentUserId == _currentChat.responderId;
+    // Buyer (non-owner) pays the listing owner when completing the deal.
+    return widget.currentUserId != _listingOwnerId;
   }
 
   int _coinAmountFromPrice(dynamic priceValue) {
@@ -1798,7 +1782,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
 
     await _coinService.pay(
-      toUserId: _currentChat.initiatorId,
+      toUserId: _listingOwnerId,
       amount: amount,
       referenceId: _currentChat.id,
       referenceType: 'ORDER_PAYMENT',

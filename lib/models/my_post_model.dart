@@ -103,7 +103,7 @@ class MyPost {
       description: json['description'] ?? '',
       images: json['images'] != null ? List<String>.from(json['images']) : [],
       status: json['status'] ?? '',
-      barterStatus: json['barterStatus'] ?? 'NO_BARTER',
+      barterStatus: _normalizeBarterStatus(json['barterStatus']),
       price: json['price'] != null
           ? (json['price'] is int
                 ? (json['price'] as int).toDouble()
@@ -184,7 +184,18 @@ class MyPost {
 
   bool get isForSale => status == 'FOR_SALE';
   bool get isProvidingService => status == 'PROVIDE_SERVICE';
-  bool get isOpenForBarter => barterStatus == 'OPEN_FOR_BARTER';
+  bool get isOpenForBarter {
+    final normalized = barterStatus.trim().toUpperCase();
+    return normalized == 'OPEN_FOR_BARTER' || normalized == 'BARTER';
+  }
+
+  static String _normalizeBarterStatus(dynamic value) {
+    final normalized = (value ?? '').toString().trim().toUpperCase();
+    if (normalized == 'OPEN_FOR_BARTER' || normalized == 'BARTER') {
+      return 'OPEN_FOR_BARTER';
+    }
+    return 'NO_BARTER';
+  }
   bool get isSold => status == 'SOLD';
   bool get hasAcceptedOffer =>
       openOffersCount > 0; // Adjust based on actual logic
