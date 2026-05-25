@@ -107,6 +107,7 @@ class CoinService {
     int limit = 20,
     String? cursor,
     String? type,
+    String? status,
     DateTime? fromDate,
     DateTime? toDate,
   }) async {
@@ -116,6 +117,9 @@ class CoinService {
     }
     if (type != null && type.isNotEmpty) {
       queryParams['type'] = type;
+    }
+    if (status != null && status.isNotEmpty) {
+      queryParams['status'] = status;
     }
     final from = _dateQueryParam(fromDate);
     final to = _dateQueryParam(toDate);

@@ -514,12 +514,17 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
   String? get _apiTypeFilter {
     switch (_selectedTab) {
       case _TransactionsTab.all:
+      case _TransactionsTab.processing:
+      case _TransactionsTab.spent:
         return null;
       case _TransactionsTab.added:
         return 'ADD_FUNDS';
-      case _TransactionsTab.spent:
-        return null;
     }
+  }
+
+  String? get _apiStatusFilter {
+    if (_selectedTab == _TransactionsTab.processing) return 'PENDING';
+    return null;
   }
 
   ({DateTime? from, DateTime? to}) get _activeDateRange {
@@ -590,13 +595,41 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
 
   List<_WalletTransaction> _applyFilters(List<_WalletTransaction> items) {
     var filtered = items;
-    if (_selectedTab == _TransactionsTab.spent) {
-      filtered = filtered.where((t) => t.type == _WalletTxnType.spent).toList();
+    switch (_selectedTab) {
+      case _TransactionsTab.spent:
+        filtered = filtered
+            .where((t) => t.type == _WalletTxnType.spent && !t.isProcessing)
+            .toList();
+        break;
+      case _TransactionsTab.added:
+        filtered = filtered
+            .where((t) => !t.isProcessing)
+            .toList();
+        break;
+      case _TransactionsTab.processing:
+        filtered = filtered.where((t) => t.isProcessing).toList();
+        break;
+      case _TransactionsTab.all:
+        break;
     }
     if (_hasDateFilter) {
       filtered = filtered.where(_txnMatchesDateFilter).toList();
     }
     return filtered;
+  }
+
+  String get _emptyTransactionsMessage {
+    if (_hasDateFilter) return 'No transactions for selected dates';
+    switch (_selectedTab) {
+      case _TransactionsTab.processing:
+        return 'No processing transactions';
+      case _TransactionsTab.added:
+        return 'No added transactions yet';
+      case _TransactionsTab.spent:
+        return 'No spent transactions yet';
+      case _TransactionsTab.all:
+        return 'No transactions yet';
+    }
   }
 
   void _onDateFilterChanged(_TransactionDateFilter filter) {
@@ -676,6 +709,7 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
         limit: 20,
         cursor: reset ? null : _nextCursor,
         type: _apiTypeFilter,
+        status: _apiStatusFilter,
         fromDate: range.from,
         toDate: range.to,
       );
@@ -826,9 +860,7 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
                           const SizedBox(height: 80),
                           Center(
                             child: Text(
-                              _hasDateFilter
-                                  ? 'No transactions for selected dates'
-                                  : 'No transactions yet',
+                              _emptyTransactionsMessage,
                               style: const TextStyle(
                                 color: Color(0xFF9CA3AF),
                                 fontWeight: FontWeight.w500,
@@ -930,12 +962,20 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
         color: const Color(0xFFEEEEF3),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
-        children: [
-          _buildTabChip('All', _TransactionsTab.all),
-          _buildTabChip('Added', _TransactionsTab.added),
-          _buildTabChip('Spent', _TransactionsTab.spent),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          children: [
+            _buildTabChip('All', _TransactionsTab.all),
+            const SizedBox(width: 10),
+            _buildTabChip('Added', _TransactionsTab.added),
+            const SizedBox(width: 10),
+            _buildTabChip('Spent', _TransactionsTab.spent),
+            const SizedBox(width: 10),
+            _buildTabChip('Processing', _TransactionsTab.processing),
+          ],
+        ),
       ),
     );
   }
@@ -946,7 +986,7 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          _buildDateChip('All time', _TransactionDateFilter.allTime),
+          _buildDateChip('All ', _TransactionDateFilter.allTime),
           const SizedBox(width: 8),
           _buildDateChip('Today', _TransactionDateFilter.today),
           const SizedBox(width: 8),
@@ -1037,37 +1077,41 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
     );
   }
 
+  Color _tabUnselectedColor(_TransactionsTab tab) {
+    switch (tab) {
+      case _TransactionsTab.spent:
+        return const Color(0xFFEF4444);
+      case _TransactionsTab.added:
+        return const Color(0xFF16A34A);
+      case _TransactionsTab.processing:
+        return const Color(0xFFF59E0B);
+      case _TransactionsTab.all:
+        return const Color(0xFF374151);
+    }
+  }
+
   Widget _buildTabChip(String label, _TransactionsTab tab) {
     final isSelected = tab == _selectedTab;
 
-    return Expanded(
-      child: InkWell(
+    return InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: () => _onTabChanged(tab),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF6549E8) : Colors.transparent,
+            color: isSelected ? _accent : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: isSelected
-                    ? Colors.white
-                    : (tab == _TransactionsTab.spent
-                          ? const Color(0xFFEF4444)
-                          : (tab == _TransactionsTab.added
-                                ? const Color(0xFF16A34A)
-                                : const Color(0xFF374151))),
-              ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: isSelected ? Colors.white : _tabUnselectedColor(tab),
             ),
           ),
         ),
-      ),
     );
   }
 }
@@ -1111,6 +1155,28 @@ class _TransactionListTile extends StatelessWidget {
                     fontSize: 13,
                   ),
                 ),
+                if (txn.isProcessing) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7E6),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFFDE68A)),
+                    ),
+                    child: const Text(
+                      'Processing',
+                      style: TextStyle(
+                        color: Color(0xFFD97706),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1183,7 +1249,7 @@ class _TransactionIcon extends StatelessWidget {
 
 enum _WalletTxnType { added, spent, reward }
 
-enum _TransactionsTab { all, added, spent }
+enum _TransactionsTab { all, added, spent, processing }
 
 enum _TransactionDateFilter { allTime, today, last7Days, last30Days, custom }
 
@@ -1245,6 +1311,8 @@ _WalletTransaction _walletTxnFromApi(Map<String, dynamic> txn) {
     } catch (_) {}
   }
 
+  final status = txn['status']?.toString().toUpperCase() ?? 'COMPLETED';
+
   return _WalletTransaction(
     id: txn['id']?.toString(),
     title: title,
@@ -1252,6 +1320,7 @@ _WalletTransaction _walletTxnFromApi(Map<String, dynamic> txn) {
     amount: CoinService.parseCoinAmount(txn['amount']),
     dateText: _formatWalletTxnDate(createdAtRaw),
     createdAt: createdAt,
+    status: status,
     type: type,
     raw: txn,
   );
@@ -1264,6 +1333,7 @@ class _WalletTransaction {
   final int amount;
   final String dateText;
   final DateTime? createdAt;
+  final String status;
   final _WalletTxnType type;
   final Map<String, dynamic>? raw;
 
@@ -1274,9 +1344,12 @@ class _WalletTransaction {
     required this.amount,
     required this.dateText,
     this.createdAt,
+    required this.status,
     required this.type,
     this.raw,
   });
+
+  bool get isProcessing => status == 'PENDING';
 }
 
 class _TransactionDetailSheet extends StatefulWidget {
