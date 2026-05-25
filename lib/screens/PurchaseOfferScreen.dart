@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:YemPover_app/models/ProductPostmain.dart';
 import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
 import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
@@ -19,9 +20,6 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
   final TextEditingController _descriptionController = TextEditingController();
   final TradeChatService _chatService = TradeChatService();
   bool _isLoading = false;
-
-  bool get _isFixedProductPrice =>
-      widget.post.type == PostType.product && widget.post.price > 0;
 
   @override
   void initState() {
@@ -48,9 +46,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
       return;
     }
 
-    final price = _isFixedProductPrice
-      ? widget.post.price
-      : double.tryParse(_priceController.text);
+    final price = double.tryParse(_priceController.text);
     if (price == null || price <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid price')),
@@ -311,26 +307,26 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
             const SizedBox(height: 24),
 
             // Price Input
-            Text(
-              _isFixedProductPrice ? 'Product Price (Fixed)' : 'Your Offer Price',
+            const Text(
+              'Your offer price',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 8),
-            if (_isFixedProductPrice)
+            if (widget.post.price > 0)
               Text(
-                'This product is purchased at the listed price.',
+                'Listed at ${CoinFormat.amount(widget.post.price)} coins — enter the amount you want to offer.',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
-            if (_isFixedProductPrice) const SizedBox(height: 8),
+            if (widget.post.price > 0) const SizedBox(height: 8),
             TextField(
               controller: _priceController,
-              keyboardType: TextInputType.number,
-              readOnly: _isFixedProductPrice,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+              ],
               decoration: InputDecoration(
-                hintText: _isFixedProductPrice
-                    ? 'Price is fixed'
-                    : 'Enter your offer price',
-                prefixIcon: coinInputPrefix(),
+                hintText: 'Enter your offer in coins',
+                prefix: coinInputPrefix(),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: Colors.grey.shade300),
@@ -341,9 +337,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
                 ),
                 contentPadding: const EdgeInsets.all(16),
                 filled: true,
-                fillColor: _isFixedProductPrice
-                    ? Colors.green.shade50
-                    : Colors.white,
+                fillColor: Colors.grey.shade50,
               ),
             ),
 

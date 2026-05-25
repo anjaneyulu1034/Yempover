@@ -177,7 +177,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             selectedItems: const [],
             currentUserId: _currentUserId!,
             offerMode: OfferSubmissionMode.price,
-            isFixedPriceOffer: true,
           ),
         ),
       );
@@ -199,7 +198,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             selectedItems: const [],
             currentUserId: _currentUserId!,
             offerMode: OfferSubmissionMode.price,
-            isFixedPriceOffer: false,
           ),
         ),
       );

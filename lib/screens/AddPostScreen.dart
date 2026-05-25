@@ -123,6 +123,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
     String? hintText,
     String? errorText,
     Widget? prefixIcon,
+    BoxConstraints? prefixIconConstraints,
     String? prefixText,
   }) {
     return InputDecoration(
@@ -132,6 +133,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
       fillColor: Colors.white,
       errorText: errorText,
       prefixIcon: prefixIcon,
+      prefixIconConstraints: prefixIconConstraints,
       prefixText: prefixText,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(_fieldRadius),
@@ -1401,6 +1403,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                       : 'Enter service price'
                 : 'Enter amount you are willing to pay',
             prefixIcon: coinInputPrefix(),
+            prefixIconConstraints: coinPrefixIconConstraints,
             errorText: _priceValidationError,
           ),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),

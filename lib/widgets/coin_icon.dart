@@ -54,13 +54,28 @@ class CoinFormat {
   }
 }
 
-/// Prefix icon for coin amount text fields.
-Widget coinInputPrefix({double size = 22}) {
+/// Leading coin badge for amount text fields. Prefer [InputDecoration.prefix]
+/// or pair with [coinPrefixIconConstraints] when using [prefixIcon].
+Widget coinInputPrefix({double size = 20}) {
   return Padding(
-    padding: const EdgeInsets.only(left: 12, right: 6),
-    child: CoinIcon(size: size, iconSize: size * 0.64),
+    padding: const EdgeInsets.only(left: 4, right: 4),
+    child: SizedBox(
+      width: size,
+      height: size,
+      child: Center(
+        child: CoinIcon(size: size, iconSize: size * 0.55),
+      ),
+    ),
   );
 }
+
+/// Keeps the coin round inside Material [prefixIcon] slots (avoids vertical stretch).
+const BoxConstraints coinPrefixIconConstraints = BoxConstraints(
+  minWidth: 44,
+  maxWidth: 44,
+  minHeight: 44,
+  maxHeight: 44,
+);
 
 /// Price text with a leading coin icon.
 class CoinPriceLabel extends StatelessWidget {

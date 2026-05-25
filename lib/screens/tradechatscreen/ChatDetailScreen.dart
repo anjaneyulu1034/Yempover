@@ -1100,6 +1100,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   decoration: InputDecoration(
                     labelText: 'Price',
                     prefixIcon: coinInputPrefix(),
+                    prefixIconConstraints: coinPrefixIconConstraints,
                     border: border,
                     enabledBorder: border,
                     focusedBorder: border.copyWith(
@@ -1329,6 +1330,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           decoration: InputDecoration(
             labelText: 'Your Counter Price',
             prefixIcon: coinInputPrefix(),
+            prefixIconConstraints: coinPrefixIconConstraints,
             border: const OutlineInputBorder(),
           ),
         ),
@@ -3605,6 +3607,7 @@ class __DealCompletionDialogState extends State<_DealCompletionDialog> {
                   decoration: InputDecoration(
                     labelText: 'Selling Price',
                     prefixIcon: coinInputPrefix(),
+                    prefixIconConstraints: coinPrefixIconConstraints,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide(color: Colors.grey.shade400),

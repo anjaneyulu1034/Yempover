@@ -648,6 +648,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                         decoration: InputDecoration(
                           hintText: 'Enter your price quote',
                           prefixIcon: coinInputPrefix(),
+                          prefixIconConstraints: coinPrefixIconConstraints,
                           errorText: _quotedPriceError,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),

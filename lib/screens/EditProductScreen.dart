@@ -943,6 +943,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                         controller: _priceController,
                         keyboardType: TextInputType.number,
                         prefixIcon: coinInputPrefix(),
+                        prefixIconConstraints: coinPrefixIconConstraints,
                         isRequired: true,
                         validator: (value) {
                           final priceText = value?.trim() ?? '';
@@ -1433,6 +1434,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     TextInputType? keyboardType,
     String? prefix,
     Widget? prefixIcon,
+    BoxConstraints? prefixIconConstraints,
     Widget? suffixIcon,
     bool isRequired = false,
     String? Function(String?)? validator,
@@ -1485,6 +1487,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
             decoration: InputDecoration(
               prefixText: prefixIcon == null ? prefix : null,
               prefixIcon: prefixIcon,
+              prefixIconConstraints: prefixIconConstraints,
               suffixIcon: suffixIcon,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),

@@ -19,7 +19,6 @@ class OfferDescriptionScreen extends StatefulWidget {
   final bool isService;
   final OfferSubmissionMode offerMode;
   final String? initialQuotedPrice;
-  final bool isFixedPriceOffer;
 
   const OfferDescriptionScreen({
     super.key,
@@ -30,7 +29,6 @@ class OfferDescriptionScreen extends StatefulWidget {
     this.isService = false,
     required this.offerMode,
     this.initialQuotedPrice,
-    this.isFixedPriceOffer = false,
   });
 
   @override
@@ -45,12 +43,6 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   String? _priceError;
   String? _descriptionError;
 
-  bool get _isFixedProductPriceOffer =>
-      widget.isFixedPriceOffer &&
-      widget.post.type == PostType.product &&
-      _requiresPrice &&
-      widget.post.price > 0;
-
   bool get _requiresPrice =>
       widget.offerMode == OfferSubmissionMode.price ||
       widget.offerMode == OfferSubmissionMode.both;
@@ -64,11 +56,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
     super.initState();
 
     final initialQuotedPrice = widget.initialQuotedPrice?.trim() ?? '';
-    if (!_isFixedProductPriceOffer && initialQuotedPrice.isNotEmpty) {
+    if (initialQuotedPrice.isNotEmpty) {
       _priceController.text = initialQuotedPrice;
-    }
-
-    if (_isFixedProductPriceOffer && widget.post.price > 0) {
+    } else if (widget.post.price > 0) {
       _priceController.text = widget.post.price.toStringAsFixed(2);
     }
   }
@@ -196,9 +186,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
       return;
     }
 
-    final parsedPrice = _isFixedProductPriceOffer
-      ? widget.post.price
-      : double.tryParse(_priceController.text.trim());
+    final parsedPrice = double.tryParse(_priceController.text.trim());
 
     if (_requiresBarterItems && widget.selectedItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -355,13 +343,6 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
 
   String? _validatePrice(String value) {
     if (!_requiresPrice) return null;
-
-    if (_isFixedProductPriceOffer) {
-      if (widget.post.price <= 0) {
-        return 'Product price is not available';
-      }
-      return null;
-    }
 
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
@@ -605,9 +586,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                 ),
                             ] else
                               Text(
-                                _isFixedProductPriceOffer
-                                    ? 'Fixed: ${CoinFormat.amount(widget.post.price)} coins'
-                                    : _priceController.text.trim().isEmpty
+                                _priceController.text.trim().isEmpty
                                     ? 'Enter a price below'
                                     : '${_priceController.text.trim()} coins',
                                 style: const TextStyle(
@@ -628,27 +607,24 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
 
             // Description Input
             if (_requiresPrice) ...[
-              Text(
-                _isFixedProductPriceOffer
-                    ? 'Product Price (Fixed)'
-                    : 'Quoted Price',
+              const Text(
+                'Your offer price',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 8),
-              if (_isFixedProductPriceOffer)
+              if (widget.post.price > 0)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text(
-                    'This product must be bought at the listed price.',
+                    'Listed at ${CoinFormat.amount(widget.post.price)} coins — enter the amount you want to offer.',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ),
               TextField(
                 controller: _priceController,
-                keyboardType: TextInputType.number,
-                readOnly: _isFixedProductPriceOffer,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
                   LengthLimitingTextInputFormatter(9),
                 ],
                 onChanged: (_) {
@@ -657,10 +633,8 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                   });
                 },
                 decoration: InputDecoration(
-                  hintText: _isFixedProductPriceOffer
-                      ? 'Price is fixed'
-                      : 'Enter your price quote',
-                  prefixIcon: coinInputPrefix(),
+                  hintText: 'Enter your offer in coins',
+                  prefix: coinInputPrefix(),
                   errorText: _priceError,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -683,9 +657,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                     borderSide: BorderSide(color: Colors.red, width: 2),
                   ),
                   filled: true,
-                  fillColor: _isFixedProductPriceOffer
-                      ? Colors.green.shade50
-                      : Colors.grey.shade50,
+                  fillColor: Colors.grey.shade50,
                 ),
               ),
               const SizedBox(height: 20),

@@ -229,6 +229,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       decoration: InputDecoration(
                         hintText: 'Enter price',
                         prefixIcon: coinInputPrefix(),
+                        prefixIconConstraints: coinPrefixIconConstraints,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),

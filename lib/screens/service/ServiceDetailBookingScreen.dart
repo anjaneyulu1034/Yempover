@@ -1572,6 +1572,7 @@ class _ServiceDetailBookingScreenState
                               ),
                               labelText: 'Your Quote Price',
                               prefixIcon: coinInputPrefix(),
+                              prefixIconConstraints: coinPrefixIconConstraints,
                             ),
                           ),
                           const SizedBox(height: 16),
