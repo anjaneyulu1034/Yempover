@@ -8,6 +8,7 @@ import 'package:YemPover_app/services/post_action_service.dart';
 import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/utils/loading_widget.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/utils/wallet_offer_guard.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
 
 class PostDetailScreen extends StatefulWidget {
@@ -166,8 +167,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         _post.status == PostStatus.FOR_BARTER;
 
     if (!allowsBarter) {
-      final hasEnoughBalance = await _ensureSufficientWalletBalance();
-      if (!mounted || !hasEnoughBalance) return;
+      if (_postRequiresCoinsToOffer) {
+        final hasEnoughBalance = await _ensureSufficientWalletBalance();
+        if (!mounted || !hasEnoughBalance) return;
+      }
 
       Navigator.push(
         context,
@@ -221,9 +224,22 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
-  Future<bool> _ensureSufficientWalletBalance() async {
-    // Temporarily bypass wallet/coins checks; no insufficient-balance popup.
-    return true;
+  Future<bool> _ensureSufficientWalletBalance({double? offerAmount}) async {
+    final required = offerAmount ?? _post.price;
+    if (required <= 0) return true;
+
+    return WalletOfferGuard.ensureCanAfford(
+      context,
+      requiredCoins: required,
+      itemName: _post.title,
+    );
+  }
+
+  bool get _postRequiresCoinsToOffer {
+    if (_post.type == PostType.service) return _post.price > 0;
+    return _post.price > 0 &&
+        (_post.status == PostStatus.FOR_SALE ||
+            _post.barterStatus != BarterStatus.OPEN_FOR_BARTER);
   }
 
   Future<OfferSubmissionMode?> _showOfferTypeSelector() async {

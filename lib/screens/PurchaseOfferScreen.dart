@@ -5,6 +5,7 @@ import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
 import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:YemPover_app/utils/error_message_utils.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:YemPover_app/utils/wallet_offer_guard.dart';
 
 class PurchaseOfferScreen extends StatefulWidget {
   final Post post;
@@ -53,6 +54,13 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
       );
       return;
     }
+
+    final canAfford = await WalletOfferGuard.ensureCanAfford(
+      context,
+      requiredCoins: price,
+      itemName: widget.post.title,
+    );
+    if (!canAfford || !mounted) return;
 
     setState(() => _isLoading = true);
 

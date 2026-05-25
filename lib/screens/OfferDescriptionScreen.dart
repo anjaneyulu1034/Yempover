@@ -8,6 +8,7 @@ import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
 import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/utils/error_message_utils.dart';
+import 'package:YemPover_app/utils/wallet_offer_guard.dart';
 
 enum OfferSubmissionMode { price, barter, both }
 
@@ -196,6 +197,15 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
         ),
       );
       return;
+    }
+
+    if (_requiresPrice && parsedPrice != null && parsedPrice > 0) {
+      final canAfford = await WalletOfferGuard.ensureCanAfford(
+        context,
+        requiredCoins: parsedPrice,
+        itemName: widget.post.title,
+      );
+      if (!canAfford || !mounted) return;
     }
 
     try {

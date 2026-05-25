@@ -9,6 +9,7 @@ import 'package:YemPover_app/screens/OfferDescriptionScreen.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/screens/AddPostScreen.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/utils/wallet_offer_guard.dart';
 
 class OfferDeckScreen extends StatefulWidget {
   final Post post;
@@ -483,7 +484,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     );
   }
 
-  void _navigateToDescriptionScreen() {
+  Future<void> _navigateToDescriptionScreen() async {
     final quotedPriceError = _validateQuotedPrice(_quotedPriceController.text);
 
     setState(() {
@@ -503,6 +504,19 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     if (quotedPriceError != null) {
       SnackbarUtils.showInfo(context, quotedPriceError);
       return;
+    }
+
+    if (widget.offerMode == OfferSubmissionMode.price ||
+        widget.offerMode == OfferSubmissionMode.both) {
+      final quoted = double.tryParse(_quotedPriceController.text.trim());
+      if (quoted != null && quoted > 0) {
+        final canAfford = await WalletOfferGuard.ensureCanAfford(
+          context,
+          requiredCoins: quoted,
+          itemName: widget.post.title,
+        );
+        if (!canAfford || !mounted) return;
+      }
     }
 
     // Determine if the post is a service

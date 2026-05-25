@@ -21,6 +21,7 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
   bool _isLoading = true;
   String? _loadError;
   bool _hasWallet = false;
+  bool _hasLoadedOnce = false;
 
   final List<_WalletTransaction> _transactions = [];
   bool _transactionsLoading = false;
@@ -31,10 +32,11 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
     _loadWallet();
   }
 
-  Future<void> _loadWallet() async {
+  Future<void> _loadWallet({bool keepExistingOnFailure = false}) async {
+    final showFullScreenLoader = !_hasLoadedOnce;
     setState(() {
-      _isLoading = true;
-      _loadError = null;
+      if (showFullScreenLoader) _isLoading = true;
+      if (!keepExistingOnFailure) _loadError = null;
     });
 
     try {
@@ -47,6 +49,8 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
           _balance = 0;
           _currencyLabel = 'Barter Coins';
           _isLoading = false;
+          _loadError = null;
+          _hasLoadedOnce = true;
         });
         await _loadTransactions();
         return;
@@ -60,12 +64,18 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
             ? 'Barter Coins'
             : currency.replaceAll('_', ' ');
         _isLoading = false;
+        _loadError = null;
+        _hasLoadedOnce = true;
       });
       await _loadTransactions();
     } catch (e) {
       if (!mounted) return;
+      if (keepExistingOnFailure && _hasLoadedOnce) {
+        setState(() => _isLoading = false);
+        return;
+      }
       setState(() {
-        _loadError = e.toString().replaceFirst('Exception: ', '');
+        _loadError = CoinService.friendlyNetworkMessage(e);
         _isLoading = false;
       });
     }
@@ -106,7 +116,7 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
-            await _loadWallet();
+            await _loadWallet(keepExistingOnFailure: true);
           },
           color: const Color(0xFF6549E8),
           child: SingleChildScrollView(
@@ -485,6 +495,7 @@ class _WalletTransactionsScreen extends StatefulWidget {
 class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
   final List<_WalletTransaction> _transactions = [];
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _dateFilterScrollController = ScrollController();
 
   _TransactionsTab _selectedTab = _TransactionsTab.all;
   _TransactionDateFilter _dateFilter = _TransactionDateFilter.allTime;
@@ -508,7 +519,19 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _dateFilterScrollController.dispose();
     super.dispose();
+  }
+
+  void _ensureCustomChipVisible() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_dateFilterScrollController.hasClients) return;
+      _dateFilterScrollController.animateTo(
+        _dateFilterScrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   String? get _apiTypeFilter {
@@ -535,8 +558,6 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
         return (from: null, to: null);
       case _TransactionDateFilter.today:
         return (from: today, to: today);
-      case _TransactionDateFilter.last7Days:
-        return (from: today.subtract(const Duration(days: 6)), to: today);
       case _TransactionDateFilter.last30Days:
         return (from: today.subtract(const Duration(days: 29)), to: today);
       case _TransactionDateFilter.custom:
@@ -554,8 +575,6 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
         return 'All time';
       case _TransactionDateFilter.today:
         return 'Today';
-      case _TransactionDateFilter.last7Days:
-        return 'Last 7 days';
       case _TransactionDateFilter.last30Days:
         return 'Last 30 days';
       case _TransactionDateFilter.custom:
@@ -635,6 +654,9 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
   void _onDateFilterChanged(_TransactionDateFilter filter) {
     if (filter == _dateFilter) return;
     setState(() => _dateFilter = filter);
+    if (filter == _TransactionDateFilter.custom) {
+      _ensureCustomChipVisible();
+    }
     _loadTransactions(reset: true);
   }
 
@@ -649,52 +671,37 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
 
   Future<void> _pickCustomDateRange() async {
     final now = DateTime.now();
-    final initialFrom = _customFrom ?? now.subtract(const Duration(days: 30));
-    final initialTo = _customTo ?? now;
-
-    final picked = await showDateRangePicker(
+    final picked = await showModalBottomSheet<({DateTime from, DateTime to})>(
       context: context,
-      firstDate: DateTime(2020),
-      lastDate: now,
-      initialDateRange: DateTimeRange(start: initialFrom, end: initialTo),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: _accent,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Color(0xFF111827),
-            ),
-          ),
-          child: child ?? const SizedBox.shrink(),
-        );
-      },
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _CustomDateRangePickerSheet(
+        initialFrom: _customFrom ?? now.subtract(const Duration(days: 30)),
+        initialTo: _customTo ?? now,
+        maxDate: now,
+        accent: _accent,
+      ),
     );
 
     if (picked == null || !mounted) return;
 
     setState(() {
       _dateFilter = _TransactionDateFilter.custom;
-      _customFrom = DateTime(
-        picked.start.year,
-        picked.start.month,
-        picked.start.day,
-      );
-      _customTo = DateTime(
-        picked.end.year,
-        picked.end.month,
-        picked.end.day,
-      );
+      _customFrom = picked.from;
+      _customTo = picked.to;
     });
+    _ensureCustomChipVisible();
     _loadTransactions(reset: true);
   }
 
-  Future<void> _loadTransactions({required bool reset}) async {
+  Future<void> _loadTransactions({
+    required bool reset,
+    bool keepExistingOnFailure = false,
+  }) async {
     if (reset) {
       setState(() {
         _isLoading = true;
-        _loadError = null;
+        if (!keepExistingOnFailure) _loadError = null;
         _nextCursor = null;
         _hasMore = false;
       });
@@ -740,8 +747,11 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      final keepExisting = reset && _transactions.isNotEmpty;
       setState(() {
-        _loadError = e.toString().replaceFirst('Exception: ', '');
+        if (!keepExisting) {
+          _loadError = CoinService.friendlyNetworkMessage(e);
+        }
         _isLoading = false;
         _isLoadingMore = false;
       });
@@ -805,7 +815,10 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () => _loadTransactions(reset: true),
+        onRefresh: () => _loadTransactions(
+          reset: true,
+          keepExistingOnFailure: true,
+        ),
         color: const Color(0xFF6549E8),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -821,27 +834,12 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
                 _buildActiveDateBanner(),
               ],
               const SizedBox(height: 20),
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Recent Transactions',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  if (_hasDateFilter)
-                    Text(
-                      _dateFilterSummary,
-                      style: const TextStyle(
-                        color: Color(0xFF6549E8),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                ],
+              const Text(
+                'Recent Transactions',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 12),
               Expanded(
@@ -982,26 +980,28 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
 
   Widget _buildDateFilters() {
     return SizedBox(
-      height: 38,
+      height: 40,
       child: ListView(
+        controller: _dateFilterScrollController,
         scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.only(left: 2, right: 20),
         children: [
-          _buildDateChip('All ', _TransactionDateFilter.allTime),
+          _buildDateChip('All', _TransactionDateFilter.allTime),
           const SizedBox(width: 8),
           _buildDateChip('Today', _TransactionDateFilter.today),
-          const SizedBox(width: 8),
-          _buildDateChip('7 days', _TransactionDateFilter.last7Days),
           const SizedBox(width: 8),
           _buildDateChip('30 days', _TransactionDateFilter.last30Days),
           const SizedBox(width: 8),
           _buildDateChip(
-            _dateFilter == _TransactionDateFilter.custom &&
-                    (_customFrom != null || _customTo != null)
-                ? _dateFilterSummary
-                : 'Custom',
+            'Custom',
             _TransactionDateFilter.custom,
-            onTap: _pickCustomDateRange,
+            onTap: () {
+              _ensureCustomChipVisible();
+              _pickCustomDateRange();
+            },
           ),
+          const SizedBox(width: 4),
         ],
       ),
     );
@@ -1028,6 +1028,8 @@ class _WalletTransactionsScreenState extends State<_WalletTransactionsScreen> {
         ),
         child: Text(
           label,
+          maxLines: 1,
+          softWrap: false,
           style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 13,
@@ -1251,7 +1253,314 @@ enum _WalletTxnType { added, spent, reward }
 
 enum _TransactionsTab { all, added, spent, processing }
 
-enum _TransactionDateFilter { allTime, today, last7Days, last30Days, custom }
+enum _TransactionDateFilter { allTime, today, last30Days, custom }
+
+class _CustomDateRangePickerSheet extends StatefulWidget {
+  final DateTime initialFrom;
+  final DateTime initialTo;
+  final DateTime maxDate;
+  final Color accent;
+
+  const _CustomDateRangePickerSheet({
+    required this.initialFrom,
+    required this.initialTo,
+    required this.maxDate,
+    required this.accent,
+  });
+
+  @override
+  State<_CustomDateRangePickerSheet> createState() =>
+      _CustomDateRangePickerSheetState();
+}
+
+class _CustomDateRangePickerSheetState extends State<_CustomDateRangePickerSheet> {
+  late int _fromDay;
+  late int _fromMonth;
+  late int _fromYear;
+  late int _toDay;
+  late int _toMonth;
+  late int _toYear;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _fromDay = widget.initialFrom.day;
+    _fromMonth = widget.initialFrom.month;
+    _fromYear = widget.initialFrom.year;
+    _toDay = widget.initialTo.day;
+    _toMonth = widget.initialTo.month;
+    _toYear = widget.initialTo.year;
+  }
+
+  int get _minYear => 2020;
+
+  int get _maxYear => widget.maxDate.year;
+
+  List<int> get _yearOptions =>
+      List.generate(_maxYear - _minYear + 1, (i) => _minYear + i);
+
+  int _daysInMonth(int year, int month) => DateTime(year, month + 1, 0).day;
+
+  DateTime _dateFrom(int day, int month, int year) =>
+      DateTime(year, month, day);
+
+  DateTime get _fromDate => _dateFrom(_fromDay, _fromMonth, _fromYear);
+
+  DateTime get _toDate => _dateFrom(_toDay, _toMonth, _toYear);
+
+  void _clampDayForMonth({required bool isFrom}) {
+    final year = isFrom ? _fromYear : _toYear;
+    final month = isFrom ? _fromMonth : _toMonth;
+    final maxDay = _daysInMonth(year, month);
+    if (isFrom) {
+      if (_fromDay > maxDay) _fromDay = maxDay;
+    } else if (_toDay > maxDay) {
+      _toDay = maxDay;
+    }
+  }
+
+  InputDecoration _dropdownDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: widget.accent, width: 1.5),
+      ),
+    );
+  }
+
+  Widget _buildDateDropdowns({
+    required String title,
+    required int day,
+    required int month,
+    required int year,
+    required ValueChanged<int> onDayChanged,
+    required ValueChanged<int> onMonthChanged,
+    required ValueChanged<int> onYearChanged,
+  }) {
+    final days = List.generate(_daysInMonth(year, month), (i) => i + 1);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            color: Color(0xFF374151),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                value: day,
+                isExpanded: true,
+                decoration: _dropdownDecoration('DD'),
+                items: days
+                    .map(
+                      (d) => DropdownMenuItem(
+                        value: d,
+                        child: Text(d.toString().padLeft(2, '0')),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) onDayChanged(value);
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                value: month,
+                isExpanded: true,
+                decoration: _dropdownDecoration('MM'),
+                items: List.generate(12, (i) => i + 1)
+                    .map(
+                      (m) => DropdownMenuItem(
+                        value: m,
+                        child: Text(m.toString().padLeft(2, '0')),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) onMonthChanged(value);
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                value: year,
+                isExpanded: true,
+                decoration: _dropdownDecoration('YYYY'),
+                items: _yearOptions
+                    .map(
+                      (y) => DropdownMenuItem(value: y, child: Text('$y')),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) onYearChanged(value);
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _apply() {
+    final from = _fromDate;
+    final to = _toDate;
+    final max = DateTime(
+      widget.maxDate.year,
+      widget.maxDate.month,
+      widget.maxDate.day,
+    );
+
+    if (from.isAfter(max) || to.isAfter(max)) {
+      setState(() => _errorText = 'Date cannot be in the future');
+      return;
+    }
+    if (from.isAfter(to)) {
+      setState(() => _errorText = 'Start date must be before end date');
+      return;
+    }
+
+    Navigator.pop(context, (from: from, to: to));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewPadding.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + bottomInset),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Icon(Icons.calendar_month, color: widget.accent),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Custom date range',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildDateDropdowns(
+                title: 'From date',
+                day: _fromDay,
+                month: _fromMonth,
+                year: _fromYear,
+                onDayChanged: (d) => setState(() {
+                  _fromDay = d;
+                  _errorText = null;
+                }),
+                onMonthChanged: (m) => setState(() {
+                  _fromMonth = m;
+                  _clampDayForMonth(isFrom: true);
+                  _errorText = null;
+                }),
+                onYearChanged: (y) => setState(() {
+                  _fromYear = y;
+                  _clampDayForMonth(isFrom: true);
+                  _errorText = null;
+                }),
+              ),
+              const SizedBox(height: 16),
+              _buildDateDropdowns(
+                title: 'To date',
+                day: _toDay,
+                month: _toMonth,
+                year: _toYear,
+                onDayChanged: (d) => setState(() {
+                  _toDay = d;
+                  _errorText = null;
+                }),
+                onMonthChanged: (m) => setState(() {
+                  _toMonth = m;
+                  _clampDayForMonth(isFrom: false);
+                  _errorText = null;
+                }),
+                onYearChanged: (y) => setState(() {
+                  _toYear = y;
+                  _clampDayForMonth(isFrom: false);
+                  _errorText = null;
+                }),
+              ),
+              if (_errorText != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _errorText!,
+                  style: const TextStyle(color: Color(0xFFEF4444), fontSize: 13),
+                ),
+              ],
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _apply,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: widget.accent,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Apply'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 String _formatWalletTxnDate(String? isoDate) {
   if (isoDate == null || isoDate.isEmpty) return 'Just now';

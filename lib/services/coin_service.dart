@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:YemPover_app/constants/api_constants.dart';
 import 'package:YemPover_app/services/api_service.dart';
+import 'package:http/http.dart' as http;
 
 class WalletTransactionsPage {
   final List<Map<String, dynamic>> transactions;
@@ -52,6 +53,43 @@ class CoinService {
     }
   }
 
+  static bool isTransientNetworkError(Object error) {
+    final message = error.toString().toLowerCase();
+    return error is http.ClientException ||
+        message.contains('connection closed') ||
+        message.contains('connection reset') ||
+        message.contains('socketexception') ||
+        message.contains('failed host lookup') ||
+        message.contains('network is unreachable') ||
+        message.contains('timed out') ||
+        message.contains('handshake');
+  }
+
+  static String friendlyNetworkMessage(Object error) {
+    if (isTransientNetworkError(error)) {
+      return 'Connection issue. Pull to refresh and try again.';
+    }
+    return error.toString().replaceFirst('Exception: ', '');
+  }
+
+  Future<T> _withNetworkRetry<T>(
+    Future<T> Function() action, {
+    int attempts = 3,
+  }) async {
+    Object? lastError;
+    for (var attempt = 0; attempt < attempts; attempt++) {
+      try {
+        return await action();
+      } catch (e) {
+        lastError = e;
+        final isLastAttempt = attempt == attempts - 1;
+        if (!isTransientNetworkError(e) || isLastAttempt) break;
+        await Future.delayed(Duration(milliseconds: 350 * (attempt + 1)));
+      }
+    }
+    throw Exception(friendlyNetworkMessage(lastError ?? 'Request failed'));
+  }
+
   Future<List<Map<String, dynamic>>> getPackages({String? countryCode}) async {
     final response = await _api.get(
       ApiConstants.coinPackages,
@@ -72,23 +110,25 @@ class CoinService {
 
   /// GET /api/mobile/wallet — returns null when wallet does not exist yet.
   Future<Map<String, dynamic>?> getWallet() async {
-    final response = await _api.get(ApiConstants.wallet);
+    return _withNetworkRetry(() async {
+      final response = await _api.get(ApiConstants.wallet);
 
-    if (response.statusCode == 404) {
-      return null;
-    }
+      if (response.statusCode == 404) {
+        return null;
+      }
 
-    if (response.statusCode != 200) {
-      final message =
-          _messageFromBody(response.body) ?? 'Failed to load wallet';
-      throw Exception(message);
-    }
+      if (response.statusCode != 200) {
+        final message =
+            _messageFromBody(response.body) ?? 'Failed to load wallet';
+        throw Exception(message);
+      }
 
-    final payload = json.decode(response.body) as Map<String, dynamic>;
-    final data = payload['data'] as Map<String, dynamic>? ?? {};
-    final wallet = data['wallet'];
-    if (wallet == null) return null;
-    return Map<String, dynamic>.from(wallet as Map);
+      final payload = json.decode(response.body) as Map<String, dynamic>;
+      final data = payload['data'] as Map<String, dynamic>? ?? {};
+      final wallet = data['wallet'];
+      if (wallet == null) return null;
+      return Map<String, dynamic>.from(wallet as Map);
+    });
   }
 
   static String? _dateQueryParam(DateTime? date) {
@@ -126,35 +166,38 @@ class CoinService {
     if (from != null) queryParams['from'] = from;
     if (to != null) queryParams['to'] = to;
 
-    final response = await _api.get(
-      ApiConstants.walletTransactions,
-      queryParams: queryParams,
-    );
+    return _withNetworkRetry(() async {
+      final response = await _api.get(
+        ApiConstants.walletTransactions,
+        queryParams: queryParams,
+      );
 
-    if (response.statusCode != 200) {
-      final message =
-          _messageFromBody(response.body) ?? 'Failed to load transactions';
-      throw Exception(message);
-    }
+      if (response.statusCode != 200) {
+        final message =
+            _messageFromBody(response.body) ?? 'Failed to load transactions';
+        throw Exception(message);
+      }
 
-    final payload = json.decode(response.body) as Map<String, dynamic>;
-    final data = payload['data'] as Map<String, dynamic>? ?? {};
-    final txns = data['transactions'] as List<dynamic>? ?? [];
-    final pagination = data['pagination'] as Map<String, dynamic>? ?? {};
+      final payload = json.decode(response.body) as Map<String, dynamic>;
+      final data = payload['data'] as Map<String, dynamic>? ?? {};
+      final txns = data['transactions'] as List<dynamic>? ?? [];
+      final pagination = data['pagination'] as Map<String, dynamic>? ?? {};
 
-    final transactions = txns
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-    final total = parseCoinAmount(pagination['total']);
-    final pageLimit = parseCoinAmount(pagination['limit']);
-    final effectiveLimit = pageLimit > 0 ? pageLimit : limit;
+      final transactions = txns
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      final total = parseCoinAmount(pagination['total']);
+      final pageLimit = parseCoinAmount(pagination['limit']);
+      final effectiveLimit = pageLimit > 0 ? pageLimit : limit;
 
-    return WalletTransactionsPage(
-      transactions: transactions,
-      total: total,
-      limit: effectiveLimit,
-      hasMore: transactions.length >= effectiveLimit && total > transactions.length,
-    );
+      return WalletTransactionsPage(
+        transactions: transactions,
+        total: total,
+        limit: effectiveLimit,
+        hasMore:
+            transactions.length >= effectiveLimit && total > transactions.length,
+      );
+    });
   }
 
   /// GET /api/mobile/wallet/transactions/:id
