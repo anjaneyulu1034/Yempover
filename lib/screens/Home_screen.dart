@@ -1444,6 +1444,24 @@ class _HomeScreenState extends State<HomeScreen> {
     return post.formattedPrice;
   }
 
+  /// Avoid duplicating barter status (e.g. "Open for barter" chip + "In Return: Open for barter").
+  bool _shouldShowInReturnChip(ExtendedPost post) {
+    final returnType = _getReturnType(post).trim();
+    if (returnType.isEmpty) return false;
+
+    final barterStatus = _getBarterStatus(post).trim();
+    if (barterStatus.isNotEmpty &&
+        returnType.toLowerCase() == barterStatus.toLowerCase()) {
+      return false;
+    }
+
+    if (post.isForBarter) {
+      return post.wishListCategory.trim().isNotEmpty;
+    }
+
+    return returnType != post.formattedPrice.trim();
+  }
+
   String _getTimelineLabel(ExtendedPost post) {
     final validUntil = post.validUntil;
     if (validUntil == null) {
@@ -2411,16 +2429,26 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-            // Content Section
+            // Content Section (field order matches Trade Booth: title → chips → location → description → footer)
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Tags
+                  Text(
+                    post.title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -2533,94 +2561,77 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ),
                         ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
+                      if (post.post.price > 0)
+                        CoinPriceLabel(
+                          text:
+                              '${post.formattedPrice}${post.formattedPrice == 'Free' ? '' : ' coins'}',
+                          iconSize: 14,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.green.shade700,
+                          ),
                         ),
-                        decoration: BoxDecoration(
-                          color: _getTimelineChipBgColor(post),
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.timer_outlined,
-                              size: 14,
-                              color: _getTimelineChipFgColor(post),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _getTimelineLabel(post),
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: _getTimelineChipFgColor(post),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  // Title
-                  Text(
-                    post.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (post.post.price > 0) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CoinIcon(size: 16, iconSize: 10),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Price: ${post.formattedPrice}${post.formattedPrice == 'Free' ? '' : ' coins'}',
+                  if (post.location.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 16,
+                          color: Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            post.location,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Colors.blue.shade700,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                              color: Colors.grey.shade700,
                             ),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (post.description.trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      post.description,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                        height: 1.3,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                   const SizedBox(height: 8),
                   Row(
                     children: [
                       Icon(
-                        Icons.access_time,
+                        Icons.timer_outlined,
                         size: 14,
-                        color: Colors.grey.shade600,
+                        color: _getTimelineChipFgColor(post),
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        _formatDate(post.postedDate),
-                        style: TextStyle(
-                          color: Colors.grey.shade700,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                      Expanded(
+                        child: Text(
+                          _getTimelineLabel(post),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: _getTimelineChipFgColor(post),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 10),
                       if (post.formattedDistance.isNotEmpty) ...[
                         Icon(
                           Icons.near_me_outlined,
@@ -2632,35 +2643,24 @@ class _HomeScreenState extends State<HomeScreen> {
                           post.formattedDistance,
                           style: TextStyle(
                             color: Colors.grey.shade700,
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                       ],
-                      Icon(
-                        Icons.location_on_outlined,
-                        size: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          post.location,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.grey.shade700,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      Text(
+                        _formatDate(post.postedDate),
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 11,
                         ),
                       ),
                     ],
                   ),
-                  if (_getReturnType(post).trim() != post.formattedPrice) ...[
+                  if (_shouldShowInReturnChip(post)) ...[
                     const SizedBox(height: 10),
-                    // Return type (shown only when different from the main price)
+                    // Wish-list / return value when it adds info beyond chips above
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
