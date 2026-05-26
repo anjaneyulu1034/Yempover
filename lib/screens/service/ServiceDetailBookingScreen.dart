@@ -1731,16 +1731,33 @@ class _ServiceDetailBookingScreenState
     }
 
     if (_isOwner) {
+      final weeklySlots = _serviceData?['availabilitySlots'] is List
+          ? (_serviceData!['availabilitySlots'] as List)
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+          : <Map<String, dynamic>>[];
+
       return SizedBox(
         width: double.infinity,
         child: OutlinedButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  ServiceAvailabilityScreen(serviceId: widget.serviceId),
-            ),
-          ),
+          onPressed: () async {
+            final saved = await Navigator.push<bool>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ServiceAvailabilityScreen(
+                  serviceId: widget.serviceId,
+                  initialAvailabilitySlots: weeklySlots,
+                ),
+              ),
+            );
+            if (saved == true && mounted) {
+              await _loadService();
+              if (!_isLookingForService) {
+                await _loadSlotsForDate(_selectedDate);
+              }
+            }
+          },
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.deepPurple,
             side: const BorderSide(color: Colors.deepPurple),

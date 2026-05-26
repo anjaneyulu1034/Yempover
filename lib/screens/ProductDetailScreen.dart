@@ -210,7 +210,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
         titleSpacing: 0,
         title: FittedBox(
           fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
+          alignment: Alignment.center,
           child: Text(
             _post.type == 'service' ? 'Service Details' : 'Product Details',
             maxLines: 1,
@@ -221,7 +221,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
             ),
           ),
         ),
-        centerTitle: false,
+        centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,

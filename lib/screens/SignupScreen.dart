@@ -232,7 +232,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 // First Name
                 _buildField(
-                  hint: 'First Name',
+                  label: 'First Name',
                   controller: _firstNameController,
                   validator: _validateName,
                 ),
@@ -240,7 +240,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 // Last Name
                 _buildField(
-                  hint: 'Last Name',
+                  label: 'Last Name',
                   controller: _lastNameController,
                   validator: _validateName,
                 ),
@@ -248,7 +248,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 // Phone
                 _buildField(
-                  hint: 'Phone Number',
+                  label: 'Phone Number',
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
                   validator: _validatePhone,
@@ -257,7 +257,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 // Email
                 _buildField(
-                  hint: 'Email Address',
+                  label: 'Email Address',
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   validator: _validateEmail,
@@ -389,29 +389,49 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Widget _buildField({
-    required String hint,
+    required String label,
     required TextEditingController controller,
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
   }) {
+    final borderRadius = BorderRadius.circular(12);
+    final outlineBorder = OutlineInputBorder(
+      borderRadius: borderRadius,
+      borderSide: BorderSide(color: Colors.grey.shade300),
+    );
+
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       decoration: InputDecoration(
-        hintText: hint,
+        labelText: label,
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
         filled: true,
         fillColor: Colors.grey.shade100,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 18,
         ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+        border: outlineBorder,
+        enabledBorder: outlineBorder,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: borderRadius,
+          borderSide: const BorderSide(
+            color: AppConstants.primaryColor,
+            width: 1.5,
+          ),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: borderRadius,
           borderSide: const BorderSide(color: Colors.red),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: borderRadius,
+          borderSide: const BorderSide(color: Colors.red, width: 1.5),
+        ),
+        floatingLabelStyle: const TextStyle(
+          color: AppConstants.primaryColor,
+          fontWeight: FontWeight.w600,
         ),
       ),
       validator: validator,
