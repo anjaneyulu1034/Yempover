@@ -58,6 +58,22 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     return false;
   }
 
+  bool get _filtersToBarterPostsOnly =>
+      widget.offerMode == OfferSubmissionMode.barter ||
+      widget.offerMode == OfferSubmissionMode.both;
+
+  bool _isBarterEligiblePost(MyPost myPost) {
+    return myPost.isOpenForBarter ||
+        myPost.status.trim().toUpperCase() == 'FOR_BARTER';
+  }
+
+  String get _emptyItemsMessage {
+    if (_filtersToBarterPostsOnly) {
+      return 'Post items open for barter to make this offer';
+    }
+    return 'Post items first to make an offer';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +87,10 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         .where((myPost) => myPost.type.toLowerCase() == 'product')
         .where((myPost) => myPost.isListed == true)
         .where((myPost) => !_isPostExpired(myPost))
+        .where(
+          (myPost) =>
+              !_filtersToBarterPostsOnly || _isBarterEligiblePost(myPost),
+        )
         .where(
           (myPost) =>
               myPost.status.toUpperCase() != 'SOLD' &&
@@ -192,6 +212,20 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
   bool get _requiresQuotedPrice => widget.offerMode == OfferSubmissionMode.both;
 
+  double get _selectedBarterItemsCoinTotal =>
+      _selectedItems.fold<double>(0, (sum, item) => sum + item.value);
+
+  /// Minimum coins to quote when offering barter items toward a priced listing.
+  int get _minimumQuotedCoinsForBoth {
+    final targetPrice = widget.post.price;
+    if (targetPrice <= 0) return 1;
+
+    final gap = targetPrice - _selectedBarterItemsCoinTotal;
+    if (gap <= 0) return 1;
+
+    return gap.ceil();
+  }
+
   String? _validateQuotedPrice(String value) {
     if (!_requiresQuotedPrice) return null;
 
@@ -207,6 +241,19 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
     if (trimmed.length > 9) {
       return 'Price is too large';
+    }
+
+    if (_selectedItems.isNotEmpty) {
+      final quotedCoins = parsed.round();
+      final minimum = _minimumQuotedCoinsForBoth;
+      if (quotedCoins < minimum) {
+        if (widget.post.price > 0) {
+          return 'Quoted price must be at least $minimum coins '
+              '(listing ${CoinFormat.amount(widget.post.price)} − '
+              'your items ${CoinFormat.amount(_selectedBarterItemsCoinTotal)})';
+        }
+        return 'Quoted price must be at least $minimum coins';
+      }
     }
 
     return null;
@@ -348,6 +395,11 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     SnackbarUtils.showError(context, message);
   }
 
+  void _revalidateQuotedPrice() {
+    if (!_requiresQuotedPrice) return;
+    _quotedPriceError = _validateQuotedPrice(_quotedPriceController.text);
+  }
+
   void _toggleItemSelection(UserItem item) {
     setState(() {
       final existingIndex = _selectedItems.indexWhere((i) => i.id == item.id);
@@ -356,12 +408,14 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       } else {
         _selectedItems.add(item);
       }
+      _revalidateQuotedPrice();
     });
   }
 
   void _removeSelectedItem(UserItem item) {
     setState(() {
       _selectedItems.removeWhere((i) => i.id == item.id);
+      _revalidateQuotedPrice();
     });
   }
 
@@ -404,11 +458,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Post items first to make an offer',
+                        _emptyItemsMessage,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade500,
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
@@ -506,13 +561,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       return;
     }
 
-    if (widget.offerMode == OfferSubmissionMode.price ||
-        widget.offerMode == OfferSubmissionMode.both) {
+    if (widget.offerMode == OfferSubmissionMode.both) {
       final quoted = double.tryParse(_quotedPriceController.text.trim());
       if (quoted != null && quoted > 0) {
         final canAfford = await WalletOfferGuard.ensureCanAfford(
           context,
-          requiredCoins: quoted,
+          requiredCoins: quoted.round(),
           itemName: widget.post.title,
         );
         if (!canAfford || !mounted) return;
@@ -682,6 +736,19 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                           fillColor: Colors.grey.shade50,
                         ),
                       ),
+                      if (_selectedItems.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.post.price > 0
+                              ? 'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins · '
+                                  'Minimum quote: ${CoinFormat.amount(_minimumQuotedCoinsForBoth)} coins'
+                              : 'Your items total: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -933,11 +1000,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Post items first to make an offer',
+                            _emptyItemsMessage,
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey.shade500,
                             ),
+                            textAlign: TextAlign.center,
                           ),
                         ],
                       ),

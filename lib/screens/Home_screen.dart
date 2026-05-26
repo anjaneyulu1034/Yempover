@@ -27,6 +27,7 @@ import 'package:YemPover_app/utils/error_message_utils.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 import '../services/post_action_service.dart';
 import 'package:YemPover_app/utils/blocked_users_cache.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Extended Post class with the required properties
 class ExtendedPost {
@@ -46,8 +47,16 @@ class ExtendedPost {
     this.distance,
   });
 
-  bool get isForBarter => post.barterStatus == BarterStatus.OPEN_FOR_BARTER;
+  bool get isForBarter =>
+      post.barterStatus == BarterStatus.OPEN_FOR_BARTER ||
+      post.status == PostStatus.FOR_BARTER;
+
   bool get isForSale => post.status == PostStatus.FOR_SALE;
+
+  /// Sale-only listing (not open for barter).
+  bool get isNotBarterSale =>
+      !isForBarter &&
+      (post.type == PostType.service || post.status == PostStatus.FOR_SALE);
 
   String get title => post.title;
   String get description => post.description;
@@ -94,6 +103,17 @@ class HomeScreen extends StatefulWidget {
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeFilterPrefs {
+  static const savedKey = 'home_filters_saved';
+  static const tradeType = 'home_filter_trade_type';
+  static const postType = 'home_filter_post_type';
+  static const category = 'home_filter_category';
+  static const wishListCategory = 'home_filter_wishlist_category';
+  static const sortBy = 'home_filter_sort_by';
+  static const radiusEnabled = 'home_filter_radius_enabled';
+  static const radius = 'home_filter_radius';
 }
 
 class _HomeScreenState extends State<HomeScreen> {
@@ -188,8 +208,118 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _loadPersistedFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!(prefs.getBool(_HomeFilterPrefs.savedKey) ?? false)) return;
+    if (!mounted) return;
+
+    setState(() {
+      _selectedTradeType = _normalizePersistedTradeType(
+        prefs.getString(_HomeFilterPrefs.tradeType),
+      );
+      _selectedPostType = _normalizePersistedPostType(
+        prefs.getString(_HomeFilterPrefs.postType),
+      );
+      _selectedCategory = prefs.getString(_HomeFilterPrefs.category);
+      _selectedWishListCategory = prefs.getString(
+        _HomeFilterPrefs.wishListCategory,
+      );
+      _selectedSortBy =
+          prefs.getString(_HomeFilterPrefs.sortBy) ?? _selectedSortBy;
+      _isRadiusFilterEnabled =
+          prefs.getBool(_HomeFilterPrefs.radiusEnabled) ??
+          _isRadiusFilterEnabled;
+      _selectedRadius =
+          prefs.getDouble(_HomeFilterPrefs.radius) ?? _selectedRadius;
+    });
+  }
+
+  String? _normalizePersistedTradeType(String? value) {
+    if (value == null || value.isEmpty) return null;
+    if (value == 'For sale') return 'Not Barter';
+    const allowed = ['Barter', 'Not Barter'];
+    return allowed.contains(value) ? value : null;
+  }
+
+  String? _normalizePersistedPostType(String? value) {
+    if (value == null || value.isEmpty) return null;
+    return switch (value) {
+      'Product' || 'Service' => value,
+      'Looking for a product/service' => 'Service',
+      'Offering for barter' || 'Barter/selling a product/service' => 'Product',
+      _ => null,
+    };
+  }
+
+  Future<void> _savePersistedFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasAnyFilter =
+        _selectedTradeType != null ||
+        _selectedPostType != null ||
+        _selectedCategory != null ||
+        _selectedWishListCategory != null ||
+        _selectedSortBy != 'Nearest' ||
+        _isRadiusFilterEnabled ||
+        _searchQuery.isNotEmpty;
+
+    if (!hasAnyFilter) {
+      await _clearPersistedFilters();
+      return;
+    }
+
+    await prefs.setBool(_HomeFilterPrefs.savedKey, true);
+    await _writeOptionalString(
+      prefs,
+      _HomeFilterPrefs.tradeType,
+      _selectedTradeType,
+    );
+    await _writeOptionalString(
+      prefs,
+      _HomeFilterPrefs.postType,
+      _selectedPostType,
+    );
+    await _writeOptionalString(prefs, _HomeFilterPrefs.category, _selectedCategory);
+    await _writeOptionalString(
+      prefs,
+      _HomeFilterPrefs.wishListCategory,
+      _selectedWishListCategory,
+    );
+    await prefs.setString(_HomeFilterPrefs.sortBy, _selectedSortBy);
+    await prefs.setBool(
+      _HomeFilterPrefs.radiusEnabled,
+      _isRadiusFilterEnabled,
+    );
+    await prefs.setDouble(_HomeFilterPrefs.radius, _selectedRadius);
+  }
+
+  Future<void> _writeOptionalString(
+    SharedPreferences prefs,
+    String key,
+    String? value,
+  ) async {
+    if (value == null || value.isEmpty) {
+      await prefs.remove(key);
+    } else {
+      await prefs.setString(key, value);
+    }
+  }
+
+  Future<void> _clearPersistedFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_HomeFilterPrefs.savedKey);
+    await prefs.remove(_HomeFilterPrefs.tradeType);
+    await prefs.remove(_HomeFilterPrefs.postType);
+    await prefs.remove(_HomeFilterPrefs.category);
+    await prefs.remove(_HomeFilterPrefs.wishListCategory);
+    await prefs.remove(_HomeFilterPrefs.sortBy);
+    await prefs.remove(_HomeFilterPrefs.radiusEnabled);
+    await prefs.remove(_HomeFilterPrefs.radius);
+  }
+
   Future<void> _initializeData() async {
     try {
+      await _loadPersistedFilters();
+
       final isLoggedIn = await _tokenService.isLoggedIn();
       _isGuestUser = await _tokenService.isGuestUser();
 
@@ -758,7 +888,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (_selectedTradeType == 'Barter' && !post.isForBarter) {
           return false;
         }
-        if (_selectedTradeType == 'Not Barter' && !post.isForSale) {
+        if (_selectedTradeType == 'Not Barter' && !post.isNotBarterSale) {
           return false;
         }
 
@@ -849,8 +979,17 @@ class _HomeScreenState extends State<HomeScreen> {
       _searchController.clear();
     });
 
+    await _clearPersistedFilters();
     await _fetchPosts();
   }
+
+  bool get _hasActiveFilters =>
+      _selectedTradeType != null ||
+      _selectedPostType != null ||
+      _selectedCategory != null ||
+      _selectedWishListCategory != null ||
+      _selectedSortBy != 'Nearest' ||
+      _isRadiusFilterEnabled;
 
   void _showLocationOptions() {
     showModalBottomSheet(
@@ -1164,6 +1303,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _isRadiusFilterEnabled = isRadiusFilterEnabled;
                 _selectedRadius = radius;
               });
+              unawaited(_savePersistedFilters());
               _fetchPosts();
               Navigator.pop(context);
             },
@@ -2082,10 +2222,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 12),
           Builder(
             builder: (context) {
-              final hasActiveFilters =
-                  _selectedTradeType != null ||
-                  _selectedPostType != null ||
-                  _selectedCategory != null;
+              final hasActiveFilters = _hasActiveFilters;
 
               return Container(
                 decoration: BoxDecoration(
@@ -2806,24 +2943,50 @@ class _FilterScreenState extends State<FilterScreen> {
     return count;
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _selectedTradeType = widget.selectedTradeType == 'Barter' ||
-            widget.selectedTradeType == 'For sale'
-        ? widget.selectedTradeType
-        : null;
-    _selectedPostType = switch (widget.selectedPostType) {
-      'Product' || 'Service' => widget.selectedPostType,
+  String? _normalizeIncomingTradeType(String? value) {
+    if (value == null || value.isEmpty) return null;
+    if (value == 'For sale') return 'Not Barter';
+    return _tradeTypes.contains(value) ? value : null;
+  }
+
+  String? _normalizeIncomingPostType(String? value) {
+    if (value == null || value.isEmpty) return null;
+    return switch (value) {
+      'Product' || 'Service' => value,
       'Looking for a product/service' => 'Service',
       'Offering for barter' || 'Barter/selling a product/service' => 'Product',
-      _ => null,
+      _ => _postTypes.contains(value) ? value : null,
     };
+  }
+
+  void _syncFromWidget() {
+    _selectedTradeType = _normalizeIncomingTradeType(widget.selectedTradeType);
+    _selectedPostType = _normalizeIncomingPostType(widget.selectedPostType);
     _selectedCategory = widget.selectedCategory;
     _selectedWishListCategory = widget.selectedWishListCategory;
     _selectedSortBy = widget.selectedSortBy;
     _isRadiusFilterEnabled = widget.isRadiusFilterEnabled;
     _selectedRadius = widget.selectedRadius;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFromWidget();
+  }
+
+  @override
+  void didUpdateWidget(covariant FilterScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedTradeType != widget.selectedTradeType ||
+        oldWidget.selectedPostType != widget.selectedPostType ||
+        oldWidget.selectedCategory != widget.selectedCategory ||
+        oldWidget.selectedWishListCategory != widget.selectedWishListCategory ||
+        oldWidget.selectedSortBy != widget.selectedSortBy ||
+        oldWidget.isRadiusFilterEnabled != widget.isRadiusFilterEnabled ||
+        oldWidget.selectedRadius != widget.selectedRadius) {
+      _syncFromWidget();
+    }
   }
 
   void _clearFilters() {

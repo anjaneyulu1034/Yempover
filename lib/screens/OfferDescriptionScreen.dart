@@ -199,10 +199,17 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
       return;
     }
 
-    if (_requiresPrice && parsedPrice != null && parsedPrice > 0) {
+    final walletAlreadyCheckedOnDeck =
+        widget.offerMode == OfferSubmissionMode.both &&
+        (widget.initialQuotedPrice?.trim().isNotEmpty ?? false);
+
+    if (_requiresPrice &&
+        parsedPrice != null &&
+        parsedPrice > 0 &&
+        !walletAlreadyCheckedOnDeck) {
       final canAfford = await WalletOfferGuard.ensureCanAfford(
         context,
-        requiredCoins: parsedPrice,
+        requiredCoins: parsedPrice.round(),
         itemName: widget.post.title,
       );
       if (!canAfford || !mounted) return;

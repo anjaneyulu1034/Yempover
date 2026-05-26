@@ -207,11 +207,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       return;
     }
 
-    if (selectedMode == OfferSubmissionMode.both) {
-      final hasEnoughBalance = await _ensureSufficientWalletBalance();
-      if (!mounted || !hasEnoughBalance) return;
-    }
-
     Navigator.push(
       context,
       MaterialPageRoute(
