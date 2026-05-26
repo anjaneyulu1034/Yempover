@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:YemPover_app/models/ProductPost.dart';
 import 'package:YemPover_app/utils/image_picker_utils.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final Function(UserItem) onPostCreated;
@@ -122,22 +123,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Title
-                    const Text(
-                      'Title',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                     TextFormField(
                       controller: _titleController,
-                      decoration: InputDecoration(
-                        hintText: 'Enter post title',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                      decoration: AppInputDecoration.build(
+                        label: 'Title',
+                        hint: 'Enter post title',
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
@@ -148,24 +138,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Category
-                    const Text(
-                      'Category',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
                       initialValue: _categoryController.text.isEmpty
                           ? null
                           : _categoryController.text,
-                      decoration: InputDecoration(
-                        hintText: 'Select category',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                      decoration: AppInputDecoration.build(
+                        label: 'Category',
+                        hint: 'Select category',
                       ),
                       items: _categories.map((category) {
                         return DropdownMenuItem(
@@ -187,23 +166,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Description
-                    const Text(
-                      'Description',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                     TextFormField(
                       controller: _descriptionController,
                       maxLines: 4,
-                      decoration: InputDecoration(
-                        hintText: 'Describe your item...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                      decoration: AppInputDecoration.build(
+                        label: 'Description',
+                        hint: 'Describe your item...',
+                        alignLabelWithHint: true,
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
@@ -214,25 +183,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Price
-                    const Text(
-                      'Price (optional)',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                     TextFormField(
                       controller: _priceController,
                       keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        hintText: 'Enter price',
+                      decoration: AppInputDecoration.build(
+                        label: 'Price (optional)',
+                        hint: 'Enter price',
                         prefixIcon: coinInputPrefix(),
                         prefixIconConstraints: coinPrefixIconConstraints,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
                       ),
                     ),
                     const SizedBox(height: 16),

@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
@@ -173,11 +174,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Text('Enter OTP sent to your phone number'),
             const SizedBox(height: 16),
             TextField(
-              decoration: const InputDecoration(
-                labelText: 'OTP',
-                border: OutlineInputBorder(),
-              ),
               keyboardType: TextInputType.number,
+              decoration: AppInputDecoration.build(label: 'OTP'),
             ),
           ],
         ),
@@ -288,72 +286,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             const SizedBox(height: 24),
 
-            // Name
-            const Text(
-              'Name',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
+            AppTextField(
+              label: 'Name',
+              hint: 'Enter your name',
               controller: _nameController,
-              decoration: InputDecoration(
-                hintText: 'Enter your name',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
             ),
 
             const SizedBox(height: 16),
 
-            // Email
-            const Text(
-              'Email',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
+            AppTextField(
+              label: 'Email',
+              hint: 'Enter your email',
               controller: _emailController,
-              decoration: InputDecoration(
-                hintText: 'Enter your email',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
               keyboardType: TextInputType.emailAddress,
             ),
 
             const SizedBox(height: 16),
 
-            // Phone Number
-            const Text(
-              'Phone number',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
-                  child: TextField(
+                  child: AppTextField(
+                    label: 'Phone Number',
+                    hint: 'Enter your phone number',
                     controller: _phoneController,
-                    decoration: InputDecoration(
-                      hintText: 'Enter your phone number',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
                     keyboardType: TextInputType.phone,
                   ),
                 ),
@@ -367,30 +323,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             const SizedBox(height: 16),
 
-            // Location
-            const Text(
-              'Location',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
+            AppTextField(
+              label: 'Location',
+              hint: 'Enter your location',
               controller: _locationController,
-              decoration: InputDecoration(
-                hintText: 'Enter your location',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.my_location),
-                  onPressed: () {
-                    // Get current location
-                    _locationController.text = 'Current Location';
-                  },
-                ),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.my_location),
+                onPressed: () {
+                  _locationController.text = 'Current Location';
+                },
               ),
             ),
 

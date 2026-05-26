@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:YemPover_app/services/coin_service.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 
 class AddCoinsResult {
   final Map<String, dynamic> transaction;
@@ -22,9 +23,7 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
   static const Color _surfaceBg = Color(0xFFF8F8FB);
   static const Color _labelColor = Color(0xFF374151);
   static const Color _borderColor = Color(0xFFEDEDF2);
-  static const Color _coinsFieldBorder = Color(0xFFFFD966);
   static const Color _coinsFieldFill = Color(0xFFFFFBEB);
-  static const Color _descriptionFieldBorder = Color(0xFFC7D2FE);
   static const Color _descriptionFieldFill = Color(0xFFF5F7FF);
 
   final CoinService _coinService = CoinService();
@@ -43,53 +42,22 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
   }
 
   InputDecoration _fieldDecoration({
-    String? hintText,
+    required String label,
+    String? hint,
     String? errorText,
     Widget? prefixIcon,
     BoxConstraints? prefixIconConstraints,
-    required Color enabledBorderColor,
-    required Color fillColor,
+    Color? fillColor,
+    bool alignLabelWithHint = false,
   }) {
-    final borderRadius = BorderRadius.circular(12);
-    final hasError = errorText != null && errorText.isNotEmpty;
-
-    return InputDecoration(
-      hintText: hintText,
-      hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-      filled: true,
-      fillColor: fillColor,
+    return AppInputDecoration.build(
+      label: label,
+      hint: hint,
       errorText: errorText,
       prefixIcon: prefixIcon,
       prefixIconConstraints: prefixIconConstraints,
-      border: OutlineInputBorder(
-        borderRadius: borderRadius,
-        borderSide: BorderSide(
-          color: hasError ? Colors.red.shade300 : enabledBorderColor,
-          width: 1.5,
-        ),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: borderRadius,
-        borderSide: BorderSide(
-          color: hasError ? Colors.red.shade300 : enabledBorderColor,
-          width: 1.5,
-        ),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: borderRadius,
-        borderSide: BorderSide(
-          color: hasError ? Colors.red.shade400 : _primary,
-          width: 2,
-        ),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: borderRadius,
-        borderSide: BorderSide(color: Colors.red.shade400, width: 1.5),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: borderRadius,
-        borderSide: BorderSide(color: Colors.red.shade500, width: 2),
-      ),
+      fillColor: fillColor ?? Colors.grey.shade100,
+      alignLabelWithHint: alignLabelWithHint,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
@@ -232,23 +200,14 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                       }
                     },
                     decoration: _fieldDecoration(
-                      hintText: 'Add Coins',
+                      label: 'Add Coins',
                       errorText: _amountError,
                       prefixIcon: coinInputPrefix(),
                       prefixIconConstraints: coinPrefixIconConstraints,
-                      enabledBorderColor: _coinsFieldBorder,
                       fillColor: _coinsFieldFill,
                     ),
                   ),
                   const SizedBox(height: 22),
-                  const Text(
-                    'Description',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: _labelColor,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
                   TextField(
                     controller: _descriptionController,
                     maxLines: 3,
@@ -259,10 +218,11 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                       }
                     },
                     decoration: _fieldDecoration(
-                      hintText: 'Add Description',
+                      label: 'Description',
+                      hint: 'Add description',
                       errorText: _descriptionError,
-                      enabledBorderColor: _descriptionFieldBorder,
                       fillColor: _descriptionFieldFill,
+                      alignLabelWithHint: true,
                       prefixIcon: const Padding(
                         padding: EdgeInsets.only(bottom: 40),
                         child: Icon(Icons.notes_outlined, color: _primary),

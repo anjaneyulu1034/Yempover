@@ -9,6 +9,7 @@ import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/utils/error_message_utils.dart';
 import 'package:YemPover_app/utils/wallet_offer_guard.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 
 enum OfferSubmissionMode { price, barter, both }
 
@@ -649,31 +650,11 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                     _priceError = _validatePrice(_priceController.text);
                   });
                 },
-                decoration: InputDecoration(
-                  hintText: 'Enter your offer in coins',
+                decoration: AppInputDecoration.build(
+                  label: 'Offer Price',
+                  hint: 'Enter your offer in coins',
                   prefix: coinInputPrefix(),
                   errorText: _priceError,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade400),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade400),
-                  ),
-                  focusedBorder: const OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
-                    borderSide: BorderSide(color: Color(0xFF2E5BFF), width: 2),
-                  ),
-                  errorBorder: const OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
-                    borderSide: BorderSide(color: Colors.red, width: 1.4),
-                  ),
-                  focusedErrorBorder: const OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
-                    borderSide: BorderSide(color: Colors.red, width: 2),
-                  ),
-                  filled: true,
                   fillColor: Colors.grey.shade50,
                 ),
               ),
@@ -696,35 +677,12 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                   );
                 });
               },
-              decoration: InputDecoration(
-                hintText: 'Explain your offer and why you want to trade...',
-                hintStyle: TextStyle(color: Colors.grey.shade400),
+              decoration: AppInputDecoration.build(
+                label: 'Description',
+                hint: 'Explain your offer and why you want to trade...',
                 errorText: _descriptionError,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade400),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade400),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(
-                    color: Color(0xFF2E5BFF),
-                    width: 2,
-                  ),
-                ),
-                errorBorder: const OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
-                  borderSide: BorderSide(color: Colors.red, width: 1.4),
-                ),
-                focusedErrorBorder: const OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
-                  borderSide: BorderSide(color: Colors.red, width: 2),
-                ),
-                filled: true,
                 fillColor: Colors.grey.shade50,
+                alignLabelWithHint: true,
                 counterText: '',
               ),
             ),

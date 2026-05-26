@@ -7,6 +7,7 @@ import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 
 enum ServiceDetailUiState { loadingService, serviceReady, serviceError }
 
@@ -1359,29 +1360,8 @@ class _ServiceDetailBookingScreenState
                         // Location Input
                         TextField(
                           controller: _locationController,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade400,
-                                width: 1.2,
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade400,
-                                width: 1.2,
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: Colors.deepPurple,
-                                width: 1.6,
-                              ),
-                            ),
-                            labelText: 'Location',
+                          decoration: AppInputDecoration.build(
+                            label: 'Location',
                             prefixIcon: const Icon(Icons.location_on, size: 20),
                           ),
                         ),
@@ -1548,29 +1528,8 @@ class _ServiceDetailBookingScreenState
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
-                            decoration: InputDecoration(
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
-                                  color: Colors.grey.shade400,
-                                  width: 1.2,
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
-                                  color: Colors.grey.shade400,
-                                  width: 1.2,
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Colors.deepPurple,
-                                  width: 1.6,
-                                ),
-                              ),
-                              labelText: 'Your Quote Price',
+                            decoration: AppInputDecoration.build(
+                              label: 'Your Quote Price',
                               prefixIcon: coinInputPrefix(),
                               prefixIconConstraints: coinPrefixIconConstraints,
                             ),
@@ -1583,30 +1542,10 @@ class _ServiceDetailBookingScreenState
                           controller: _notesController,
                           minLines: 3,
                           maxLines: 5,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade400,
-                                width: 1.2,
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade400,
-                                width: 1.2,
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: Colors.deepPurple,
-                                width: 1.6,
-                              ),
-                            ),
-                            labelText: 'Additional Notes',
+                          decoration: AppInputDecoration.build(
+                            label: 'Additional Notes',
                             prefixIcon: const Icon(Icons.note, size: 20),
+                            alignLabelWithHint: true,
                           ),
                         ),
                       ],

@@ -10,6 +10,7 @@ import 'package:YemPover_app/services/profile_service.dart';
 import 'package:YemPover_app/services/profile_session_manager.dart';
 import 'package:YemPover_app/utils/loading_overlay.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -470,87 +471,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                 const SizedBox(height: 20),
 
-                // First Name Field
-                TextFormField(
+                AppTextField(
+                  label: 'First Name',
+                  hint: 'Enter your first name',
                   controller: _firstNameController,
+                  prefixIcon: const Icon(Icons.person_outline),
                   validator: (value) => _validateName(value, 'first name'),
-                  decoration: InputDecoration(
-                    labelText: 'First Name',
-                    hintText: 'Enter your first name',
-                    prefixIcon: const Icon(Icons.person_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(
-                        color: AppConstants.primaryColor,
-                        width: 2,
-                      ),
-                    ),
-                  ),
                 ),
 
                 const SizedBox(height: 16),
 
-                // Last Name Field
-                TextFormField(
+                AppTextField(
+                  label: 'Last Name',
+                  hint: 'Enter your last name',
                   controller: _lastNameController,
+                  prefixIcon: const Icon(Icons.person_outline),
                   validator: (value) => _validateName(value, 'last name'),
-                  decoration: InputDecoration(
-                    labelText: 'Last Name',
-                    hintText: 'Enter your last name',
-                    prefixIcon: const Icon(Icons.person_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(
-                        color: AppConstants.primaryColor,
-                        width: 2,
-                      ),
-                    ),
-                  ),
                 ),
 
                 const SizedBox(height: 16),
 
-                // Email Field
-                TextFormField(
+                AppTextField(
+                  label: 'Email',
+                  hint: 'Enter your email',
                   controller: _emailController,
-                  validator: _validateEmail,
                   keyboardType: TextInputType.emailAddress,
+                  prefixIcon: const Icon(Icons.email_outlined),
                   inputFormatters: [
                     LengthLimitingTextInputFormatter(_emailMaxLength),
                   ],
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'Enter your email',
-                    prefixIcon: const Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(
-                        color: AppConstants.primaryColor,
-                        width: 2,
-                      ),
-                    ),
-                  ),
+                  validator: _validateEmail,
                 ),
 
                 const SizedBox(height: 16),
@@ -592,32 +542,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                 const SizedBox(height: 20),
 
-                // Home Address Field
-                TextFormField(
+                AppTextField(
+                  label: 'Home Address',
+                  hint: 'Enter your home address',
                   controller: _homeAddressController,
                   maxLines: 3,
-                  decoration: InputDecoration(
-                    labelText: 'Home Address',
-                    hintText: 'Enter your home address',
-                    prefixIcon: const Padding(
-                      padding: EdgeInsets.only(bottom: 50),
-                      child: Icon(Icons.location_on_outlined),
-                    ),
-                    alignLabelWithHint: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(
-                        color: AppConstants.primaryColor,
-                        width: 2,
-                      ),
-                    ),
+                  alignLabelWithHint: true,
+                  prefixIcon: const Padding(
+                    padding: EdgeInsets.only(bottom: 50),
+                    child: Icon(Icons.location_on_outlined),
                   ),
                 ),
 

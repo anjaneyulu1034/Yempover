@@ -6,6 +6,7 @@ import 'package:YemPover_app/screens/SignupScreen.dart';
 import 'package:YemPover_app/services/api_service.dart';
 import 'package:YemPover_app/services/auth_service.dart';
 import 'package:YemPover_app/services/token_service.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -275,31 +276,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 32),
 
-                        // Phone Field
-                        TextFormField(
+                        AppTextField(
+                          label: 'Phone Number',
+                          hint: 'e.g., +1234567890',
                           controller: _phoneController,
                           keyboardType: TextInputType.phone,
-                          decoration: InputDecoration(
-                            hintText:
-                                'Enter your phone number (e.g., +1234567890)',
-                            filled: true,
-                            fillColor: Colors.grey.shade100,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 18,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            errorBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: Colors.red),
-                            ),
-                            prefixIcon: const Icon(
-                              Icons.phone,
-                              color: Colors.grey,
-                            ),
+                          prefixIcon: const Icon(
+                            Icons.phone,
+                            color: Colors.grey,
                           ),
                           validator: _validatePhone,
                         ),

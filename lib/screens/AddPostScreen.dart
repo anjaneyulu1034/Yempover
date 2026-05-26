@@ -16,6 +16,7 @@ import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 
 class AddPostScreen extends StatefulWidget {
   final Function()? onPostAdded;
@@ -121,39 +122,23 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
   InputDecoration _fieldDecoration({
     String? hintText,
+    String? labelText,
     String? errorText,
     Widget? prefixIcon,
     BoxConstraints? prefixIconConstraints,
     String? prefixText,
+    bool alignLabelWithHint = false,
   }) {
-    return InputDecoration(
-      hintText: hintText,
-      hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-      filled: true,
-      fillColor: Colors.white,
+    final label = labelText ?? hintText ?? 'Field';
+    return AppInputDecoration.build(
+      label: label,
+      hint: labelText != null ? hintText : null,
       errorText: errorText,
       prefixIcon: prefixIcon,
       prefixIconConstraints: prefixIconConstraints,
       prefixText: prefixText,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(_fieldRadius),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(_fieldRadius),
-        borderSide: const BorderSide(color: _borderColor, width: 1.2),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(_fieldRadius),
-        borderSide: const BorderSide(color: _primary, width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(_fieldRadius),
-        borderSide: const BorderSide(color: Colors.red, width: 1.2),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(_fieldRadius),
-        borderSide: const BorderSide(color: Colors.red, width: 1.5),
-      ),
+      fillColor: Colors.white,
+      alignLabelWithHint: alignLabelWithHint,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }

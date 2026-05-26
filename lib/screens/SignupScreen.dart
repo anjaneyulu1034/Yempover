@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:YemPover_app/constants/api_constants.dart';
 import 'package:YemPover_app/screens/LoginScreen.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -230,24 +231,21 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 const SizedBox(height: 32),
 
-                // First Name
-                _buildField(
+                AppTextField(
                   label: 'First Name',
                   controller: _firstNameController,
                   validator: _validateName,
                 ),
                 const SizedBox(height: 16),
 
-                // Last Name
-                _buildField(
+                AppTextField(
                   label: 'Last Name',
                   controller: _lastNameController,
                   validator: _validateName,
                 ),
                 const SizedBox(height: 16),
 
-                // Phone
-                _buildField(
+                AppTextField(
                   label: 'Phone Number',
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
@@ -255,8 +253,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Email
-                _buildField(
+                AppTextField(
                   label: 'Email Address',
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -388,53 +385,4 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  Widget _buildField({
-    required String label,
-    required TextEditingController controller,
-    TextInputType keyboardType = TextInputType.text,
-    String? Function(String?)? validator,
-  }) {
-    final borderRadius = BorderRadius.circular(12);
-    final outlineBorder = OutlineInputBorder(
-      borderRadius: borderRadius,
-      borderSide: BorderSide(color: Colors.grey.shade300),
-    );
-
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        floatingLabelBehavior: FloatingLabelBehavior.auto,
-        filled: true,
-        fillColor: Colors.grey.shade100,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 18,
-        ),
-        border: outlineBorder,
-        enabledBorder: outlineBorder,
-        focusedBorder: OutlineInputBorder(
-          borderRadius: borderRadius,
-          borderSide: const BorderSide(
-            color: AppConstants.primaryColor,
-            width: 1.5,
-          ),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: borderRadius,
-          borderSide: const BorderSide(color: Colors.red),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: borderRadius,
-          borderSide: const BorderSide(color: Colors.red, width: 1.5),
-        ),
-        floatingLabelStyle: const TextStyle(
-          color: AppConstants.primaryColor,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      validator: validator,
-    );
-  }
 }

@@ -6,6 +6,7 @@ import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart
 import 'package:YemPover_app/utils/error_message_utils.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/utils/wallet_offer_guard.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 
 class PurchaseOfferScreen extends StatefulWidget {
   final Post post;
@@ -332,19 +333,10 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
               ],
-              decoration: InputDecoration(
-                hintText: 'Enter your offer in coins',
+              decoration: AppInputDecoration.build(
+                label: 'Offer Price',
+                hint: 'Enter your offer in coins',
                 prefix: coinInputPrefix(),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF2E5BFF)),
-                ),
-                contentPadding: const EdgeInsets.all(16),
-                filled: true,
                 fillColor: Colors.grey.shade50,
               ),
             ),
@@ -360,19 +352,10 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
             TextField(
               controller: _descriptionController,
               maxLines: 4,
-              decoration: InputDecoration(
-                hintText:
-                    'Add any notes or conditions for your purchase offer...',
-                hintStyle: const TextStyle(color: Colors.grey),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF2E5BFF)),
-                ),
-                contentPadding: const EdgeInsets.all(16),
+              decoration: AppInputDecoration.build(
+                label: 'Additional Notes',
+                hint: 'Add any notes or conditions for your purchase offer...',
+                alignLabelWithHint: true,
               ),
             ),
 

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/api_constants.dart';
@@ -1398,26 +1399,20 @@ class _EditProductScreenState extends State<EditProductScreen> {
                   });
                 }
               },
-              decoration: InputDecoration(
-                hintText: _selectedExpiryUnit == 'Minutes'
-                    ? 'Enter minutes'
+              decoration: AppInputDecoration.build(
+                label: _selectedExpiryUnit == 'Minutes'
+                    ? 'Minutes'
                     : _selectedExpiryUnit == 'Hours'
-                    ? 'Enter hours'
+                    ? 'Hours'
                     : _selectedExpiryUnit == 'Days'
-                    ? 'Enter days'
-                    : 'Enter months',
+                    ? 'Days'
+                    : 'Months',
+                hint: 'Enter value',
                 errorText: _expiryValidationError,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Colors.blue, width: 2),
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
                 ),
               ),
             ),
@@ -1455,52 +1450,18 @@ class _EditProductScreenState extends State<EditProductScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          RichText(
-            text: TextSpan(
-              children: [
-                TextSpan(
-                  text: label,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey,
-                  ),
-                ),
-                if (isRequired)
-                  const TextSpan(
-                    text: ' *',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.red,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
           TextFormField(
             controller: controller,
             maxLines: maxLines,
             keyboardType: keyboardType,
             validator: validator,
-            decoration: InputDecoration(
+            decoration: AppInputDecoration.build(
+              label: isRequired ? '$label *' : label,
               prefixText: prefixIcon == null ? prefix : null,
               prefixIcon: prefixIcon,
               prefixIconConstraints: prefixIconConstraints,
               suffixIcon: suffixIcon,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.blue, width: 2),
-              ),
+              fillColor: Colors.white,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 12,

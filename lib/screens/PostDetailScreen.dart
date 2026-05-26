@@ -11,6 +11,7 @@ import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:YemPover_app/utils/wallet_offer_guard.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/widgets/safe_network_image.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -490,27 +491,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       setDialogState(() => validationError = null);
                     }
                   },
-                  decoration: InputDecoration(
-                    hintText: 'Additional details (required)...',
-                    border: reportFieldBorder,
-                    enabledBorder: reportFieldBorder,
-                    focusedBorder: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(10)),
-                      borderSide: BorderSide(
-                        color: Color(0xFF3B82F6),
-                        width: 1.4,
-                      ),
-                    ),
-                    errorBorder: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(10)),
-                      borderSide: BorderSide(color: Color(0xFFDC2626), width: 1.4),
-                    ),
-                    focusedErrorBorder: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(10)),
-                      borderSide: BorderSide(color: Color(0xFFDC2626), width: 1.4),
-                    ),
-                    contentPadding: const EdgeInsets.all(12),
+                  decoration: AppInputDecoration.build(
+                    label: 'Additional details',
+                    hint: 'Required...',
                     errorText: validationError,
+                    alignLabelWithHint: true,
+                    contentPadding: const EdgeInsets.all(12),
                   ),
                   maxLines: 3,
                 ),

@@ -145,30 +145,41 @@ class MyApp extends StatelessWidget {
           ),
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.22),
+            fillColor: const Color(0xFFF5F5F5),
+            floatingLabelBehavior: FloatingLabelBehavior.auto,
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 14,
+              horizontal: 16,
+              vertical: 18,
             ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.30),
-              ),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade300),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
               borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.40),
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(
                 color: Color(0xFF1A73E8),
-                width: 1.2,
+                width: 1.5,
               ),
             ),
+            errorBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+              borderSide: BorderSide(color: Colors.red),
+            ),
+            focusedErrorBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+              borderSide: BorderSide(color: Colors.red, width: 1.5),
+            ),
+            floatingLabelStyle: const TextStyle(
+              color: Color(0xFF1A73E8),
+              fontWeight: FontWeight.w600,
+            ),
+            labelStyle: TextStyle(color: Colors.grey.shade600),
+            hintStyle: TextStyle(color: Colors.grey.shade500),
           ),
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(

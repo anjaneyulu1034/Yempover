@@ -10,6 +10,7 @@ import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/screens/AddPostScreen.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:YemPover_app/utils/wallet_offer_guard.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 
 class OfferDeckScreen extends StatefulWidget {
   final Post post;
@@ -713,26 +714,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                             );
                           });
                         },
-                        decoration: InputDecoration(
-                          hintText: 'Enter your price quote',
+                        decoration: AppInputDecoration.build(
+                          label: 'Price Quote',
+                          hint: 'Enter your price quote',
                           prefixIcon: coinInputPrefix(),
                           prefixIconConstraints: coinPrefixIconConstraints,
                           errorText: _quotedPriceError,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade400),
-                          ),
-                          focusedBorder: const OutlineInputBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(12)),
-                            borderSide: BorderSide(
-                              color: Color(0xFF2E5BFF),
-                              width: 2,
-                            ),
-                          ),
-                          filled: true,
                           fillColor: Colors.grey.shade50,
                         ),
                       ),

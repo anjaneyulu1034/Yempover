@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:YemPover_app/widgets/app_text_field.dart';
 
 class HelpSupportScreen extends StatefulWidget {
   const HelpSupportScreen({super.key});
@@ -75,86 +76,22 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    // Subject
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Subject',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
+                    AppTextField(
+                      label: 'Subject',
+                      hint: 'Enter subject/title',
                       controller: _subjectController,
-                      style: const TextStyle(color: Colors.black87),
-                      decoration: InputDecoration(
-                        hintText: 'Enter subject/title',
-                        hintStyle: TextStyle(color: Colors.grey.shade700),
-                        filled: true,
-                        fillColor: const Color(0xFFF6F6F6),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey.shade400),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey.shade400),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF2E5BFF),
-                            width: 1.6,
-                          ),
-                        ),
-                      ),
+                      fillColor: const Color(0xFFF6F6F6),
                     ),
 
                     const SizedBox(height: 20),
 
-                    // Message
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Message',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
+                    AppTextField(
+                      label: 'Message',
+                      hint: 'Describe your issue or question...',
                       controller: _messageController,
                       maxLines: 5,
-                      style: const TextStyle(color: Colors.black87),
-                      decoration: InputDecoration(
-                        hintText: 'Describe your issue or question...',
-                        hintStyle: TextStyle(color: Colors.grey.shade700),
-                        filled: true,
-                        fillColor: const Color(0xFFF6F6F6),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey.shade400),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey.shade400),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF2E5BFF),
-                            width: 1.6,
-                          ),
-                        ),
-                        alignLabelWithHint: true,
-                      ),
+                      alignLabelWithHint: true,
+                      fillColor: const Color(0xFFF6F6F6),
                     ),
 
                     const SizedBox(height: 32),
