@@ -2901,10 +2901,15 @@ class FilterScreen extends StatefulWidget {
   State<FilterScreen> createState() => _FilterScreenState();
 }
 
+enum _CategoryPickerField { none, main, sub }
+
 class _FilterScreenState extends State<FilterScreen> {
   static const Color _accent = Color(0xFF2E5BFF);
   static const Color _surface = Color(0xFFF7F9FF);
   static const Color _border = Color(0xFFE6ECFF);
+  static const double _categoryListMaxHeight = 220;
+
+  _CategoryPickerField _openCategoryPicker = _CategoryPickerField.none;
 
   late String? _selectedTradeType;
   late String? _selectedPostType;
@@ -2994,6 +2999,7 @@ class _FilterScreenState extends State<FilterScreen> {
       _selectedSortBy = 'Nearest';
       _isRadiusFilterEnabled = false;
       _selectedRadius = 10.0;
+      _openCategoryPicker = _CategoryPickerField.none;
     });
     widget.onClear();
   }
@@ -3224,6 +3230,154 @@ class _FilterScreenState extends State<FilterScreen> {
     );
   }
 
+  List<Map<String, String>> _validCategoryOptions(
+    List<Map<String, String>> options,
+  ) {
+    return options
+        .where(
+          (item) =>
+              (item['id'] ?? '').isNotEmpty && (item['name'] ?? '').isNotEmpty,
+        )
+        .toList();
+  }
+
+  String? _labelForCategoryId(
+    List<Map<String, String>> options,
+    String? id,
+  ) {
+    if (id == null) return null;
+    for (final item in options) {
+      if (item['id'] == id) return item['name'];
+    }
+    return null;
+  }
+
+  void _toggleCategoryPicker(_CategoryPickerField field) {
+    setState(() {
+      _openCategoryPicker =
+          _openCategoryPicker == field ? _CategoryPickerField.none : field;
+    });
+  }
+
+  Widget _buildInlineCategoryPicker({
+    required String hint,
+    required String? selectedId,
+    required List<Map<String, String>> options,
+    required _CategoryPickerField field,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final validOptions = _validCategoryOptions(options);
+    final isOpen = _openCategoryPicker == field;
+    final selectedLabel = _labelForCategoryId(validOptions, selectedId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: () => _toggleCategoryPicker(field),
+            borderRadius: BorderRadius.circular(12),
+            child: InputDecorator(
+              decoration: _dropdownDecoration(hint).copyWith(
+                suffixIcon: Icon(
+                  isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              child: Text(
+                selectedLabel ?? hint,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: selectedLabel != null
+                      ? const Color(0xFF111827)
+                      : Colors.grey.shade500,
+                  fontWeight: selectedLabel != null
+                      ? FontWeight.w500
+                      : FontWeight.normal,
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (isOpen) ...[
+          const SizedBox(height: 8),
+          Container(
+            constraints: const BoxConstraints(
+              maxHeight: _categoryListMaxHeight,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: validOptions.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Text(
+                      'No categories available',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: validOptions.length,
+                    separatorBuilder: (_, __) => Divider(
+                      height: 1,
+                      color: _border.withValues(alpha: 0.8),
+                    ),
+                    itemBuilder: (context, index) {
+                      final item = validOptions[index];
+                      final id = item['id']!;
+                      final name = item['name']!;
+                      final isSelected = selectedId == id;
+                      return ListTile(
+                        dense: true,
+                        title: Text(
+                          name,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isSelected
+                                ? _accent
+                                : const Color(0xFF111827),
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        ),
+                        trailing: isSelected
+                            ? const Icon(Icons.check, color: _accent, size: 20)
+                            : null,
+                        onTap: () {
+                          onChanged(id);
+                          setState(
+                            () => _openCategoryPicker =
+                                _CategoryPickerField.none,
+                          );
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildCategoryDropdowns() {
     if (widget.isLoadingCategories) {
       return const Padding(
@@ -3293,27 +3447,16 @@ class _FilterScreenState extends State<FilterScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            isExpanded: true,
-            value: _selectedCategory,
-            decoration: _dropdownDecoration('Select category'),
-            items: widget.mainCategories
-                .where(
-                  (category) =>
-                      (category['id'] ?? '').isNotEmpty &&
-                      (category['name'] ?? '').isNotEmpty,
-                )
-                .map(
-                  (category) => DropdownMenuItem<String>(
-                    value: category['id'],
-                    child: Text(category['name']!),
-                  ),
-                )
-                .toList(),
+          _buildInlineCategoryPicker(
+            hint: 'Select category',
+            selectedId: _selectedCategory,
+            options: widget.mainCategories,
+            field: _CategoryPickerField.main,
             onChanged: (value) {
               setState(() {
                 _selectedCategory = value;
                 _selectedWishListCategory = null;
+                _openCategoryPicker = _CategoryPickerField.none;
               });
             },
           ),
@@ -3344,23 +3487,11 @@ class _FilterScreenState extends State<FilterScreen> {
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
               )
             else
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                value: _selectedWishListCategory,
-                decoration: _dropdownDecoration('Select subcategory'),
-                items: subCategories
-                    .where(
-                      (sub) =>
-                          (sub['id'] ?? '').isNotEmpty &&
-                          (sub['name'] ?? '').isNotEmpty,
-                    )
-                    .map(
-                      (sub) => DropdownMenuItem<String>(
-                        value: sub['id'],
-                        child: Text(sub['name']!),
-                      ),
-                    )
-                    .toList(),
+              _buildInlineCategoryPicker(
+                hint: 'Select subcategory',
+                selectedId: _selectedWishListCategory,
+                options: subCategories,
+                field: _CategoryPickerField.sub,
                 onChanged: (value) {
                   setState(() => _selectedWishListCategory = value);
                 },
