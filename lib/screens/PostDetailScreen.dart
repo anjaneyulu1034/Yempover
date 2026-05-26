@@ -10,6 +10,7 @@ import 'package:YemPover_app/utils/loading_widget.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
 import 'package:YemPover_app/utils/wallet_offer_guard.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:YemPover_app/widgets/safe_network_image.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -425,96 +426,128 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Report Post'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Select reason for reporting this post:'),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              initialValue: selectedReason,
-              items: const [
-                DropdownMenuItem(value: 'Spam', child: Text('Spam')),
-                DropdownMenuItem(
-                  value: 'Inappropriate',
-                  child: Text('Inappropriate Content'),
-                ),
-                DropdownMenuItem(
-                  value: 'Wrong Category',
-                  child: Text('Wrong Category'),
-                ),
-                DropdownMenuItem(value: 'Fake', child: Text('Fake Post')),
-                DropdownMenuItem(
-                  value: 'Duplicate',
-                  child: Text('Duplicate Post'),
-                ),
-                DropdownMenuItem(value: 'Other', child: Text('Other')),
-              ],
-              onChanged: (value) {
-                selectedReason = value ?? 'Spam';
-              },
-              decoration: const InputDecoration(
-                border: reportFieldBorder,
-                enabledBorder: reportFieldBorder,
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(10)),
-                  borderSide: BorderSide(color: Color(0xFF3B82F6), width: 1.4),
-                ),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: reportController,
-              decoration: const InputDecoration(
-                hintText: 'Additional details (required)...',
-                border: reportFieldBorder,
-                enabledBorder: reportFieldBorder,
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(10)),
-                  borderSide: BorderSide(color: Color(0xFF3B82F6), width: 1.4),
-                ),
-                contentPadding: EdgeInsets.all(12),
-              ),
-              maxLines: 3,
-            ),
-          ],
-        ),
-        actions: [
-          OutlinedButton(
-            onPressed: () => Navigator.pop(context),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF334155),
-              side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final description = reportController.text.trim();
-              if (description.isEmpty) {
-                SnackbarUtils.showInfo(
-                  context,
-                  'Additional details are required to submit report.',
-                );
-                return;
-              }
+      builder: (dialogContext) {
+        String? validationError;
 
-              _reportPost(selectedReason, description);
-              Navigator.pop(context);
-            },
-            child: const Text('Submit Report'),
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text('Report Post'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Select reason for reporting this post:'),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedReason,
+                  items: const [
+                    DropdownMenuItem(value: 'Spam', child: Text('Spam')),
+                    DropdownMenuItem(
+                      value: 'Inappropriate',
+                      child: Text('Inappropriate Content'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Wrong Category',
+                      child: Text('Wrong Category'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Fake',
+                      child: Text('Fake Post'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Duplicate',
+                      child: Text('Duplicate Post'),
+                    ),
+                    DropdownMenuItem(value: 'Other', child: Text('Other')),
+                  ],
+                  onChanged: (value) {
+                    selectedReason = value ?? 'Spam';
+                  },
+                  decoration: const InputDecoration(
+                    border: reportFieldBorder,
+                    enabledBorder: reportFieldBorder,
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(10)),
+                      borderSide: BorderSide(
+                        color: Color(0xFF3B82F6),
+                        width: 1.4,
+                      ),
+                    ),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: reportController,
+                  onChanged: (_) {
+                    if (validationError != null) {
+                      setDialogState(() => validationError = null);
+                    }
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Additional details (required)...',
+                    border: reportFieldBorder,
+                    enabledBorder: reportFieldBorder,
+                    focusedBorder: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(10)),
+                      borderSide: BorderSide(
+                        color: Color(0xFF3B82F6),
+                        width: 1.4,
+                      ),
+                    ),
+                    errorBorder: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(10)),
+                      borderSide: BorderSide(color: Color(0xFFDC2626), width: 1.4),
+                    ),
+                    focusedErrorBorder: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(10)),
+                      borderSide: BorderSide(color: Color(0xFFDC2626), width: 1.4),
+                    ),
+                    contentPadding: const EdgeInsets.all(12),
+                    errorText: validationError,
+                  ),
+                  maxLines: 3,
+                ),
+              ],
+            ),
+            actions: [
+              OutlinedButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF334155),
+                  side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final description = reportController.text.trim();
+                  if (description.isEmpty) {
+                    setDialogState(() {
+                      validationError =
+                          'Additional details are required to submit report.';
+                    });
+                    return;
+                  }
+
+                  _reportPost(selectedReason, description);
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Submit Report'),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -630,11 +663,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     backgroundColor: Colors.grey.shade200,
                     child: (profileImage != null && profileImage.isNotEmpty)
                         ? ClipOval(
-                            child: Image.network(
-                              profileImage,
+                            child: SafeNetworkImage(
+                              url: profileImage,
                               width: 100,
                               height: 100,
                               fit: BoxFit.cover,
+                              errorWidget: Text(
+                                fullName.isNotEmpty
+                                    ? fullName[0].toUpperCase()
+                                    : 'U',
+                                style: const TextStyle(
+                                  fontSize: 36,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
                             ),
                           )
                         : Text(
@@ -807,34 +850,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               });
             },
             itemBuilder: (context, index) {
-              return Image.network(
-                images[index],
+              return SafeNetworkImage(
+                url: images[index],
                 width: double.infinity,
+                height: double.infinity,
                 fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    width: double.infinity,
-                    height: double.infinity,
-                    color: Colors.grey.shade200,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                            : null,
-                      ),
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: Colors.grey.shade200,
-                    child: const Center(
-                      child: Icon(Icons.photo, size: 64, color: Colors.grey),
-                    ),
-                  );
-                },
               );
             },
           ),

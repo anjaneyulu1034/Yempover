@@ -19,6 +19,7 @@ import 'package:YemPover_app/screens/MyProfileScreen.dart';
 import 'package:YemPover_app/screens/NotificationsScreen.dart';
 import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:YemPover_app/widgets/safe_network_image.dart';
 import 'package:YemPover_app/services/my_profile_service.dart';
 import 'package:YemPover_app/services/profile_session_manager.dart';
 import 'package:YemPover_app/services/category_service.dart';
@@ -2308,37 +2309,32 @@ class _HomeScreenState extends State<HomeScreen> {
                   child:
                       post.processedImages.isNotEmpty &&
                           post.processedImages.first.trim().isNotEmpty
-                      ? Image.network(
-                          post.processedImages.first,
+                      ? SafeNetworkImage(
+                          url: post.processedImages.first,
                           height: 220,
                           width: double.infinity,
                           fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              height: 220,
-                              color: Colors.grey.shade200,
-                              child: const Center(
-                                child: CircularProgressIndicator(
-                                  color: Colors.blue,
-                                ),
+                          placeholder: Container(
+                            height: 220,
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.blue,
                               ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              height: 220,
-                              width: double.infinity,
-                              color: Colors.grey.shade200,
-                              child: Center(
-                                child: Icon(
-                                  Icons.image_not_supported,
-                                  size: 64,
-                                  color: Colors.grey,
-                                ),
+                            ),
+                          ),
+                          errorWidget: Container(
+                            height: 220,
+                            width: double.infinity,
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: Icon(
+                                Icons.image_not_supported,
+                                size: 64,
+                                color: Colors.grey,
                               ),
-                            );
-                          },
+                            ),
+                          ),
                         )
                       : Container(
                           height: 220,
