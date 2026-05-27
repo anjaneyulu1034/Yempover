@@ -73,11 +73,16 @@ class WalletOfferGuard {
     required int balance,
     String? itemName,
   }) {
-    const primary = Color(0xFF6549E8);
+    final shortfall = (required - balance).clamp(0, required);
+    final progress = required <= 0 ? 0.0 : (balance / required).clamp(0.0, 1.0);
+    final shortPercent =
+        required <= 0 ? 0 : ((shortfall / required) * 100).round().clamp(0, 100);
+
+    const primary = Color(0xFF2E5BFF);
     const titleColor = Color(0xFF111827);
     const bodyColor = Color(0xFF6B7280);
-    const borderColor = Color(0xFFD1D5DB);
-    final shortfall = (required - balance).clamp(0, required);
+    const borderColor = Color(0xFFE5E7EB);
+    const cardBg = Color(0xFFF7F4EA);
 
     return showDialog<bool>(
       context: context,
@@ -88,170 +93,169 @@ class WalletOfferGuard {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF8E6),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: CoinIcon(size: 28, iconSize: 16),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Insufficient coins',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: titleColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Text(
-                itemName != null && itemName.isNotEmpty
-                    ? 'You need more coins to make an offer on "$itemName".'
-                    : 'You need more coins in your wallet to make this offer.',
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.35,
-                  color: Colors.black.withValues(alpha: 0.68),
-                ),
-              ),
-              const SizedBox(height: 16),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8F8FB),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFEDEDF2)),
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFF0EAD8)),
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _coinBalanceRow(
-                      label: 'Required',
-                      amount: required,
-                      valueColor: titleColor,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3EEDC),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Center(
+                            child: CoinIcon(size: 26, iconSize: 16),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'Insufficient balance',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: titleColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Padding(
+                      padding: EdgeInsets.only(left: 56),
+                      child: Text(
+                        'Top up to continue your offer',
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.25,
+                          color: bodyColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${CoinFormat.amount(balance)}',
+                          style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            color: titleColor,
+                            height: 1.0,
+                          ),
+                        ),
+                        Text(
+                          ' / ${CoinFormat.amount(required)} coins',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black.withValues(alpha: 0.55),
+                            height: 1.2,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '$shortPercent% short',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFB42318),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 10),
-                    _coinBalanceRow(
-                      label: 'Your balance',
-                      amount: balance,
-                      valueColor: const Color(0xFFDC2626),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 9,
+                        backgroundColor: const Color(0xFFE7DFC8),
+                        valueColor: const AlwaysStoppedAnimation(Color(0xFF8A7A3A)),
+                      ),
                     ),
-                    if (shortfall > 0) ...[
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 10),
-                        child: Divider(height: 1, color: Color(0xFFE5E7EB)),
+                    const SizedBox(height: 10),
+                    Text(
+                      itemName != null && itemName.isNotEmpty
+                          ? 'Add ${CoinFormat.amount(shortfall)} coins to make an offer on "$itemName"'
+                          : 'Add ${CoinFormat.amount(shortfall)} coins to continue',
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        height: 1.25,
+                        color: bodyColor,
+                        fontWeight: FontWeight.w600,
                       ),
-                      _coinBalanceRow(
-                        label: 'Short by',
-                        amount: shortfall,
-                        valueColor: const Color(0xFFB45309),
-                      ),
-                    ],
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Add coins to continue with your offer.',
-                style: TextStyle(fontSize: 13, height: 1.35, color: bodyColor),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                    backgroundColor: primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: Text(
+                    'Add ${CoinFormat.amount(shortfall)} coins',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                        foregroundColor: const Color(0xFF374151),
-                        side: const BorderSide(color: borderColor, width: 1.2),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
-                      ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                    foregroundColor: const Color(0xFF111827),
+                    side: const BorderSide(color: borderColor, width: 1.2),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                        backgroundColor: primary,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: const Text(
-                        'Add Coins',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
-                      ),
+                  child: const Text(
+                    'Maybe later',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
                     ),
                   ),
-                ],
+                ),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  static Widget _coinBalanceRow({
-    required String label,
-    required int amount,
-    required Color valueColor,
-  }) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF6B7280),
-            ),
-          ),
-        ),
-        CoinPriceLabel(
-          text: '${CoinFormat.amount(amount)} coins',
-          iconSize: 18,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: valueColor,
-          ),
-        ),
-      ],
     );
   }
 }
