@@ -11,6 +11,8 @@ import 'package:YemPover_app/widgets/app_text_field.dart';
 
 enum ServiceDetailUiState { loadingService, serviceReady, serviceError }
 
+enum _SlotPeriod { morning, afternoon, evening }
+
 class ServiceDetailBookingScreen extends StatefulWidget {
   final String serviceId;
 
@@ -42,6 +44,7 @@ class _ServiceDetailBookingScreenState
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _proposedTime = const TimeOfDay(hour: 10, minute: 0);
   Map<String, dynamic>? _selectedSlot;
+  _SlotPeriod _selectedSlotPeriod = _SlotPeriod.afternoon;
 
   int _duration = 30;
   bool _showDurationOptions = false;
@@ -315,6 +318,11 @@ class _ServiceDetailBookingScreenState
         _slots = slots;
         _slotsUnavailableReason = unavailableReason;
         _loadingSlots = false;
+        _selectedSlotPeriod = _defaultSlotPeriod(slots);
+        if (_selectedSlot != null &&
+            _periodForSlot(_selectedSlot!) != _selectedSlotPeriod) {
+          _selectedSlot = null;
+        }
       });
     } catch (error) {
       if (!mounted) return;
@@ -455,6 +463,251 @@ class _ServiceDetailBookingScreenState
     final available = slot['available'];
     if (available is bool) return available;
     return slot['isAvailable'] != false;
+  }
+
+  _SlotPeriod _periodForSlot(Map<String, dynamic> slot) {
+    final dt = _slotDateTime(slot);
+    final hour = dt?.hour ??
+        _service.parseTimeOfDay(
+              _selectedDate,
+              slot['startTime']?.toString() ?? slot['time']?.toString(),
+            )?.hour ??
+        12;
+    if (hour < 12) return _SlotPeriod.morning;
+    if (hour < 17) return _SlotPeriod.afternoon;
+    return _SlotPeriod.evening;
+  }
+
+  _SlotPeriod _defaultSlotPeriod(List<Map<String, dynamic>> slots) {
+    int count(_SlotPeriod p) =>
+        slots.where((s) => _slotAvailable(s) && _periodForSlot(s) == p).length;
+
+    final morning = count(_SlotPeriod.morning);
+    final afternoon = count(_SlotPeriod.afternoon);
+    final evening = count(_SlotPeriod.evening);
+
+    if (afternoon > 0) return _SlotPeriod.afternoon;
+    if (morning > 0) return _SlotPeriod.morning;
+    if (evening > 0) return _SlotPeriod.evening;
+    return _SlotPeriod.afternoon;
+  }
+
+  String _periodTitle(_SlotPeriod p) {
+    switch (p) {
+      case _SlotPeriod.morning:
+        return 'Morning';
+      case _SlotPeriod.afternoon:
+        return 'Afternoon';
+      case _SlotPeriod.evening:
+        return 'Evening';
+    }
+  }
+
+  List<Map<String, dynamic>> _slotsForPeriod(_SlotPeriod p) {
+    return _slots.where((s) => _periodForSlot(s) == p).toList();
+  }
+
+  String _periodRangeLabel(_SlotPeriod p) {
+    final items = _slotsForPeriod(p).where(_slotAvailable).toList()
+      ..sort((a, b) {
+        final ad = _slotDateTime(a);
+        final bd = _slotDateTime(b);
+        if (ad == null || bd == null) return 0;
+        return ad.compareTo(bd);
+      });
+
+    if (items.isEmpty) return '';
+    final first = _slotDateTime(items.first);
+    final last = _slotDateTime(items.last);
+    if (first == null || last == null) return '';
+    return '${_timeFormat.format(first)} – ${_timeFormat.format(last)}';
+  }
+
+  Widget _buildPeriodTab(_SlotPeriod period, int count, bool selected) {
+    final enabled = count > 0;
+    final fg = selected ? const Color(0xFF2E5BFF) : const Color(0xFF374151);
+
+    return Expanded(
+      child: InkWell(
+        onTap: enabled
+            ? () {
+                setState(() {
+                  _selectedSlotPeriod = period;
+                  if (_selectedSlot != null &&
+                      _periodForSlot(_selectedSlot!) != period) {
+                    _selectedSlot = null;
+                  }
+                });
+              }
+            : null,
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFEAF1FF) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFF2E5BFF)
+                  : const Color(0xFFE5E7EB),
+              width: selected ? 1.8 : 1.2,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _periodTitle(period),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: enabled ? fg : const Color(0xFF9CA3AF),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$count slots',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: enabled ? fg : const Color(0xFF9CA3AF),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlotChip(Map<String, dynamic> slot) {
+    final available = _slotAvailable(slot);
+    final selectedSlot = _selectedSlot;
+    final selected =
+        selectedSlot != null && _slotLabel(selectedSlot) == _slotLabel(slot);
+
+    final bg = selected
+        ? const Color(0xFF2E5BFF)
+        : available
+            ? Colors.white
+            : const Color(0xFFF3F4F6);
+    final borderColor = selected
+        ? const Color(0xFF2E5BFF)
+        : const Color(0xFFE5E7EB);
+    final fg = selected
+        ? Colors.white
+        : available
+            ? const Color(0xFF111827)
+            : const Color(0xFF9CA3AF);
+
+    return InkWell(
+      onTap: available
+          ? () {
+              setState(() {
+                _selectedSlot = slot;
+                final rawDuration = slot['slotDurationMinutes'];
+                _duration = rawDuration is int
+                    ? rawDuration
+                    : int.tryParse(rawDuration?.toString() ?? '') ?? _duration;
+              });
+            }
+          : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 44,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: borderColor, width: selected ? 1.8 : 1.2),
+        ),
+        child: Text(
+          _slotLabel(slot).replaceAll(RegExp(r'\s?[–-]\s?.*$'), ''),
+          textAlign: TextAlign.center,
+          style: TextStyle(fontWeight: FontWeight.w700, color: fg),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlotPicker() {
+    final morningCount =
+        _slotsForPeriod(_SlotPeriod.morning).where(_slotAvailable).length;
+    final afternoonCount =
+        _slotsForPeriod(_SlotPeriod.afternoon).where(_slotAvailable).length;
+    final eveningCount =
+        _slotsForPeriod(_SlotPeriod.evening).where(_slotAvailable).length;
+
+    final periodSlots = _slotsForPeriod(_selectedSlotPeriod)
+        .where(_slotAvailable)
+        .toList()
+      ..sort((a, b) {
+        final ad = _slotDateTime(a);
+        final bd = _slotDateTime(b);
+        if (ad == null || bd == null) return 0;
+        return ad.compareTo(bd);
+      });
+
+    final rangeText = _periodRangeLabel(_selectedSlotPeriod);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.access_time, color: Color(0xFF2E5BFF)),
+            SizedBox(width: 10),
+            Text(
+              'Pick a time slot',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            _buildPeriodTab(
+              _SlotPeriod.morning,
+              morningCount,
+              _selectedSlotPeriod == _SlotPeriod.morning,
+            ),
+            const SizedBox(width: 10),
+            _buildPeriodTab(
+              _SlotPeriod.afternoon,
+              afternoonCount,
+              _selectedSlotPeriod == _SlotPeriod.afternoon,
+            ),
+            const SizedBox(width: 10),
+            _buildPeriodTab(
+              _SlotPeriod.evening,
+              eveningCount,
+              _selectedSlotPeriod == _SlotPeriod.evening,
+            ),
+          ],
+        ),
+        if (rangeText.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(
+            '${_periodTitle(_selectedSlotPeriod)} : $rangeText',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF111827),
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 3,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 2.25,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: periodSlots.map(_buildSlotChip).toList(),
+        ),
+      ],
+    );
   }
 
   String? _slotReason(Map<String, dynamic> slot) {
@@ -1197,15 +1450,6 @@ class _ServiceDetailBookingScreenState
                             ),
                           ),
                         ] else ...[
-                          const Text(
-                            'Available Time Slots',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
                           if (_loadingSlots)
                             const Center(
                               child: Padding(
@@ -1243,83 +1487,7 @@ class _ServiceDetailBookingScreenState
                               ),
                             )
                           else
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: _slots.map((slot) {
-                                final available = _slotAvailable(slot);
-                                final selectedSlot = _selectedSlot;
-                                final selected =
-                                    selectedSlot != null &&
-                                    _slotLabel(selectedSlot) ==
-                                        _slotLabel(slot);
-                                return InkWell(
-                                  onTap: available
-                                      ? () {
-                                          setState(() {
-                                            _selectedSlot = slot;
-                                            final rawDuration =
-                                                slot['slotDurationMinutes'];
-                                            _duration = rawDuration is int
-                                                ? rawDuration
-                                                : int.tryParse(
-                                                        rawDuration
-                                                                ?.toString() ??
-                                                            '',
-                                                      ) ??
-                                                      _duration;
-                                          });
-                                        }
-                                      : null,
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 10,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: selected
-                                          ? Colors.deepPurple
-                                          : available
-                                          ? Colors.grey[50]
-                                          : Colors.grey[100],
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: selected
-                                            ? Colors.deepPurple
-                                            : available
-                                            ? Colors.grey.shade400
-                                            : Colors.grey.shade300,
-                                        width: 1.2,
-                                      ),
-                                      boxShadow: selected
-                                          ? [
-                                              BoxShadow(
-                                                color: Colors.deepPurple
-                                                    .withValues(alpha: 0.3),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ]
-                                          : null,
-                                    ),
-                                    child: Text(
-                                      _slotLabel(slot),
-                                      style: TextStyle(
-                                        color: selected
-                                            ? Colors.white
-                                            : available
-                                            ? Colors.black87
-                                            : Colors.grey[500],
-                                        fontWeight: selected
-                                            ? FontWeight.w600
-                                            : FontWeight.normal,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
+                            _buildSlotPicker(),
 
                           if (_selectedSlot != null &&
                               !_slotAvailable(_selectedSlot!))
@@ -1725,12 +1893,13 @@ class _ServiceDetailBookingScreenState
       child: ElevatedButton(
         onPressed: canBookWithSelection && !_booking ? _book : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.deepPurple,
+          backgroundColor: const Color(0xFF2E5BFF),
           foregroundColor: Colors.white,
-          disabledBackgroundColor: Colors.grey[300],
+          disabledBackgroundColor: const Color(0xFFF5F3EE),
+          disabledForegroundColor: const Color(0xFF6B7280),
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(12),
           ),
           elevation: 0,
         ),
@@ -1769,7 +1938,7 @@ class _ServiceDetailBookingScreenState
                       !canBook
                           ? _invalidReason
                           : !_isLookingForService && _selectedSlot == null
-                          ? 'Select a Time Slot'
+                          ? 'Select a time slot'
                           : _isLookingForService
                           ? 'Send Proposal'
                           : 'Book Appointment',
