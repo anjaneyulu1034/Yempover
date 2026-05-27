@@ -40,11 +40,20 @@ class SendOtpRequest {
 class VerifyOtpRequest {
   final String mobileNumber;
   final String otp;
+  final String? photo;
 
-  VerifyOtpRequest({required this.mobileNumber, required this.otp});
+  VerifyOtpRequest({
+    required this.mobileNumber,
+    required this.otp,
+    this.photo,
+  });
 
   Map<String, dynamic> toJson() {
-    return {'mobileNumber': mobileNumber, 'otp': otp};
+    return {
+      'mobileNumber': mobileNumber,
+      'otp': otp,
+      if (photo != null) 'photo': photo,
+    };
   }
 }
 
