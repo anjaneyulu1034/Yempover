@@ -14,6 +14,7 @@ import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/utils/blocked_users_cache.dart';
 import 'package:YemPover_app/services/coin_service.dart';
 import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
+import 'package:YemPover_app/utils/error_message_utils.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final TradeChat chat;
@@ -1057,10 +1058,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Future<void> _showPriceOfferDialog() async {
     final priceController = TextEditingController();
     String selectedCurrency = 'USD';
+    String? dialogError;
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => StatefulBuilder(
+      builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
           final border = OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
@@ -1075,10 +1077,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             title: const Text('Price Offer'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (dialogError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      dialogError!,
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
                 TextField(
                   controller: priceController,
                   keyboardType: TextInputType.number,
+                  onChanged: (_) {
+                    if (dialogError != null) {
+                      setDialogState(() => dialogError = null);
+                    }
+                  },
                   decoration: InputDecoration(
                     labelText: 'Price',
                     prefixIcon: coinInputPrefix(),
@@ -1134,7 +1154,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.pop(dialogContext),
                 style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF2E5BFF),
                   side: const BorderSide(color: Color(0xFF2E5BFF), width: 1.2),
@@ -1150,9 +1170,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               ),
               ElevatedButton(
                 onPressed: () {
-                  if (priceController.text.isNotEmpty) {
-                    Navigator.pop(context, true);
+                  final trimmed = priceController.text.trim();
+                  if (trimmed.isEmpty) {
+                    setDialogState(() => dialogError = 'Enter a price');
+                    return;
                   }
+
+                  final parsed = double.tryParse(trimmed);
+                  if (parsed == null) {
+                    setDialogState(
+                      () => dialogError = 'Enter a valid price',
+                    );
+                    return;
+                  }
+
+                  final validationError =
+                      _validateOfferPriceAgainstListing(parsed);
+                  if (validationError != null) {
+                    setDialogState(() => dialogError = validationError);
+                    return;
+                  }
+
+                  Navigator.pop(dialogContext, true);
                 },
                 child: const Text('Create Offer'),
               ),
@@ -1162,12 +1201,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       ),
     );
 
-    if (result == true && priceController.text.isNotEmpty) {
-      await _createPriceOffer(
-        price: double.parse(priceController.text),
-        currency: selectedCurrency,
-      );
-    }
+    if (result != true || priceController.text.trim().isEmpty) return;
+
+    final parsedPrice = double.tryParse(priceController.text.trim());
+    if (parsedPrice == null) return;
+
+    await _createPriceOffer(
+      price: parsedPrice,
+      currency: selectedCurrency,
+    );
   }
 
   Future<void> _showBarterOfferDialog() async {
@@ -1297,48 +1339,143 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     await _showCounterBarterOfferDialog(originalOffer);
   }
 
+  double? get _listingPrice {
+    final productPrice = _currentChat.product?.price;
+    if (productPrice != null && productPrice > 0) return productPrice;
+
+    final servicePrice = _currentChat.service?.price;
+    if (servicePrice != null && servicePrice > 0) return servicePrice;
+
+    return null;
+  }
+
+  String? _validateOfferPriceAgainstListing(double price) {
+    final listing = _listingPrice;
+    if (listing == null) return null;
+
+    if (price <= 0) {
+      return 'Enter a valid price';
+    }
+
+    if (price.round() > listing.round()) {
+      return 'Offer cannot exceed listing price of '
+          '${CoinFormat.amount(listing)} coins';
+    }
+
+    return null;
+  }
+
+  Future<void> _showOfferMessageDialog(String message) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Offer'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showCounterPriceOfferDialog(TradeOffer originalOffer) async {
     final priceController = TextEditingController(
       text: originalOffer.price?.toStringAsFixed(2) ?? '',
     );
+    String? dialogError;
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Counter Price Offer'),
-        content: TextField(
-          controller: priceController,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            labelText: 'Your Counter Price',
-            prefixIcon: coinInputPrefix(),
-            prefixIconConstraints: coinPrefixIconConstraints,
-            border: const OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (priceController.text.trim().isNotEmpty) {
-                Navigator.pop(context, true);
-              }
-            },
-            child: const Text('Send Counter'),
-          ),
-        ],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Counter Price Offer'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (dialogError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      dialogError!,
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                TextField(
+                  controller: priceController,
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) {
+                    if (dialogError != null) {
+                      setDialogState(() => dialogError = null);
+                    }
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Your Counter Price',
+                    prefixIcon: coinInputPrefix(),
+                    prefixIconConstraints: coinPrefixIconConstraints,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final trimmed = priceController.text.trim();
+                  if (trimmed.isEmpty) {
+                    setDialogState(
+                      () => dialogError = 'Enter a price',
+                    );
+                    return;
+                  }
+
+                  final parsed = double.tryParse(trimmed);
+                  if (parsed == null) {
+                    setDialogState(
+                      () => dialogError = 'Enter a valid price',
+                    );
+                    return;
+                  }
+
+                  final validationError =
+                      _validateOfferPriceAgainstListing(parsed);
+                  if (validationError != null) {
+                    setDialogState(() => dialogError = validationError);
+                    return;
+                  }
+
+                  Navigator.pop(dialogContext, true);
+                },
+                child: const Text('Send Counter'),
+              ),
+            ],
+          );
+        },
       ),
     );
 
     if (result != true || priceController.text.trim().isEmpty) return;
 
+    final parsedPrice = double.tryParse(priceController.text.trim());
+    if (parsedPrice == null) return;
+
     await _createCounterOffer(
       originalOffer: originalOffer,
       offerType: 'PRICE',
-      price: double.tryParse(priceController.text.trim()),
+      price: parsedPrice,
     );
   }
 
@@ -1461,6 +1598,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       return null;
     }
 
+    if (offerType == 'PRICE' && price != null) {
+      final validationError = _validateOfferPriceAgainstListing(price);
+      if (validationError != null) {
+        await _showOfferMessageDialog(validationError);
+        return null;
+      }
+    }
+
     setState(() {
       _isOfferActionInProgress = true;
       _processingOfferId = originalOffer.id;
@@ -1501,10 +1646,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       return counterOffer;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to send counter offer: ${e.toString()}'),
-            backgroundColor: Colors.red,
+        await _showOfferMessageDialog(
+          ErrorMessageUtils.sanitize(
+            e,
+            fallback: 'Failed to send counter offer. Please try again.',
           ),
         );
       }

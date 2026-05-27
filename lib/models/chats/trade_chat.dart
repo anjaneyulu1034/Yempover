@@ -236,12 +236,14 @@ class ServiceInfo {
   final String id;
   final String title;
   final List<String> images;
+  final double? price;
   final String status;
 
   ServiceInfo({
     required this.id,
     required this.title,
     required this.images,
+    this.price,
     required this.status,
   });
 
@@ -250,12 +252,21 @@ class ServiceInfo {
       id: json['id'] ?? '',
       title: json['title'] ?? '',
       images: (json['images'] as List? ?? []).map((e) => e.toString()).toList(),
+      price: json['price'] != null
+          ? double.tryParse(json['price'].toString())
+          : null,
       status: json['status'] ?? '',
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {'id': id, 'title': title, 'images': images, 'status': status};
+    return {
+      'id': id,
+      'title': title,
+      'images': images,
+      'price': price,
+      'status': status,
+    };
   }
 
   String get firstImage => images.isNotEmpty ? images.first : '';
