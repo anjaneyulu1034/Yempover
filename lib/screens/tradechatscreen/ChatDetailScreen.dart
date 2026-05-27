@@ -1031,8 +1031,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           children: [
             ListTile(
               leading: const CoinIcon(size: 36, iconSize: 22),
-              title: const Text('Price Offer'),
-              subtitle: const Text('Make a cash offer'),
+              title: const Text('Coins Offer'),
+              subtitle: const Text('Offer coins'),
               onTap: () => Navigator.pop(context, {'type': 'price'}),
             ),
             ListTile(
@@ -1074,7 +1074,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               borderRadius: BorderRadius.circular(14),
               side: BorderSide(color: Colors.grey.shade300, width: 1.2),
             ),
-            title: const Text('Price Offer'),
+            title: const Text('Coins Offer'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1100,7 +1100,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     }
                   },
                   decoration: InputDecoration(
-                    labelText: 'Price',
+                    labelText: 'Coins',
                     prefixIcon: coinInputPrefix(),
                     prefixIconConstraints: coinPrefixIconConstraints,
                     border: border,
@@ -1172,7 +1172,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 onPressed: () {
                   final trimmed = priceController.text.trim();
                   if (trimmed.isEmpty) {
-                    setDialogState(() => dialogError = 'Enter a price');
+                    setDialogState(() => dialogError = 'Enter coins');
                     return;
                   }
 
@@ -1393,7 +1393,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('Counter Price Offer'),
+            title: const Text('Counter Coins Offer'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1419,7 +1419,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     }
                   },
                   decoration: InputDecoration(
-                    labelText: 'Your Counter Price',
+                    labelText: 'Your Counter Coins',
                     prefixIcon: coinInputPrefix(),
                     prefixIconConstraints: coinPrefixIconConstraints,
                     border: const OutlineInputBorder(),
@@ -1437,7 +1437,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   final trimmed = priceController.text.trim();
                   if (trimmed.isEmpty) {
                     setDialogState(
-                      () => dialogError = 'Enter a price',
+                      () => dialogError = 'Enter coins',
                     );
                     return;
                   }
@@ -1445,7 +1445,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   final parsed = double.tryParse(trimmed);
                   if (parsed == null) {
                     setDialogState(
-                      () => dialogError = 'Enter a valid price',
+                      () => dialogError = 'Enter a valid coin amount',
                     );
                     return;
                   }
@@ -2146,13 +2146,26 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           'You will no longer receive messages or offers from them.',
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(context, false),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF334155),
+              side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2E5BFF),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             child: const Text('Block'),
           ),
         ],

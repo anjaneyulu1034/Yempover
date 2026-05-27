@@ -520,7 +520,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   if (description.isEmpty) {
                     setDialogState(() {
                       validationError =
-                          'Additional details are required to submit report.';
+                          'Additional details are required.';
                     });
                     return;
                   }

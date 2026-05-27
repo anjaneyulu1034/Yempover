@@ -1323,8 +1323,14 @@ class _CustomDateRangePickerSheetState extends State<_CustomDateRangePickerSheet
   InputDecoration _dropdownDecoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      labelStyle: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF6B7280),
+      ),
+      floatingLabelBehavior: FloatingLabelBehavior.always,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
@@ -1366,12 +1372,28 @@ class _CustomDateRangePickerSheetState extends State<_CustomDateRangePickerSheet
               child: DropdownButtonFormField<int>(
                 value: day,
                 isExpanded: true,
+                alignment: Alignment.center,
                 decoration: _dropdownDecoration('DD'),
                 items: days
                     .map(
                       (d) => DropdownMenuItem(
                         value: d,
-                        child: Text(d.toString().padLeft(2, '0')),
+                        child: Center(
+                          child: Text(
+                            d.toString().padLeft(2, '0'),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+                selectedItemBuilder: (context) => days
+                    .map(
+                      (d) => Center(
+                        child: Text(
+                          d.toString().padLeft(2, '0'),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     )
                     .toList(),
@@ -1385,12 +1407,28 @@ class _CustomDateRangePickerSheetState extends State<_CustomDateRangePickerSheet
               child: DropdownButtonFormField<int>(
                 value: month,
                 isExpanded: true,
+                alignment: Alignment.center,
                 decoration: _dropdownDecoration('MM'),
                 items: List.generate(12, (i) => i + 1)
                     .map(
                       (m) => DropdownMenuItem(
                         value: m,
-                        child: Text(m.toString().padLeft(2, '0')),
+                        child: Center(
+                          child: Text(
+                            m.toString().padLeft(2, '0'),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+                selectedItemBuilder: (context) => List.generate(12, (i) => i + 1)
+                    .map(
+                      (m) => Center(
+                        child: Text(
+                          m.toString().padLeft(2, '0'),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     )
                     .toList(),
@@ -1404,10 +1442,29 @@ class _CustomDateRangePickerSheetState extends State<_CustomDateRangePickerSheet
               child: DropdownButtonFormField<int>(
                 value: year,
                 isExpanded: true,
+                alignment: Alignment.center,
                 decoration: _dropdownDecoration('YYYY'),
                 items: _yearOptions
                     .map(
-                      (y) => DropdownMenuItem(value: y, child: Text('$y')),
+                      (y) => DropdownMenuItem(
+                        value: y,
+                        child: Center(
+                          child: Text(
+                            '$y',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+                selectedItemBuilder: (context) => _yearOptions
+                    .map(
+                      (y) => Center(
+                        child: Text(
+                          '$y',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     )
                     .toList(),
                 onChanged: (value) {
