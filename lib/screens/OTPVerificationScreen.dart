@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:YemPover_app/constants/api_constants.dart';
 import 'package:YemPover_app/models/auth_models.dart';
@@ -6,6 +8,8 @@ import 'package:YemPover_app/services/auth_service.dart';
 import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/services/notification1_service.dart';
 import 'package:YemPover_app/screens/LoginScreen.dart';
+import 'package:YemPover_app/screens/UploadProfilePicScreen.dart';
+import 'package:YemPover_app/utils/image_picker_utils.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -147,6 +151,273 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     }
   }
 
+  Future<void> _handleVerificationSuccess(VerifyOtpResponseData responseData) async {
+    final userId = responseData.user.id;
+    final token = responseData.token;
+    final refreshToken = responseData.refreshToken;
+
+    debugPrint('👤 User ID from response: $userId');
+    debugPrint('🔑 Token from response: ${token.substring(0, token.length > 20 ? 20 : token.length)}...');
+
+    await TokenService().saveTokens(
+      token: token,
+      refreshToken: refreshToken,
+      userId: userId,
+    );
+
+    // Ensure device FCM token is registered with backend after auth is available.
+    await NotificationService1.syncTokenWithBackend();
+
+    debugPrint('✅ Tokens and user ID saved successfully');
+
+    final savedUserId = await TokenService().getUserId();
+    debugPrint('✅ Verified saved userId: $savedUserId');
+
+    // Check if user has profile picture
+    final hasProfilePic = responseData.user.profileImage != null &&
+        responseData.user.profileImage!.trim().isNotEmpty;
+
+    if (!hasProfilePic) {
+      debugPrint('📸 User has no profile pic. Redirecting to UploadProfilePicScreen');
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const UploadProfilePicScreen(),
+        ),
+        (route) => false,
+      );
+      return;
+    }
+
+    // Show push notification based on flow
+    if (widget.isSignupFlow) {
+      // Show OTP verification success notification (same style as signup)
+      await _notificationService.showOTPVerificationSuccessNotification();
+      debugPrint('✅ OTP verification success notification shown');
+
+      // Show success dialog (same style as signup)
+      _showVerificationSuccessDialog();
+    } else {
+      // Show login success notification
+      await _notificationService.showLoginSuccessNotification();
+      debugPrint('✅ Login success notification shown');
+
+      // Show success dialog for login (similar style)
+      _showLoginSuccessDialog(responseData.user);
+    }
+  }
+
+  Future<void> _promptForProfilePhoto(String otp) async {
+    File? selectedPhoto;
+    bool isUploading = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Future<void> pickImage(bool fromCamera) async {
+              final File? file = fromCamera
+                  ? await ImagePickerUtils.takePhotoWithCamera()
+                  : await ImagePickerUtils.pickSingleImageFromGallery();
+              if (file != null) {
+                setModalState(() {
+                  selectedPhoto = file;
+                });
+              }
+            }
+
+            Future<void> uploadAndVerify() async {
+              if (selectedPhoto == null) return;
+              setModalState(() {
+                isUploading = true;
+              });
+
+              try {
+                final bytes = await selectedPhoto!.readAsBytes();
+                final base64String = base64Encode(bytes);
+                final photoDataUrl = 'data:image/jpeg;base64,$base64String';
+
+                debugPrint('🔄 OTPVerificationScreen: Re-calling verifyOtp with photo...');
+                final response = await _authService.verifyOtp(
+                  mobileNumber: widget.phoneNumber,
+                  otp: otp,
+                  photo: photoDataUrl,
+                );
+
+                if (response.isSuccess && response.data != null) {
+                  if (mounted) {
+                    Navigator.pop(context); // Close bottom sheet
+                  }
+                  await _handleVerificationSuccess(response.data!);
+                } else {
+                  setModalState(() {
+                    isUploading = false;
+                  });
+                  if (mounted) {
+                    AuthService.showErrorDialog(context, response.message);
+                  }
+                }
+              } on ApiException catch (e) {
+                setModalState(() {
+                  isUploading = false;
+                });
+                if (mounted) {
+                  AuthService.showErrorDialog(context, e.message);
+                }
+              } catch (e) {
+                setModalState(() {
+                  isUploading = false;
+                });
+                if (mounted) {
+                  AuthService.showErrorDialog(context, ErrorMessages.unknownError);
+                }
+              }
+            }
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                24,
+                24,
+                24,
+                24 + MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).viewPadding.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Profile Photo Required',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Please capture or select a profile photo to complete your verification.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  if (selectedPhoto == null)
+                    Container(
+                      width: 140,
+                      height: 140,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.grey.shade300, width: 2),
+                      ),
+                      child: Icon(
+                        Icons.account_circle,
+                        size: 100,
+                        color: Colors.grey.shade400,
+                      ),
+                    )
+                  else
+                    Container(
+                      width: 140,
+                      height: 140,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppConstants.primaryColor, width: 3),
+                        image: DecorationImage(
+                          image: FileImage(selectedPhoto!),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                  if (!isUploading) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () => pickImage(true),
+                          icon: const Icon(Icons.camera_alt, color: Colors.white),
+                          label: const Text('Camera', style: TextStyle(color: Colors.white)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppConstants.primaryColor,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () => pickImage(false),
+                          icon: const Icon(Icons.photo_library, color: Colors.white),
+                          label: const Text('Gallery', style: TextStyle(color: Colors.white)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppConstants.primaryColor,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                  if (isUploading)
+                    const Column(
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text(
+                          'Uploading photo and verifying...',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    )
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: selectedPhoto != null ? uploadAndVerify : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppConstants.primaryColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                        ),
+                        child: const Text(
+                          'Upload & Verify',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _verifyOTP() async {
     debugPrint('🟡 OTPVerificationScreen: _verifyOTP() called');
 
@@ -205,59 +476,30 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         debugPrint('🟢 OTPVerificationScreen: OTP verification successful');
         debugPrint('🟢 User data received: ${response.data}');
 
-        // Save tokens
         if (response.data != null) {
-          final userId = response.data!.user.id;
-          final token = response.data!.token;
-          final refreshToken = response.data!.refreshToken;
-
-          debugPrint('👤 User ID from response: $userId');
-          debugPrint('🔑 Token from response: ${token.substring(0, 20)}...');
-
-          await TokenService().saveTokens(
-            token: token,
-            refreshToken: refreshToken,
-            userId: userId,
-          );
-
-          // Ensure device FCM token is registered with backend after auth is available.
-          await NotificationService1.syncTokenWithBackend();
-
-          debugPrint('✅ Tokens and user ID saved successfully');
-
-          final savedUserId = await TokenService().getUserId();
-          debugPrint('✅ Verified saved userId: $savedUserId');
-        }
-
-        // Show push notification based on flow
-        if (widget.isSignupFlow) {
-          // Show OTP verification success notification (same style as signup)
-          await _notificationService.showOTPVerificationSuccessNotification();
-          debugPrint('✅ OTP verification success notification shown');
-
-          // Show success dialog (same style as signup)
-          _showVerificationSuccessDialog();
-        } else {
-          // Show login success notification
-          await _notificationService.showLoginSuccessNotification();
-          debugPrint('✅ Login success notification shown');
-
-          // Show success dialog for login (similar style)
-          _showLoginSuccessDialog(response.data?.user);
+          await _handleVerificationSuccess(response.data!);
         }
       } else {
         debugPrint(
           '🔴 OTPVerificationScreen: OTP verification failed: ${response.message}',
         );
         if (!mounted) return;
-        AuthService.showErrorDialog(context, response.message);
+        if (response.message.toLowerCase().contains('profile pic required')) {
+          _promptForProfilePhoto(otp);
+        } else {
+          AuthService.showErrorDialog(context, response.message);
+        }
       }
     } on ApiException catch (e) {
       debugPrint(
         '🔴 OTPVerificationScreen: ApiException during verification: ${e.message}',
       );
       if (!mounted) return;
-      AuthService.showErrorDialog(context, e.message);
+      if (e.statusCode == 400 && e.message.toLowerCase().contains('profile pic required')) {
+        _promptForProfilePhoto(otp);
+      } else {
+        AuthService.showErrorDialog(context, e.message);
+      }
     } catch (e) {
       debugPrint(
         '🔴 OTPVerificationScreen: General exception during verification: $e',

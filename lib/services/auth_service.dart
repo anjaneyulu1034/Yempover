@@ -46,10 +46,15 @@ class AuthService extends ChangeNotifier {
   Future<AuthResponse<VerifyOtpResponseData>> verifyOtp({
     required String mobileNumber,
     required String otp,
+    String? photo,
   }) async {
     debugPrint('✅ AuthService: verifyOtp called');
     debugPrint('✅ AuthService: Phone: $mobileNumber, OTP: $otp');
-    final request = VerifyOtpRequest(mobileNumber: mobileNumber, otp: otp);
+    final request = VerifyOtpRequest(
+      mobileNumber: mobileNumber,
+      otp: otp,
+      photo: photo,
+    );
     return await _apiService.verifyOtp(request);
   }
 
