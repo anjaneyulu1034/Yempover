@@ -2077,16 +2077,19 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               child: IconButton(
                 icon: Container(
-                  width: 28,
-                  height: 28,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFC62B),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Icon(
-                    Icons.monetization_on,
-                    color: Colors.white,
-                    size: 18,
+                  child: Center(
+                    child: Image.asset(
+                      'assets/icons_logo.png',
+                      width: 34,
+                      height: 34,
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
+                    ),
                   ),
                 ),
                 onPressed: _showCoinsWalletScreen,
