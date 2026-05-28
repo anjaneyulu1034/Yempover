@@ -10,7 +10,6 @@ import 'package:YemPover_app/screens/MyProfileScreen.dart';
 import 'package:YemPover_app/screens/NotificationsScreen.dart';
 import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
 import 'package:YemPover_app/screens/PrivacyScreen.dart';
-import 'package:YemPover_app/screens/service/AppointmentsDashboardScreen.dart';
 import 'package:YemPover_app/screens/TermsScreen.dart';
 import 'package:YemPover_app/screens/TradeHistoryScreen.dart';
 import 'package:YemPover_app/services/account_service.dart';
@@ -589,6 +588,11 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
       await TokenService()
           .clearTokens(); // FIXED: Using clearTokens() instead of deleteToken()
 
+      // Clear in-memory provider state so the next session can't see stale badges.
+      if (mounted) {
+        context.read<NotificationProvider>().reset();
+      }
+
       // Clear session manager
       ProfileSessionManager.instance.clearSession();
 
@@ -624,6 +628,8 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
         await TokenService()
             .clearTokens(); // FIXED: Using clearTokens() here too
         if (!mounted) return;
+
+        context.read<NotificationProvider>().reset();
         ProfileSessionManager.instance.clearSession();
 
         Navigator.pushAndRemoveUntil(

@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'utils/notification_provider.dart';
 import 'screens/SplashScreen.dart';
+import 'widgets/location_permission_gate.dart';
 
 // Global notification plugin instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -241,15 +242,17 @@ class MyApp extends StatelessWidget {
         builder: (context, child) {
           final content = child ?? const SizedBox.shrink();
 
-          return Listener(
-            behavior: HitTestBehavior.translucent,
-            onPointerDown: (_) {
-              final currentFocus = FocusManager.instance.primaryFocus;
-              if (currentFocus != null && !currentFocus.hasPrimaryFocus) {
-                currentFocus.unfocus();
-              }
-            },
-            child: content,
+          return LocationPermissionGate(
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (_) {
+                final currentFocus = FocusManager.instance.primaryFocus;
+                if (currentFocus != null && !currentFocus.hasPrimaryFocus) {
+                  currentFocus.unfocus();
+                }
+              },
+              child: content,
+            ),
           );
         },
         home: const SplashScreen(),

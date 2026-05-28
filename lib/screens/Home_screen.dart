@@ -345,6 +345,9 @@ class _HomeScreenState extends State<HomeScreen> {
           );
           _isLoadingProfile = false;
         });
+        if (mounted) {
+          Provider.of<NotificationProvider>(context, listen: false).reset();
+        }
         ProfileSessionManager.instance.clearSession();
       }
 
@@ -2006,6 +2009,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(width: 6),
             Consumer<NotificationProvider>(
               builder: (context, provider, child) {
+                final badgeCount = _isGuestUser ? 0 : provider.unreadCount;
                 return Stack(
                   children: [
                     Container(
@@ -2027,7 +2031,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: _showNotificationScreen,
                       ),
                     ),
-                    if (provider.unreadCount > 0)
+                    if (badgeCount > 0)
                       Positioned(
                         right: -2,
                         top: -2,
@@ -2050,9 +2054,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           child: Center(
                             child: Text(
-                              provider.unreadCount > 9
-                                  ? '9+'
-                                  : '${provider.unreadCount}',
+                              badgeCount > 9 ? '9+' : '$badgeCount',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 9,
@@ -2733,11 +2735,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(width: 40),
                   Consumer<NotificationProvider>(
                     builder: (context, provider, child) {
+                      final badgeCount = _isGuestUser ? 0 : provider.unreadCount;
                       return _navItem(
                         Icons.chat_bubble_outline,
                         'Chat',
                         false,
-                        badge: provider.unreadCount,
+                        badge: badgeCount,
                         iconAssetPath: 'assets/chat_icons.png',
                       );
                     },
