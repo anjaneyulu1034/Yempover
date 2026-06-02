@@ -34,6 +34,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   late Post _post;
   bool _isLoading = false;
+  bool _isNoLongerAvailable = false;
+  String? _noLongerAvailableMessage;
   bool _isFavorite = false;
   bool _isFavoriteUpdating = false;
   String? _currentUserId;
@@ -80,7 +82,27 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         _post = response.post;
         _currentImageIndex = 0;
         _isLoading = false;
+        _isNoLongerAvailable = false;
+        _noLongerAvailableMessage = null;
       });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.statusCode == 410) {
+        setState(() {
+          _isLoading = false;
+          _isNoLongerAvailable = true;
+          _noLongerAvailableMessage = e.message;
+        });
+        return;
+      }
+
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load post details: ${e.message}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -1352,7 +1374,53 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
       body: _isLoading
           ? const Center(child: LoadingWidget())
-          : SingleChildScrollView(
+          : _isNoLongerAvailable
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.orange.shade200),
+                          ),
+                          child: const Icon(
+                            Icons.inventory_2_outlined,
+                            color: Colors.orange,
+                            size: 36,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'No longer available',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          (_noLongerAvailableMessage ?? '').trim().isNotEmpty
+                              ? _noLongerAvailableMessage!
+                                  .replaceFirst('Exception: ', '')
+                              : 'This item is no longer available.',
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            height: 1.3,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : SingleChildScrollView(
               padding: const EdgeInsets.only(bottom: 120),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1528,9 +1596,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {
-                _navigateToOfferDeck();
-              },
+              onPressed: () => _navigateToOfferDeck(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2E5BFF),
                 padding: const EdgeInsets.symmetric(vertical: 16),

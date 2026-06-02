@@ -8,8 +8,11 @@ import 'package:YemPover_app/services/auth_service.dart';
 import 'package:YemPover_app/services/token_service.dart';
 import 'package:YemPover_app/services/notification1_service.dart';
 import 'package:YemPover_app/screens/LoginScreen.dart';
+import 'package:YemPover_app/screens/SignupScreen.dart';
 import 'package:YemPover_app/screens/UploadProfilePicScreen.dart';
 import 'package:YemPover_app/utils/image_picker_utils.dart';
+import 'package:YemPover_app/services/profile_session_manager.dart';
+import 'package:YemPover_app/utils/blocked_users_cache.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -158,6 +161,10 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
     debugPrint('👤 User ID from response: $userId');
     debugPrint('🔑 Token from response: ${token.substring(0, token.length > 20 ? 20 : token.length)}...');
+
+    // Ensure we don't reuse any in-memory state from a prior account.
+    ProfileSessionManager.instance.clearSession();
+    BlockedUsersCache.instance.reset();
 
     await TokenService().saveTokens(
       token: token,
@@ -495,6 +502,21 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         '🔴 OTPVerificationScreen: ApiException during verification: ${e.message}',
       );
       if (!mounted) return;
+
+      final isDeletedOrMissingUser = e.statusCode == 403 || e.statusCode == 404;
+      if (isDeletedOrMissingUser) {
+        AuthService.showErrorDialog(context, e.message);
+        await TokenService().clearTokens();
+        ProfileSessionManager.instance.clearSession();
+        BlockedUsersCache.instance.reset();
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SignupScreen()),
+          (route) => false,
+        );
+        return;
+      }
+
       if (e.statusCode == 400 && e.message.toLowerCase().contains('profile pic required')) {
         _promptForProfilePhoto(otp);
       } else {

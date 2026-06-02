@@ -57,6 +57,46 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   bool _isOtherUserOnline = false;
   Timer? _typingTimer;
 
+  bool get _isReferenceUnavailable {
+    final productStatus = _currentChat.product?.status.trim().toUpperCase();
+    if (productStatus != null &&
+        (productStatus == 'SOLD' ||
+            productStatus == 'BARTERED' ||
+            productStatus == 'EXPIRED')) {
+      return true;
+    }
+
+    final serviceStatus = _currentChat.service?.status.trim().toUpperCase();
+    if (serviceStatus != null &&
+        (serviceStatus == 'COMPLETED' || serviceStatus == 'CANCELLED')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  bool get _canShowOfferActions {
+    if (!_currentChat.isActive) return false;
+    if (_currentChat.hasAcceptedOffer) return false;
+    if (_isReferenceUnavailable) return false;
+    return true;
+  }
+
+  void _showErrorToast(Object error) {
+    final raw = error.toString().replaceFirst('Exception: ', '').trim();
+    final cleaned = raw.startsWith('Bad request:')
+        ? raw.replaceFirst('Bad request:', '').trim()
+        : raw;
+    final message = ErrorMessageUtils.sanitize(
+      cleaned,
+      fallback: 'Something went wrong. Please try again.',
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -856,6 +896,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   // Updated accept offer method with socket emit and full refresh
   Future<void> _acceptOffer(TradeOffer offer) async {
+    if (!_canShowOfferActions) {
+      _showErrorToast('Offers are not available for this chat.');
+      return;
+    }
     if (_isOfferActionInProgress) return;
 
     setState(() {
@@ -926,14 +970,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to accept offer: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showErrorToast(e);
     } finally {
       if (mounted) {
         setState(() {
@@ -947,6 +984,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   // Updated reject offer method with socket emit and full refresh
   Future<void> _rejectOffer(TradeOffer offer) async {
+    if (!_canShowOfferActions) {
+      _showErrorToast('Offers are not available for this chat.');
+      return;
+    }
     if (_isOfferActionInProgress) return;
 
     setState(() {
@@ -990,14 +1031,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       _scrollToBottom();
       widget.onChatUpdated(_currentChat);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to reject offer: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showErrorToast(e);
     } finally {
       if (mounted) {
         setState(() {
@@ -1010,15 +1044,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   }
 
   Future<void> _showMakeOfferDialog() async {
-    if (!_currentChat.isActive || _currentChat.hasAcceptedOffer) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Offers are no longer available for this chat.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
+    if (!_canShowOfferActions) {
+      _showErrorToast('Offers are no longer available for this chat.');
       return;
     }
 
@@ -1593,6 +1620,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   }) async {
     if (!_currentChat.isActive ||
         _currentChat.hasAcceptedOffer ||
+        _isReferenceUnavailable ||
         !originalOffer.isPending ||
         originalOffer.madeById == widget.currentUserId) {
       return null;
@@ -1646,12 +1674,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       return counterOffer;
     } catch (e) {
       if (mounted) {
-        await _showOfferMessageDialog(
-          ErrorMessageUtils.sanitize(
-            e,
-            fallback: 'Failed to send counter offer. Please try again.',
-          ),
-        );
+        _showErrorToast(e);
       }
       return null;
     } finally {
@@ -1668,7 +1691,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     required double price,
     required String currency,
   }) async {
-    if (!_currentChat.isActive || _currentChat.hasAcceptedOffer) {
+    if (!_currentChat.isActive ||
+        _currentChat.hasAcceptedOffer ||
+        _isReferenceUnavailable) {
       return;
     }
 
@@ -1711,14 +1736,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         _isLoading = false;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to create offer: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showErrorToast(e);
     }
   }
 
@@ -1726,7 +1744,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     required String title,
     String? description,
   }) async {
-    if (!_currentChat.isActive || _currentChat.hasAcceptedOffer) {
+    if (!_currentChat.isActive ||
+        _currentChat.hasAcceptedOffer ||
+        _isReferenceUnavailable) {
       return;
     }
 
@@ -1768,14 +1788,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         _isLoading = false;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to create offer: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showErrorToast(e);
     }
   }
 
@@ -2410,6 +2423,47 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                               color: Colors.blue.shade700,
                             ),
                           ),
+                          if (message.offerId != null) ...[
+                            const SizedBox(width: 8),
+                            Builder(
+                              builder: (context) {
+                                final offerId = message.offerId;
+                                if (offerId == null || offerId.isEmpty) {
+                                  return const SizedBox();
+                                }
+                                final matched = _currentChat.offers
+                                    .where((o) => o.id == offerId)
+                                    .toList();
+                                final offer = matched.isNotEmpty
+                                    ? matched.first
+                                    : null;
+                                if (offer == null || !offer.isRejected) {
+                                  return const SizedBox();
+                                }
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withValues(alpha: 0.10),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: Colors.red.withValues(alpha: 0.35),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'REJECTED',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.red,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -2954,8 +3008,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
                                 setSheetState(() => sendingProposal = true);
                                 try {
-                                  final payloadDate = _serviceBookingService
-                                      .isoWithOffset(slotDateTime);
                                   final displayDate = DateFormat(
                                     'dd MMM yyyy, h:mm a',
                                   ).format(slotDateTime.toLocal());
@@ -3059,6 +3111,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (_currentChat.offers.isEmpty) return const SizedBox();
 
     if (!_currentChat.isActive) return const SizedBox();
+    if (_isReferenceUnavailable) return const SizedBox();
 
     final visibleOffers = _currentChat.offers
         .where((offer) => !offer.isWithdrawn)
@@ -3251,6 +3304,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (_currentChat.offers.isEmpty) return const SizedBox();
 
     if (!_currentChat.isActive) return const SizedBox();
+    if (_isReferenceUnavailable) return const SizedBox();
 
     final myOffers = _currentChat.offers
         .where(
@@ -3350,6 +3404,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   }
 
   Widget _buildDealCompletionBanner() {
+    if (_isReferenceUnavailable) return const SizedBox();
     if (!_currentChat.canCompleteDeal(widget.currentUserId)) {
       return const SizedBox();
     }
@@ -3579,9 +3634,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ),
             IconButton(
               icon: const Icon(Icons.request_page, color: Colors.orange),
-              onPressed: _currentChat.hasAcceptedOffer
-                  ? null
-                  : _showMakeOfferDialog,
+              onPressed: _canShowOfferActions ? _showMakeOfferDialog : null,
             ),
             Expanded(
               child: TextField(

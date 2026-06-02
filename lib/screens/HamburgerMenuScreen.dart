@@ -21,6 +21,7 @@ import 'package:YemPover_app/screens/Home_screen.dart';
 import 'package:YemPover_app/services/subscription_plan_service.dart';
 import 'package:YemPover_app/models/get_current_subscription_plan_response.dart';
 import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:YemPover_app/utils/blocked_users_cache.dart';
 
 class HamburgerMenuScreen extends StatefulWidget {
   const HamburgerMenuScreen({super.key});
@@ -681,6 +682,12 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
 
       // Clear all local data
       await accountService.clearAllLocalData();
+      await TokenService().clearTokens();
+      ProfileSessionManager.instance.clearSession();
+      if (mounted) {
+        context.read<NotificationProvider>().reset();
+      }
+      BlockedUsersCache.instance.reset();
 
       // Close loading dialog
       if (mounted && isDialogShowing) {

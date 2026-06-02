@@ -61,6 +61,14 @@ class BlockedUsersCache extends ChangeNotifier {
     _loaded = false;
   }
 
+  /// Clears in-memory cached ids (used on logout/delete-account/re-signup).
+  void reset() {
+    final changed = _ids.isNotEmpty || _loaded;
+    _ids = {};
+    _loaded = false;
+    if (changed) notifyListeners();
+  }
+
   List<FavoriteItem> filterFavorites(List<FavoriteItem> items) {
     return filterByOwner(items, _favoriteOwnerId);
   }
