@@ -42,6 +42,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Map<String, dynamic>? _otherUserProfile;
   int _currentImageIndex = 0;
   final PageController _imagePageController = PageController();
+  bool _isGuestUser = false;
 
   bool get _isOwnPost {
     final current = (_currentUserId ?? '').trim();
@@ -59,6 +60,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     _loadCurrentUser();
     _loadPostDetails();
     _checkIfFavorite(); // Check if post is already favorited
+    _loadGuestFlag();
+  }
+
+  Future<void> _loadGuestFlag() async {
+    try {
+      final isGuest = await _tokenService.isGuestUser();
+      if (!mounted) return;
+      setState(() => _isGuestUser = isGuest);
+    } catch (_) {}
   }
 
   Future<void> _loadCurrentUser() async {
@@ -1358,17 +1368,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          IconButton(
-            icon: Icon(
-              _isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: _isFavorite ? Colors.red : Colors.black,
+          if (!_isGuestUser) ...[
+            IconButton(
+              icon: Icon(
+                _isFavorite ? Icons.favorite : Icons.favorite_border,
+                color: _isFavorite ? Colors.red : Colors.black,
+              ),
+              onPressed: _isFavoriteUpdating ? null : _toggleFavorite,
             ),
-            onPressed: _isFavoriteUpdating ? null : _toggleFavorite,
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.black),
-            onPressed: _showPostOptions,
-          ),
+            IconButton(
+              icon: const Icon(Icons.more_vert, color: Colors.black),
+              onPressed: _showPostOptions,
+            ),
+          ],
         ],
       ),
 
