@@ -497,11 +497,7 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
                   : null,
               onTap: () {
                 if (_isGuestUser) {
-                  SnackbarUtils.showError(
-                    context,
-                    'Please login or create an account to continue accessing this feature.',
-                    title: 'Login required',
-                  );
+                  SnackbarUtils.showGuestLoginRequired(context);
                   return;
                 }
                 Navigator.push(

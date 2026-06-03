@@ -18,7 +18,6 @@ import 'package:YemPover_app/screens/HamburgerMenuScreen.dart';
 import 'package:YemPover_app/screens/MyProfileScreen.dart';
 import 'package:YemPover_app/screens/NotificationsScreen.dart';
 import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
-import 'package:YemPover_app/screens/LoginScreen.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/widgets/safe_network_image.dart';
 import 'package:YemPover_app/services/my_profile_service.dart';
@@ -1546,53 +1545,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showPleaseLoginMessage() {
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.clearSnackBars();
-
-    messenger.showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFFFFF4C2), // light yellow
-        behavior: SnackBarBehavior.floating,
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        content: Row(
-          children: [
-            const Icon(Icons.info_outline, color: Color(0xFF6B4E00), size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Please login or create an account to continue accessing this feature.',
-                style: const TextStyle(
-                  color: Color(0xFF3B2A00),
-                  fontSize: 13.5,
-                  height: 1.25,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            InkWell(
-              onTap: () {
-                messenger.clearSnackBars();
-                if (!mounted) return;
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
-              },
-              child: const Text(
-                'Login / Sign Up',
-                style: TextStyle(
-                  color: Color(0xFF1F4EFF),
-                  fontWeight: FontWeight.w800,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    SnackbarUtils.showGuestLoginRequired(context);
   }
 
   void _navigateToHamburgerMenu() {

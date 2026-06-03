@@ -78,7 +78,9 @@ class ErrorMessageUtils {
         lower.contains('clientexception')) {
       return 'Network issue. Please check your internet connection and try again.';
     }
-    if (lower.contains('session expired') || lower.contains('please login')) {
+    if (lower.contains('session expired') ||
+        lower.contains('please login again') ||
+        lower.contains('login again to continue')) {
       return 'Session expired. Please login again.';
     }
     if (lower.contains('network') ||
