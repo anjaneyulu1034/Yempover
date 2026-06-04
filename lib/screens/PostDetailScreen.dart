@@ -425,6 +425,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           builder: (context) {
             final reportId = response.data.report.id.toString();
             return AlertDialog(
+              scrollable: true,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
               ),
@@ -572,12 +574,24 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         String? validationError;
 
         return StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
+          builder: (context, setDialogState) {
+            final mediaQuery = MediaQuery.of(context);
+            final maxContentHeight = (mediaQuery.size.height * 0.5) -
+                mediaQuery.viewInsets.bottom -
+                120;
+
+            return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
             title: const Text('Report Post'),
-            content: Column(
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: maxContentHeight.clamp(160.0, 360.0),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -642,6 +656,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   maxLines: 3,
                 ),
               ],
+                ),
+              ),
             ),
             actions: [
               OutlinedButton(
@@ -672,7 +688,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 child: const Text('Submit Report'),
               ),
             ],
-          ),
+          );
+          },
         );
       },
     );
