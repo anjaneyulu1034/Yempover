@@ -163,14 +163,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   // Navigate to Offer Deck
   Future<void> _navigateToOfferDeck() async {
+    final isGuest = await _tokenService.isGuestUser();
     final isLoggedIn = await _tokenService.isLoggedIn();
     if (!mounted) return;
-    if (!isLoggedIn || _currentUserId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please login to make an offer'),
-          backgroundColor: Colors.orange,
-        ),
+    if (isGuest || !isLoggedIn || _currentUserId == null) {
+      SnackbarUtils.showGuestLoginToast(
+        context,
+        message:
+            'Please login or create an account to make an offer.',
       );
       return;
     }

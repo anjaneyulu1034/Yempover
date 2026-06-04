@@ -1964,7 +1964,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
   }
 
   void _showError(String message) {
-    SnackbarUtils.showError(context, message);
+    if (!mounted) return;
+    SnackbarUtils.showValidation(context, message);
   }
 
   void _showSuccessSnackBar(String message) {
@@ -1973,22 +1974,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
-    final normalized = message.toLowerCase();
-    if (normalized.contains('maximum') && normalized.contains('photos')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.red.shade700,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-      return;
-    }
-
-    SnackbarUtils.showError(context, message);
+    SnackbarUtils.showValidation(context, message);
   }
 
   Future<void> _submitPost() async {
