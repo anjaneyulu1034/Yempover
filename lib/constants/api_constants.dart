@@ -95,6 +95,9 @@ class ApiConstants {
   static const String termsAndConditions = '$baseUrl/content/terms';
   static const String privacyPolicy = '$baseUrl/content/privacy';
 
+  // Help & Support / inquiries
+  static const String inquiries = '$baseUrl/inquiries';
+
   // Helper methods
   static String favoritesWithPagination(int page, int limit) =>
       '$favorites?page=$page&limit=$limit';
