@@ -1,7 +1,9 @@
 import 'package:YemPover_app/models/favorites_response.dart';
 import 'package:flutter/material.dart';
 import 'package:YemPover_app/models/ProductPostmain.dart';
+import 'package:YemPover_app/services/api_service.dart';
 import 'package:YemPover_app/services/post_action_service.dart';
+import 'package:YemPover_app/utils/post_availability_utils.dart';
 import 'package:YemPover_app/screens/PostDetailScreen.dart';
 import 'package:YemPover_app/widgets/coin_icon.dart';
 import 'package:YemPover_app/screens/Home_screen.dart';
@@ -18,6 +20,7 @@ class FavoritesScreen extends StatefulWidget {
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
   final PostActionService _postActionService = PostActionService();
+  final ApiService _apiService = ApiService();
   final TokenService _tokenService = TokenService();
 
   List<FavoriteItem> _favorites = [];
@@ -52,14 +55,44 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     });
   }
 
-  Future<List<FavoriteItem>> _filterBlockedFavorites(
-    List<FavoriteItem> items,
-  ) async {
+  Future<List<FavoriteItem>> _filterFavorites(List<FavoriteItem> items) async {
+    final withoutExpired =
+        items.where((item) => !item.isExpiredOrUnavailable).toList();
+    final available = await _filterByLivePostAvailability(withoutExpired);
+
     final isLoggedIn = await _tokenService.isLoggedIn();
-    if (!isLoggedIn) return items;
+    if (!isLoggedIn) return available;
 
     await BlockedUsersCache.instance.ensureLoaded();
-    return BlockedUsersCache.instance.filterFavorites(items);
+    return BlockedUsersCache.instance.filterFavorites(available);
+  }
+
+  /// Drop favorites whose post detail API returns 410/404 (expired / unavailable).
+  Future<List<FavoriteItem>> _filterByLivePostAvailability(
+    List<FavoriteItem> items,
+  ) async {
+    final available = <FavoriteItem>[];
+
+    for (final item in items) {
+      final postId = item.actualPostId;
+      if (postId == null || postId.isEmpty) continue;
+
+      try {
+        await _apiService.getPostDetail(
+          postId: postId,
+          type: item.type == 'service' ? PostType.service : PostType.product,
+        );
+        available.add(item);
+      } on ApiException catch (e) {
+        if (!PostAvailabilityUtils.isApiUnavailableStatus(e.statusCode)) {
+          available.add(item);
+        }
+      } catch (_) {
+        available.add(item);
+      }
+    }
+
+    return available;
   }
 
   void _onScroll() {
@@ -84,7 +117,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         limit: _limit,
       );
 
-      final filtered = await _filterBlockedFavorites(response.data.favorites);
+      final filtered = await _filterFavorites(response.data.favorites);
 
       setState(() {
         _favorites = filtered;
@@ -118,7 +151,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         limit: _limit,
       );
 
-      final filtered = await _filterBlockedFavorites(response.data.favorites);
+      final filtered = await _filterFavorites(response.data.favorites);
 
       setState(() {
         _favorites.addAll(filtered);

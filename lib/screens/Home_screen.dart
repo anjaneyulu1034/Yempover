@@ -725,7 +725,9 @@ class _HomeScreenState extends State<HomeScreen> {
         radius: _selectedRadius,
       );
 
-      final List<ExtendedPost> extendedPosts = response.posts.map((post) {
+      final List<ExtendedPost> extendedPosts = response.posts
+          .where((post) => !post.isExpiredOrUnavailable)
+          .map((post) {
         double? distance;
         if (_activeLatitude != null &&
             _activeLongitude != null &&
@@ -880,6 +882,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void _applyFilters() {
     setState(() {
       _filteredPosts = _posts.where((post) {
+        if (post.post.isExpiredOrUnavailable) {
+          return false;
+        }
+
         if (!_isGuestUser) {
           final ownerId = post.post.postedBy.id.isNotEmpty
               ? post.post.postedBy.id

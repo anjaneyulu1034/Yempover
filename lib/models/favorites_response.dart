@@ -1,5 +1,6 @@
 import 'package:YemPover_app/models/ProductPostmain.dart';
 import 'package:YemPover_app/models/post_model.dart' hide Category;
+import 'package:YemPover_app/utils/post_availability_utils.dart';
 
 class FavoritesResponse {
   final String status;
@@ -124,6 +125,63 @@ class FavoriteItem {
     if (post != null) return post!.postedBy;
     return PostedBy(id: '', firstName: '', lastName: '');
   }
+
+  bool get isExpiredOrUnavailable {
+    if (post != null) return post!.isExpiredOrUnavailable;
+
+    final nested = _asMap(product) ?? _asMap(service);
+    if (nested != null) {
+      return PostAvailabilityUtils.isUnavailable(
+        hasExpired: _readBool(nested, const ['hasExpired', 'isExpired']),
+        validFrom: _readDate(nested['validFrom']),
+        validUntil: _readDate(nested['validUntil']),
+        remainingTime: nested['remainingTime']?.toString(),
+        status: nested['status']?.toString(),
+        isListed: _readNullableBool(nested['isListed']),
+      );
+    }
+
+    return false;
+  }
+
+  static Map<String, dynamic>? _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return null;
+  }
+
+  static bool? _readNullableBool(dynamic value) {
+    if (value is bool) return value;
+    if (value == null) return null;
+    final text = value.toString().trim().toLowerCase();
+    if (text == 'true') return true;
+    if (text == 'false') return false;
+    return null;
+  }
+
+  static bool _readBool(
+    Map<String, dynamic> json,
+    List<String> keys, {
+    bool defaultValue = false,
+  }) {
+    for (final key in keys) {
+      final value = json[key];
+      if (value is bool) return value;
+      if (value != null) {
+        final text = value.toString().trim().toLowerCase();
+        if (text == 'true') return true;
+        if (text == 'false') return false;
+      }
+    }
+    return defaultValue;
+  }
+
+  static DateTime? _readDate(dynamic value) {
+    if (value == null) return null;
+    final raw = value.toString().trim();
+    if (raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
+  }
 }
 
 class FavoritePost {
@@ -144,6 +202,10 @@ class FavoritePost {
   final bool isListed;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? validFrom;
+  final DateTime? validUntil;
+  final String? remainingTime;
+  final bool hasExpired;
   final Category category;
   final PostedBy postedBy;
 
@@ -162,12 +224,25 @@ class FavoritePost {
     required this.postedById,
     required this.postedDate,
     required this.viewCount,
-    required this.isListed,
+    this.isListed = true,
     required this.createdAt,
     required this.updatedAt,
+    this.validFrom,
+    this.validUntil,
+    this.remainingTime,
+    this.hasExpired = false,
     required this.category,
     required this.postedBy,
   });
+
+  bool get isExpiredOrUnavailable => PostAvailabilityUtils.isUnavailable(
+        hasExpired: hasExpired,
+        validFrom: validFrom,
+        validUntil: validUntil,
+        remainingTime: remainingTime,
+        status: status,
+        isListed: isListed,
+      );
 
   factory FavoritePost.fromJson(Map<String, dynamic> json) {
     return FavoritePost(
@@ -192,13 +267,17 @@ class FavoritePost {
           ? DateTime.parse(json['postedDate'])
           : DateTime.now(),
       viewCount: json['viewCount'] ?? 0,
-      isListed: json['isListed'] ?? false,
+      isListed: FavoriteItem._readBool(json, const ['isListed'], defaultValue: true),
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'])
           : DateTime.now(),
       updatedAt: json['updatedAt'] != null
           ? DateTime.parse(json['updatedAt'])
           : DateTime.now(),
+      validFrom: FavoriteItem._readDate(json['validFrom']),
+      validUntil: FavoriteItem._readDate(json['validUntil']),
+      remainingTime: json['remainingTime']?.toString(),
+      hasExpired: FavoriteItem._readBool(json, const ['hasExpired', 'isExpired']),
       category: Category.fromJson(json['category'] ?? {}),
       postedBy: PostedBy.fromJson(json['postedBy'] ?? {}),
     );

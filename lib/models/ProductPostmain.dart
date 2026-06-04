@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:YemPover_app/utils/post_availability_utils.dart';
 
 // Post Types
 enum PostType { product, service }
@@ -466,6 +467,15 @@ class Post {
 
   bool get isForBarter => barterStatus == BarterStatus.OPEN_FOR_BARTER;
   bool get isForSale => status == PostStatus.FOR_SALE && price > 0;
+
+  bool get isExpiredOrUnavailable => PostAvailabilityUtils.isUnavailable(
+        hasExpired: hasExpired,
+        validFrom: validFrom,
+        validUntil: validUntil,
+        remainingTime: remainingTime,
+        status: status.name,
+        isListed: isListed,
+      );
 }
 
 // Posts Response Model
@@ -480,7 +490,10 @@ class PostsResponse {
     final paginationData = json['data']['pagination'];
 
     return PostsResponse(
-      posts: postsData.map((postJson) => Post.fromJson(postJson)).toList(),
+      posts: postsData
+          .map((postJson) => Post.fromJson(postJson))
+          .where((post) => !post.isExpiredOrUnavailable)
+          .toList(),
       pagination: Pagination.fromJson(paginationData),
     );
   }

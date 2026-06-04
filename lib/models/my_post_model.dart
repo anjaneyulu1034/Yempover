@@ -1,4 +1,6 @@
 // lib/models/my_post_model.dart
+import 'package:YemPover_app/utils/post_availability_utils.dart';
+
 class MyPostsResponse {
   final String status;
   final String message;
@@ -188,6 +190,15 @@ class MyPost {
   bool get isSold => status == 'SOLD';
   bool get hasAcceptedOffer =>
       openOffersCount > 0; // Adjust based on actual logic
+
+  bool get isExpiredOrUnavailable => PostAvailabilityUtils.isUnavailable(
+        hasExpired: hasExpired,
+        validFrom: validFrom,
+        validUntil: validUntil,
+        remainingTime: remainingTime,
+        status: status,
+        isListed: isListed,
+      );
 }
 
 class Category {

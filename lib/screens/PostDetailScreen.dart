@@ -163,6 +163,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   // Navigate to Offer Deck
   Future<void> _navigateToOfferDeck() async {
+    if (_isNoLongerAvailable) return;
+
     final isGuest = await _tokenService.isGuestUser();
     final isLoggedIn = await _tokenService.isLoggedIn();
     if (!mounted) return;
@@ -1609,7 +1611,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ),
             ),
 
-      bottomNavigationBar: SafeArea(
+      bottomNavigationBar: _isNoLongerAvailable
+          ? null
+          : SafeArea(
         top: false,
         child: Container(
           padding: const EdgeInsets.all(16),
