@@ -1,14 +1,30 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:YemPover_app/services/coin_service.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:barterx_app/services/coin_service.dart';
+import 'package:barterx_app/utils/snackbar_utils.dart';
+import 'package:barterx_app/widgets/app_text_field.dart';
+import 'package:barterx_app/widgets/coin_icon.dart';
 
 class AddCoinsResult {
   final Map<String, dynamic> transaction;
 
   const AddCoinsResult({required this.transaction});
+}
+
+class _CoinPackage {
+  final String name;
+  final int coinAmount;
+
+  const _CoinPackage({required this.name, required this.coinAmount});
+
+  factory _CoinPackage.fromMap(Map<String, dynamic> map) {
+    return _CoinPackage(
+      name: map['name']?.toString() ?? 'Coin Pack',
+      coinAmount: CoinService.parseCoinAmount(map['coinAmount']),
+    );
+  }
 }
 
 class AddCoinsScreen extends StatefulWidget {
@@ -30,15 +46,61 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
+  List<_CoinPackage> _packages = [];
+  bool _packagesLoading = true;
+  String? _packagesError;
+
   String? _amountError;
   String? _descriptionError;
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPackages();
+  }
 
   @override
   void dispose() {
     _amountController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  String _resolveCountryCode() {
+    final localeCode =
+        ui.PlatformDispatcher.instance.locale.countryCode?.toUpperCase();
+    if (localeCode != null && localeCode.length == 2) {
+      return localeCode;
+    }
+    return 'IN';
+  }
+
+  Future<void> _loadPackages() async {
+    setState(() {
+      _packagesLoading = true;
+      _packagesError = null;
+    });
+
+    try {
+      final raw = await _coinService.getPackages(
+        countryCode: _resolveCountryCode(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _packages = raw
+            .map(_CoinPackage.fromMap)
+            .where((p) => p.coinAmount > 0)
+            .toList();
+        _packagesLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _packagesLoading = false;
+        _packagesError = CoinService.friendlyNetworkMessage(e);
+      });
+    }
   }
 
   InputDecoration _fieldDecoration({
@@ -172,6 +234,8 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
               ),
             ),
             const SizedBox(height: 24),
+            _buildPackagesSection(),
+            const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
@@ -266,6 +330,92 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPackagesSection() {
+    if (_packagesLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: CircularProgressIndicator(color: _primary),
+        ),
+      );
+    }
+
+    if (_packagesError != null) {
+      return _buildPackagesError();
+    }
+
+    if (_packages.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      children: _packages.map(_buildPackageTile).toList(),
+    );
+  }
+
+  Widget _buildPackageTile(_CoinPackage pack) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Row(
+        children: [
+          const CoinIcon(size: 32, iconSize: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${pack.coinAmount} Coins',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                Text(
+                  pack.name,
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPackagesError() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Column(
+        children: [
+          Text(
+            _packagesError ?? 'Could not load packages',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: _loadPackages,
+            child: const Text('Retry'),
+          ),
+        ],
       ),
     );
   }
