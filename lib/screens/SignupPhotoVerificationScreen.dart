@@ -1,16 +1,24 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/screens/LoginScreen.dart';
-import 'package:YemPover_app/screens/OTPVerificationScreen.dart';
-import 'package:YemPover_app/services/api_service.dart';
-import 'package:YemPover_app/services/auth_service.dart';
-import 'package:YemPover_app/services/notification1_service.dart';
-import 'package:YemPover_app/utils/image_picker_utils.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/auth_models.dart';
+import 'package:yempover_app/screens/LoginScreen.dart';
+import 'package:yempover_app/screens/OTPVerificationScreen.dart';
+import 'package:yempover_app/services/api_service.dart';
+import 'package:yempover_app/services/auth_service.dart';
+import 'package:yempover_app/services/notification1_service.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/services/profile_session_manager.dart';
+import 'package:yempover_app/utils/blocked_users_cache.dart';
+import 'package:yempover_app/utils/image_picker_utils.dart';
 import 'package:flutter/material.dart';
 
 class SignupPhotoVerificationScreen extends StatefulWidget {
+  final bool isLoginFlow;
+  final String? pendingOtp;
+  final bool uploadOnly;
+  final void Function(User?)? onLoginComplete;
   final String firstName;
   final String lastName;
   final String email;
@@ -19,11 +27,15 @@ class SignupPhotoVerificationScreen extends StatefulWidget {
 
   const SignupPhotoVerificationScreen({
     super.key,
-    required this.firstName,
-    required this.lastName,
-    required this.email,
+    this.isLoginFlow = false,
+    this.pendingOtp,
+    this.uploadOnly = false,
+    this.onLoginComplete,
+    this.firstName = '',
+    this.lastName = '',
+    this.email = '',
     required this.mobileNumber,
-    required this.acceptedTerms,
+    this.acceptedTerms = false,
   });
 
   @override
@@ -34,6 +46,7 @@ class SignupPhotoVerificationScreen extends StatefulWidget {
 class _SignupPhotoVerificationScreenState
     extends State<SignupPhotoVerificationScreen> {
   final AuthService _authService = AuthService();
+  final ApiService _apiService = ApiService();
   final NotificationService1 _notificationService = NotificationService1();
 
   File? _capturedPhoto;
@@ -61,6 +74,53 @@ class _SignupPhotoVerificationScreenState
         lowerCaseMessage.contains('exist');
   }
 
+  Future<String> _photoToDataUrl() async {
+    final photoBytes = await _capturedPhoto!.readAsBytes();
+    final photoBase64 = base64Encode(photoBytes);
+    return 'data:image/jpeg;base64,$photoBase64';
+  }
+
+  Future<void> _uploadProfilePhoto(String photoDataUrl) async {
+    final base64Image = photoDataUrl.split(',').last;
+    await _apiService.uploadProfileImageBase64(
+      base64Image: base64Image,
+      mimeType: 'image/jpeg',
+    );
+
+    if (!mounted) return;
+    await _notificationService.showLoginSuccessNotification();
+    widget.onLoginComplete?.call(null);
+  }
+
+  Future<void> _verifyOtpWithPhoto(String photoDataUrl) async {
+    final response = await _authService.verifyOtp(
+      mobileNumber: widget.mobileNumber,
+      otp: widget.pendingOtp!,
+      photo: photoDataUrl,
+    );
+
+    if (!response.isSuccess || response.data == null) {
+      if (!mounted) return;
+      AuthService.showErrorDialog(context, response.message);
+      return;
+    }
+
+    final responseData = response.data!;
+    ProfileSessionManager.instance.clearSession();
+    BlockedUsersCache.instance.reset();
+
+    await TokenService().saveTokens(
+      token: responseData.token,
+      refreshToken: responseData.refreshToken,
+      userId: responseData.user.id,
+    );
+    await NotificationService1.syncTokenWithBackend();
+
+    if (!mounted) return;
+    await _notificationService.showLoginSuccessNotification();
+    widget.onLoginComplete?.call(responseData.user);
+  }
+
   Future<void> _registerWithPhoto() async {
     if (_capturedPhoto == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -77,9 +137,16 @@ class _SignupPhotoVerificationScreenState
     });
 
     try {
-      final photoBytes = await _capturedPhoto!.readAsBytes();
-      final photoBase64 = base64Encode(photoBytes);
-      final photoDataUrl = 'data:image/jpeg;base64,$photoBase64';
+      final photoDataUrl = await _photoToDataUrl();
+
+      if (widget.isLoginFlow) {
+        if (widget.pendingOtp != null) {
+          await _verifyOtpWithPhoto(photoDataUrl);
+        } else if (widget.uploadOnly) {
+          await _uploadProfilePhoto(photoDataUrl);
+        }
+        return;
+      }
 
       final response = await _authService.registerUser(
         firstName: widget.firstName,
@@ -254,7 +321,10 @@ class _SignupPhotoVerificationScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Live Photo Verification')),
+      appBar: AppBar(
+        title: const Text('Live Photo Verification'),
+        automaticallyImplyLeading: !widget.isLoginFlow,
+      ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {

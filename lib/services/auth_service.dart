@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/models/auth_models.dart';
-import 'package:YemPover_app/services/api_service.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/auth_models.dart';
+import 'package:yempover_app/services/api_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
 
 class AuthService extends ChangeNotifier {
   final ApiService _apiService = ApiService();
 
   // TODO: Replace with your actual user model or state management
   dynamic currentUser;
+
+  /// Normalizes phone numbers to +{digits} for the backend.
+  String _normalizeMobileNumber(String value) {
+    final digits = value.trim().replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return value.trim();
+    return '+$digits';
+  }
 
   Future<AuthResponse<RegisterResponseData>> registerUser({
     required String firstName,
@@ -27,7 +34,7 @@ class AuthService extends ChangeNotifier {
       firstName: firstName,
       lastName: lastName,
       email: email,
-      mobileNumber: mobileNumber,
+      mobileNumber: _normalizeMobileNumber(mobileNumber),
       photo: photo,
       acceptedTerms: acceptedTerms, // ✅ NEW
     );
@@ -38,8 +45,9 @@ class AuthService extends ChangeNotifier {
   Future<AuthResponse<SendOtpResponseData>> sendOtp({
     required String mobileNumber,
   }) async {
-    debugPrint('📱 AuthService: sendOtp called for: $mobileNumber');
-    final request = SendOtpRequest(mobileNumber: mobileNumber);
+    final normalized = _normalizeMobileNumber(mobileNumber);
+    debugPrint('📱 AuthService: sendOtp called for: $normalized');
+    final request = SendOtpRequest(mobileNumber: normalized);
     return await _apiService.sendOtp(request);
   }
 
@@ -48,10 +56,11 @@ class AuthService extends ChangeNotifier {
     required String otp,
     String? photo,
   }) async {
+    final normalized = _normalizeMobileNumber(mobileNumber);
     debugPrint('✅ AuthService: verifyOtp called');
-    debugPrint('✅ AuthService: Phone: $mobileNumber, OTP: $otp');
+    debugPrint('✅ AuthService: Phone: $normalized, OTP: $otp');
     final request = VerifyOtpRequest(
-      mobileNumber: mobileNumber,
+      mobileNumber: normalized,
       otp: otp,
       photo: photo,
     );
