@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:yempover_app/constants/api_constants.dart';
 import 'package:yempover_app/models/auth_models.dart';
+import 'package:yempover_app/screens/Home_screen.dart';
 import 'package:yempover_app/screens/LoginScreen.dart';
 import 'package:yempover_app/screens/OTPVerificationScreen.dart';
 import 'package:yempover_app/services/api_service.dart';
@@ -52,14 +53,39 @@ class _SignupPhotoVerificationScreenState
   File? _capturedPhoto;
   bool _isLoading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    debugPrint('📸 SignupPhotoVerificationScreen: initState() called');
+    debugPrint(
+      '📸 SignupPhotoVerificationScreen: isLoginFlow=${widget.isLoginFlow}, '
+      'uploadOnly=${widget.uploadOnly}, pendingOtp=${widget.pendingOtp != null}',
+    );
+    debugPrint(
+      '📸 SignupPhotoVerificationScreen: mobileNumber=${widget.mobileNumber}',
+    );
+  }
+
+  @override
+  void dispose() {
+    debugPrint('📸 SignupPhotoVerificationScreen: dispose() called');
+    super.dispose();
+  }
+
   Future<void> _captureLivePhoto() async {
+    debugPrint('📸 SignupPhotoVerificationScreen: _captureLivePhoto() called');
     final photo = await ImagePickerUtils.takePhotoWithCamera();
     if (!mounted) return;
 
     if (photo != null) {
+      debugPrint(
+        '📸 SignupPhotoVerificationScreen: Photo captured at ${photo.path}',
+      );
       setState(() {
         _capturedPhoto = photo;
       });
+    } else {
+      debugPrint('📸 SignupPhotoVerificationScreen: Photo capture cancelled');
     }
   }
 
@@ -74,6 +100,38 @@ class _SignupPhotoVerificationScreenState
         lowerCaseMessage.contains('exist');
   }
 
+  void _navigateToDashboard() {
+    debugPrint('📸 SignupPhotoVerificationScreen: Navigating to dashboard');
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      (route) => false,
+    );
+  }
+
+  Future<void> _completeVerificationAndNavigateHome({User? user}) async {
+    if (!widget.isLoginFlow) return;
+
+    final userId = user?.id ?? await TokenService().getUserId();
+    try {
+      await _apiService.completeVerification(userId: userId);
+      debugPrint(
+        '📸 SignupPhotoVerificationScreen: verificationPending set to false',
+      );
+    } on ApiException catch (e) {
+      debugPrint(
+        '🟡 SignupPhotoVerificationScreen: completeVerification failed - ${e.message}',
+      );
+    } catch (e) {
+      debugPrint(
+        '🟡 SignupPhotoVerificationScreen: completeVerification error - $e',
+      );
+    }
+
+    if (!mounted) return;
+    await _notificationService.showLoginSuccessNotification();
+    _navigateToDashboard();
+  }
+
   Future<String> _photoToDataUrl() async {
     final photoBytes = await _capturedPhoto!.readAsBytes();
     final photoBase64 = base64Encode(photoBytes);
@@ -81,48 +139,106 @@ class _SignupPhotoVerificationScreenState
   }
 
   Future<void> _uploadProfilePhoto(String photoDataUrl) async {
-    final base64Image = photoDataUrl.split(',').last;
-    await _apiService.uploadProfileImageBase64(
-      base64Image: base64Image,
-      mimeType: 'image/jpeg',
+    debugPrint(
+      '📸 SignupPhotoVerificationScreen: _uploadProfilePhoto() called',
     );
+    try {
+      final base64Image = photoDataUrl.split(',').last;
+      final response = await _apiService.uploadProfileImageBase64(
+        base64Image: base64Image,
+        mimeType: 'image/jpeg',
+      );
+      debugPrint(
+        '📸 SignupPhotoVerificationScreen: Upload profile photo success - '
+        'status=${response.status}, message=${response.message}',
+      );
 
-    if (!mounted) return;
-    await _notificationService.showLoginSuccessNotification();
-    widget.onLoginComplete?.call(null);
+      if (!mounted) return;
+      await _completeVerificationAndNavigateHome();
+    } on ApiException catch (e) {
+      debugPrint(
+        '🔴 SignupPhotoVerificationScreen: Upload profile photo ApiException - '
+        '${e.message} (statusCode=${e.statusCode})',
+      );
+      rethrow;
+    } catch (e) {
+      debugPrint(
+        '🔴 SignupPhotoVerificationScreen: Upload profile photo error - $e',
+      );
+      rethrow;
+    }
   }
 
   Future<void> _verifyOtpWithPhoto(String photoDataUrl) async {
-    final response = await _authService.verifyOtp(
-      mobileNumber: widget.mobileNumber,
-      otp: widget.pendingOtp!,
-      photo: photoDataUrl,
+    debugPrint(
+      '📸 SignupPhotoVerificationScreen: _verifyOtpWithPhoto() called',
+    );
+    debugPrint(
+      '📸 SignupPhotoVerificationScreen: Phone=${widget.mobileNumber}, '
+      'OTP=${widget.pendingOtp}',
     );
 
-    if (!response.isSuccess || response.data == null) {
+    try {
+      final response = await _authService.verifyOtp(
+        mobileNumber: widget.mobileNumber,
+        otp: widget.pendingOtp!,
+        photo: photoDataUrl,
+      );
+
+      debugPrint(
+        '📨 SignupPhotoVerificationScreen: verifyOtp response - '
+        'isSuccess=${response.isSuccess}, message=${response.message}',
+      );
+
+      if (!response.isSuccess || response.data == null) {
+        debugPrint(
+          '🔴 SignupPhotoVerificationScreen: verifyOtp failed - ${response.message}',
+        );
+        if (!mounted) return;
+        AuthService.showErrorDialog(context, response.message);
+        return;
+      }
+
+      final responseData = response.data!;
+      debugPrint(
+        '🟢 SignupPhotoVerificationScreen: verifyOtp success - '
+        'userId=${responseData.user.id}',
+      );
+
+      ProfileSessionManager.instance.clearSession();
+      BlockedUsersCache.instance.reset();
+
+      await TokenService().saveTokens(
+        token: responseData.token,
+        refreshToken: responseData.refreshToken,
+        userId: responseData.user.id,
+      );
+      await NotificationService1.syncTokenWithBackend();
+      debugPrint('📸 SignupPhotoVerificationScreen: Tokens saved after OTP+photo');
+
       if (!mounted) return;
-      AuthService.showErrorDialog(context, response.message);
-      return;
+      await _completeVerificationAndNavigateHome(user: responseData.user);
+    } on ApiException catch (e) {
+      debugPrint(
+        '🔴 SignupPhotoVerificationScreen: verifyOtp ApiException - '
+        '${e.message} (statusCode=${e.statusCode})',
+      );
+      if (!mounted) return;
+      AuthService.showErrorDialog(context, e.message);
+    } catch (e) {
+      debugPrint(
+        '🔴 SignupPhotoVerificationScreen: verifyOtp unexpected error - $e',
+      );
+      if (!mounted) return;
+      AuthService.showErrorDialog(context, ErrorMessages.unknownError);
     }
-
-    final responseData = response.data!;
-    ProfileSessionManager.instance.clearSession();
-    BlockedUsersCache.instance.reset();
-
-    await TokenService().saveTokens(
-      token: responseData.token,
-      refreshToken: responseData.refreshToken,
-      userId: responseData.user.id,
-    );
-    await NotificationService1.syncTokenWithBackend();
-
-    if (!mounted) return;
-    await _notificationService.showLoginSuccessNotification();
-    widget.onLoginComplete?.call(responseData.user);
   }
 
   Future<void> _registerWithPhoto() async {
+    debugPrint('📸 SignupPhotoVerificationScreen: _registerWithPhoto() called');
+
     if (_capturedPhoto == null) {
+      debugPrint('🔴 SignupPhotoVerificationScreen: No photo captured');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please capture a live photo to continue.'),
@@ -138,8 +254,16 @@ class _SignupPhotoVerificationScreenState
 
     try {
       final photoDataUrl = await _photoToDataUrl();
+      debugPrint(
+        '📸 SignupPhotoVerificationScreen: Photo encoded, '
+        'dataUrl length=${photoDataUrl.length}',
+      );
 
       if (widget.isLoginFlow) {
+        debugPrint(
+          '📸 SignupPhotoVerificationScreen: Login flow - '
+          'pendingOtp=${widget.pendingOtp != null}, uploadOnly=${widget.uploadOnly}',
+        );
         if (widget.pendingOtp != null) {
           await _verifyOtpWithPhoto(photoDataUrl);
         } else if (widget.uploadOnly) {
@@ -147,6 +271,12 @@ class _SignupPhotoVerificationScreenState
         }
         return;
       }
+
+      debugPrint(
+        '📸 SignupPhotoVerificationScreen: Registering user - '
+        'firstName=${widget.firstName}, lastName=${widget.lastName}, '
+        'email=${widget.email}, mobile=${widget.mobileNumber}',
+      );
 
       final response = await _authService.registerUser(
         firstName: widget.firstName,
@@ -157,11 +287,20 @@ class _SignupPhotoVerificationScreenState
         acceptedTerms: widget.acceptedTerms,
       );
 
+      debugPrint(
+        '📨 SignupPhotoVerificationScreen: registerUser response - '
+        'isSuccess=${response.isSuccess}, message=${response.message}',
+      );
+
       if (response.isSuccess) {
+        debugPrint('🟢 SignupPhotoVerificationScreen: Registration successful');
         await _notificationService.showSignupSuccessNotification();
         if (!mounted) return;
         _showSignupSuccessDialog();
       } else {
+        debugPrint(
+          '🔴 SignupPhotoVerificationScreen: Registration failed - ${response.message}',
+        );
         if (_isUserAlreadyExistsError(response.message)) {
           if (!mounted) return;
           _showUserExistsDialog(response.message);
@@ -171,9 +310,16 @@ class _SignupPhotoVerificationScreenState
         }
       }
     } on ApiException catch (e) {
+      debugPrint(
+        '🔴 SignupPhotoVerificationScreen: registerUser ApiException - '
+        '${e.message} (statusCode=${e.statusCode})',
+      );
       if (e.message.toLowerCase().contains('success') ||
           e.message.toLowerCase().contains('verify') ||
           e.message.toLowerCase().contains('otp')) {
+        debugPrint(
+          '🟡 SignupPhotoVerificationScreen: Treating ApiException as success',
+        );
         await _notificationService.showSignupSuccessNotification();
         if (!mounted) return;
         _showSignupSuccessDialog();
@@ -184,11 +330,15 @@ class _SignupPhotoVerificationScreenState
         if (!mounted) return;
         AuthService.showErrorDialog(context, e.message);
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint(
+        '🔴 SignupPhotoVerificationScreen: registerUser unexpected error - $e',
+      );
       if (!mounted) return;
       AuthService.showErrorDialog(context, ErrorMessages.unknownError);
     } finally {
       if (mounted) {
+        debugPrint('📸 SignupPhotoVerificationScreen: Setting isLoading=false');
         setState(() {
           _isLoading = false;
         });
@@ -263,6 +413,10 @@ class _SignupPhotoVerificationScreenState
   }
 
   void _navigateToOTPScreen() {
+    debugPrint(
+      '📸 SignupPhotoVerificationScreen: Navigating to OTP screen - '
+      'phone=${widget.mobileNumber}',
+    );
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -320,6 +474,7 @@ class _SignupPhotoVerificationScreenState
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('📸 SignupPhotoVerificationScreen: build() called');
     return Scaffold(
       appBar: AppBar(
         title: const Text('Live Photo Verification'),

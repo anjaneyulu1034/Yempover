@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:async';
-import 'package:YemPover_app/models/update_profile_image_request.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/models/update_profile_image_request.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:YemPover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
 import '../constants/api_constants.dart';
 import '../models/auth_models.dart';
 import 'token_service.dart';
@@ -675,6 +675,30 @@ class ApiService {
       debugPrint('🔴 ApiService: Error uploading profile image: $e');
       rethrow;
     }
+  }
+
+  /// PUT /api/users/:id — sets verificationPending: false after live photo.
+  Future<void> completeVerification({String? userId}) async {
+    final resolvedUserId = userId ?? await _tokenService.getUserId();
+    if (resolvedUserId == null || resolvedUserId.isEmpty) {
+      throw ApiException('User id not found');
+    }
+
+    final url = ApiConstants.updateUser(resolvedUserId);
+    debugPrint('✅ ApiService: completeVerification PUT $url');
+
+    final response = await put(
+      url,
+      body: {'verificationPending': false},
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final Map<String, dynamic> body = json.decode(response.body);
+      final message = body['message']?.toString() ?? ErrorMessages.unknownError;
+      throw ApiException(message, statusCode: response.statusCode);
+    }
+
+    debugPrint('✅ ApiService: completeVerification success');
   }
 
   /// Upload profile image with automatic mime type detection

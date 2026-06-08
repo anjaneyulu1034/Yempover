@@ -177,13 +177,17 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     final savedUserId = await TokenService().getUserId();
     debugPrint('✅ Verified saved userId: $savedUserId');
 
-    // Check if user has profile picture
+    // Check if live photo verification is still pending
     final hasProfilePic = responseData.user.profileImage != null &&
         responseData.user.profileImage!.trim().isNotEmpty;
+    final needsPhotoVerification =
+        responseData.user.verificationPending || !hasProfilePic;
 
-    if (!hasProfilePic) {
+    if (needsPhotoVerification) {
       debugPrint(
-        '📸 User has no profile pic. Redirecting to Live Photo Verification',
+        '📸 User needs live photo verification '
+        '(verificationPending=${responseData.user.verificationPending}). '
+        'Redirecting to Live Photo Verification',
       );
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
