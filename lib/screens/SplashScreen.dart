@@ -1,6 +1,6 @@
 // // ignore: file_names
 // import 'package:flutter/material.dart';
-// import 'package:YemPover_app/screens/OnboardingScreen.dart';
+// import 'package:yempover_app/screens/OnboardingScreen.dart';
 
 // class SplashScreen extends StatefulWidget {
 //   const SplashScreen({super.key});
@@ -57,7 +57,7 @@
 //             const Column(
 //               children: [
 //                 Text(
-//                   'YemPover',
+//                   'Yempover',
 //                   style: TextStyle(
 //                     fontSize: 36,
 //                     fontWeight: FontWeight.bold,
@@ -91,12 +91,12 @@
 
 // screens/SplashScreen.dart
 
-import 'package:YemPover_app/screens/LoginScreen.dart';
-import 'package:YemPover_app/services/shared_prefs_service.dart';
+import 'package:yempover_app/screens/LoginScreen.dart';
+import 'package:yempover_app/services/shared_prefs_service.dart';
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/screens/OnboardingScreen.dart';
-import 'package:YemPover_app/screens/Home_screen.dart';
-import 'package:YemPover_app/services/token_service.dart';
+import 'package:yempover_app/screens/OnboardingScreen.dart';
+import 'package:yempover_app/screens/Home_screen.dart';
+import 'package:yempover_app/services/token_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -187,7 +187,7 @@ class _SplashScreenState extends State<SplashScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Image.asset(
-                  'assets/YemPover_applogo.png',
+                  'assets/Yempover_applogo.png',
                   fit: BoxFit.contain,
                 ),
               ),
@@ -197,7 +197,7 @@ class _SplashScreenState extends State<SplashScreen> {
             const Column(
               children: [
                 Text(
-                  'YemPover',
+                  'Yempover',
                   style: TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
@@ -207,7 +207,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Barter System',
+                  'Exchange Platform',
                   style: TextStyle(
                     fontSize: 18,
                     color: Color(0xFF6B7280),

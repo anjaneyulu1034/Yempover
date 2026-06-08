@@ -1,5 +1,5 @@
-name: YemPover_app
-description: "YemPover Battery System Application."
+name: yempover_app
+description: "Yempover mobile application."
 publish_to: "none"
 
 version: 1.0.2+3
@@ -62,5 +62,8 @@ flutter:
 
   assets:
     - assets/YemPover_applogo.png
+    - assets/Yempover_logo.png
+    - assets/icons_logo.png
     - assets/chat-message-icon.jpg
     - assets/chat_icons.png
+    - assets/image.png

@@ -5,18 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Yempover-1.0",
+            "name": "Yempover",
             "request": "launch",
             "type": "dart"
         },
         {
-            "name": "Yempover-1.0 (profile mode)",
+            "name": "Yempover (profile mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "profile"
         },
         {
-            "name": "Yempover-1.0 (release mode)",
+            "name": "Yempover (release mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "release"
