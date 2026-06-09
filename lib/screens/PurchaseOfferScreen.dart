@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/utils/wallet_offer_guard.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/utils/wallet_offer_guard.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 
 class PurchaseOfferScreen extends StatefulWidget {
   final Post post;

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/screens/AddCoinsScreen.dart';
-import 'package:YemPover_app/services/coin_service.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/screens/AddCoinsScreen.dart';
+import 'package:yempover_app/services/coin_service.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
 
 /// Ensures the user has enough wallet coins before a priced offer.
 class WalletOfferGuard {

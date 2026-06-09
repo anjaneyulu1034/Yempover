@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/screens/Home_screen.dart';
-import 'package:YemPover_app/services/api_service.dart';
-import 'package:YemPover_app/services/notification1_service.dart';
-import 'package:YemPover_app/utils/image_picker_utils.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/screens/Home_screen.dart';
+import 'package:yempover_app/services/api_service.dart';
+import 'package:yempover_app/services/notification1_service.dart';
+import 'package:yempover_app/utils/image_picker_utils.dart';
 
 class UploadProfilePicScreen extends StatefulWidget {
   const UploadProfilePicScreen({super.key});

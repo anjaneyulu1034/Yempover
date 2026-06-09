@@ -1,12 +1,13 @@
-import 'package:YemPover_app/screens/PrivacyPolicyScreen.dart';
-import 'package:YemPover_app/screens/SignupPhotoVerificationScreen.dart';
-import 'package:YemPover_app/screens/TermsAndConditionsScreen.dart';
-import 'package:YemPover_app/services/notification1_service.dart';
+import 'package:yempover_app/screens/PrivacyPolicyScreen.dart';
+import 'package:yempover_app/screens/SignupPhotoVerificationScreen.dart';
+import 'package:yempover_app/screens/TermsAndConditionsScreen.dart';
+import 'package:yempover_app/services/notification1_service.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/screens/LoginScreen.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/screens/LoginScreen.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/widgets/phone_number_field.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -22,6 +23,8 @@ class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController _emailController = TextEditingController();
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final GlobalKey<PhoneNumberFieldState> _phoneFieldKey =
+      GlobalKey<PhoneNumberFieldState>();
   bool _agreeToTerms = false;
   final bool _isLoading = false;
 
@@ -59,16 +62,6 @@ class _SignupScreenState extends State<SignupScreen> {
     return null;
   }
 
-  String? _validatePhone(String? value) {
-    debugPrint('🔵 SignupScreen: _validatePhone called with value: "$value"');
-    if (value == null || value.isEmpty) {
-      return ErrorMessages.emptyField;
-    }
-    if (!ValidationRegex.phoneRegex.hasMatch(value)) {
-      return ErrorMessages.invalidPhoneNumber;
-    }
-    return null;
-  }
 
   String? _validateEmail(String? value) {
     debugPrint('🔵 SignupScreen: _validateEmail called with value: "$value"');
@@ -120,8 +113,9 @@ class _SignupScreenState extends State<SignupScreen> {
     }
 
     debugPrint('🟢 SignupScreen: Form validation passed');
+    final mobileNumber = _phoneFieldKey.currentState!.fullPhoneNumber;
     debugPrint(
-      '📋 SignupScreen: Form data - First: ${_firstNameController.text}, Last: ${_lastNameController.text}, Phone: ${_phoneController.text}, Email: ${_emailController.text}',
+      '📋 SignupScreen: Form data - First: ${_firstNameController.text}, Last: ${_lastNameController.text}, Phone: $mobileNumber, Email: ${_emailController.text}',
     );
 
     if (!mounted) return;
@@ -133,7 +127,7 @@ class _SignupScreenState extends State<SignupScreen> {
           firstName: _firstNameController.text.trim(),
           lastName: _lastNameController.text.trim(),
           email: _emailController.text.trim(),
-          mobileNumber: _phoneController.text.trim(),
+          mobileNumber: mobileNumber,
           acceptedTerms: _agreeToTerms,
         ),
       ),
@@ -188,7 +182,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Image.asset(
-                        'assets/YemPover_applogo.png',
+                        'assets/BarterX_applogo.png',
                         fit: BoxFit.contain,
                       ),
                     ),
@@ -218,10 +212,10 @@ class _SignupScreenState extends State<SignupScreen> {
                   style: TextStyle(fontSize: 16, color: Colors.grey),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'YemPover Barter System!',
+                Text(
+                  '${AppConstants.appName}!',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 6),
                 const Text(
@@ -245,11 +239,10 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                AppTextField(
-                  label: 'Phone Number',
+                PhoneNumberField(
+                  key: _phoneFieldKey,
                   controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  validator: _validatePhone,
+                  hint: 'Enter phone number',
                 ),
                 const SizedBox(height: 16),
 

@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/models/chats/trade_chat.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:http/http.dart' as http;
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/utils/error_handler.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/error_handler.dart';
 
 enum ChatReferenceType { product, service }
 

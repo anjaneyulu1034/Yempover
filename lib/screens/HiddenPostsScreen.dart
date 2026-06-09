@@ -1,5 +1,5 @@
-import 'package:YemPover_app/screens/PostDetailScreen.dart';
-import 'package:YemPover_app/services/post_action_service.dart';
+import 'package:yempover_app/screens/PostDetailScreen.dart';
+import 'package:yempover_app/services/post_action_service.dart';
 import 'package:flutter/material.dart';
 
 class HiddenPostsScreen extends StatefulWidget {

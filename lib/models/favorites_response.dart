@@ -1,6 +1,6 @@
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/models/post_model.dart' hide Category;
-import 'package:YemPover_app/utils/post_availability_utils.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/models/post_model.dart' hide Category;
+import 'package:yempover_app/utils/post_availability_utils.dart';
 
 class FavoritesResponse {
   final String status;

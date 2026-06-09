@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/services/content_service.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/services/content_service.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
 
 class PrivacyScreen extends StatefulWidget {
   const PrivacyScreen({super.key});
@@ -262,7 +262,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                                   ),
                                   SizedBox(width: 4),
                                   Text(
-                                    'privacy@YemPover.com',
+                                    'privacy@yempover.com',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.blue,

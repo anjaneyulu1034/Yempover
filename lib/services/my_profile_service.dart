@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:YemPover_app/services/token_refresh_service.dart';
+import 'package:yempover_app/services/token_refresh_service.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/models/get_my_profile_response.dart';
-import 'package:YemPover_app/services/token_service.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/get_my_profile_response.dart';
+import 'package:yempover_app/services/token_service.dart';
 
 class MyProfileService {
   static final MyProfileService _instance = MyProfileService._internal();

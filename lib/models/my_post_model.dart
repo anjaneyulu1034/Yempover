@@ -1,5 +1,5 @@
 // lib/models/my_post_model.dart
-import 'package:YemPover_app/utils/post_availability_utils.dart';
+import 'package:yempover_app/utils/post_availability_utils.dart';
 
 class MyPostsResponse {
   final String status;

@@ -1,15 +1,15 @@
-import 'package:YemPover_app/models/favorites_response.dart';
+import 'package:yempover_app/models/favorites_response.dart';
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/services/api_service.dart';
-import 'package:YemPover_app/services/post_action_service.dart';
-import 'package:YemPover_app/utils/post_availability_utils.dart';
-import 'package:YemPover_app/screens/PostDetailScreen.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/screens/Home_screen.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
-import 'package:YemPover_app/utils/blocked_users_cache.dart';
-import 'package:YemPover_app/services/token_service.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/services/api_service.dart';
+import 'package:yempover_app/services/post_action_service.dart';
+import 'package:yempover_app/utils/post_availability_utils.dart';
+import 'package:yempover_app/screens/PostDetailScreen.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/screens/Home_screen.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/utils/blocked_users_cache.dart';
+import 'package:yempover_app/services/token_service.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});

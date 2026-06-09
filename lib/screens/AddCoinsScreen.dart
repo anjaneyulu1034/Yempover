@@ -2,10 +2,10 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:barterx_app/services/coin_service.dart';
-import 'package:barterx_app/utils/snackbar_utils.dart';
-import 'package:barterx_app/widgets/app_text_field.dart';
-import 'package:barterx_app/widgets/coin_icon.dart';
+import 'package:yempover_app/services/coin_service.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
 
 class AddCoinsResult {
   final Map<String, dynamic> transaction;

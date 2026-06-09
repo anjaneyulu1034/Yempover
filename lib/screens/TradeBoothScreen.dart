@@ -1,14 +1,14 @@
 // screens/TradeBoothScreen.dart
 import 'dart:async';
 
-import 'package:YemPover_app/screens/ProductDetailScreen.dart';
+import 'package:yempover_app/screens/ProductDetailScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
 import '../models/my_post_model.dart';
 import '../services/my_posts_service.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
 import '../screens/AddPostScreen.dart';
 
 class TradeBoothScreen extends StatefulWidget {

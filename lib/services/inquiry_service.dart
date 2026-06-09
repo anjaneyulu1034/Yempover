@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/services/api_service.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/services/api_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
 
 class InquiryService {
   static const String sourcePlatformMobile = 'MOBILE_APP';

@@ -1,16 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:YemPover_app/services/api_service.dart';
+import 'package:yempover_app/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/models/get_my_profile_response.dart';
-import 'package:YemPover_app/models/profile_update_request.dart';
-import 'package:YemPover_app/services/profile_service.dart';
-import 'package:YemPover_app/services/profile_session_manager.dart';
-import 'package:YemPover_app/utils/loading_overlay.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/get_my_profile_response.dart';
+import 'package:yempover_app/models/profile_update_request.dart';
+import 'package:yempover_app/services/profile_service.dart';
+import 'package:yempover_app/services/profile_session_manager.dart';
+import 'package:yempover_app/utils/loading_overlay.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});

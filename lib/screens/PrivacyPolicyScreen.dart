@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/services/content_service.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:yempover_app/services/content_service.dart';
+import 'package:yempover_app/constants/api_constants.dart';
 
 class PrivacyPolicyScreen extends StatefulWidget {
   const PrivacyPolicyScreen({super.key});
@@ -319,7 +319,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'support@YemPover.com',
+                      'support@yempover.com',
                       style: TextStyle(
                         fontSize: 14,
                         color: AppConstants.primaryColor,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/services/content_service.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:yempover_app/services/content_service.dart';
+import 'package:yempover_app/constants/api_constants.dart';
 
 class TermsAndConditionsScreen extends StatefulWidget {
   const TermsAndConditionsScreen({super.key});

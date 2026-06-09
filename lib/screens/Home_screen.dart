@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:math';
-import 'package:YemPover_app/utils/notification_provider.dart';
+import 'package:yempover_app/utils/notification_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
@@ -8,26 +8,26 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
 import 'package:provider/provider.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/models/get_my_profile_response.dart';
-import 'package:YemPover_app/services/api_service.dart';
-import 'package:YemPover_app/screens/PostDetailScreen.dart';
-import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:YemPover_app/screens/TradeBoothScreen.dart';
-import 'package:YemPover_app/screens/HamburgerMenuScreen.dart';
-import 'package:YemPover_app/screens/MyProfileScreen.dart';
-import 'package:YemPover_app/screens/NotificationsScreen.dart';
-import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/widgets/safe_network_image.dart';
-import 'package:YemPover_app/services/my_profile_service.dart';
-import 'package:YemPover_app/services/profile_session_manager.dart';
-import 'package:YemPover_app/services/category_service.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/models/get_my_profile_response.dart';
+import 'package:yempover_app/services/api_service.dart';
+import 'package:yempover_app/screens/PostDetailScreen.dart';
+import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:yempover_app/screens/TradeBoothScreen.dart';
+import 'package:yempover_app/screens/HamburgerMenuScreen.dart';
+import 'package:yempover_app/screens/MyProfileScreen.dart';
+import 'package:yempover_app/screens/NotificationsScreen.dart';
+import 'package:yempover_app/screens/CoinsWalletScreen.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/safe_network_image.dart';
+import 'package:yempover_app/services/my_profile_service.dart';
+import 'package:yempover_app/services/profile_session_manager.dart';
+import 'package:yempover_app/services/category_service.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
 import '../services/post_action_service.dart';
-import 'package:YemPover_app/utils/blocked_users_cache.dart';
+import 'package:yempover_app/utils/blocked_users_cache.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Extended Post class with the required properties
@@ -1697,7 +1697,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        'Are you sure you want to close YemPover now?',
+                        'Are you sure you want to close BarterX now?',
                         style: TextStyle(
                           fontSize: 15,
                           height: 1.35,
@@ -2005,7 +2005,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const Text(
-                    'Welcome to YemPover',
+                    'Welcome to BarterX',
                     style: TextStyle(
                       color: Color(0xFFE1EEFF),
                       fontSize: 13,

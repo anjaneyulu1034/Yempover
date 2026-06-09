@@ -1,7 +1,7 @@
 // core/utils/snackbar_utils.dart
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/screens/LoginScreen.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/screens/LoginScreen.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
 
 class SnackbarUtils {
   static bool _isErrorSheetOpen = false;

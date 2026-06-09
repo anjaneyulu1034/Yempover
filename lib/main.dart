@@ -1,4 +1,4 @@
-import 'package:YemPover_app/services/notification1_service.dart';
+import 'package:yempover_app/services/notification1_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -72,7 +72,7 @@ class MyApp extends StatelessWidget {
       ],
       child: MaterialApp(
         navigatorKey: rootNavigatorKey,
-        title: 'YemPover',
+        title: 'BarterX',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           primaryColor: const Color(0xFF1A73E8),

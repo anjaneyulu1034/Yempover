@@ -1,9 +1,9 @@
 // lib/services/notification_service.dart
 import 'dart:convert';
-import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:yempover_app/constants/api_constants.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:YemPover_app/services/token_service.dart';
+import 'package:yempover_app/services/token_service.dart';
 import '../models/notification_model.dart';
 import '../models/notification_preferences_model.dart';
 

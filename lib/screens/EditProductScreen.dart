@@ -2,11 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/api_constants.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
 import '../models/my_post_model.dart';
 import '../services/add_post_service.dart';
 import '../services/category_service.dart';

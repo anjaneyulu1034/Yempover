@@ -1,20 +1,20 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:YemPover_app/services/socket_io/socket_service.dart';
-import 'package:YemPover_app/services/service_booking_service.dart';
+import 'package:yempover_app/services/socket_io/socket_service.dart';
+import 'package:yempover_app/services/service_booking_service.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:YemPover_app/models/chats/trade_chat.dart';
-import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:YemPover_app/utils/loading_widget.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/utils/blocked_users_cache.dart';
-import 'package:YemPover_app/services/coin_service.dart';
-import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/models/chats/trade_chat.dart';
+import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/utils/loading_widget.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/utils/blocked_users_cache.dart';
+import 'package:yempover_app/services/coin_service.dart';
+import 'package:yempover_app/screens/CoinsWalletScreen.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final TradeChat chat;

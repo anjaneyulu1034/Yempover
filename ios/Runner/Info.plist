@@ -7,7 +7,7 @@
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
-		<string>Yempover</string>
+		<string>BarterX</string>
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>
@@ -38,17 +38,17 @@
 			<true/>
 		</dict>
 		<key>NSCameraUsageDescription</key>
-		<string>Yempover needs access to your camera to take photos for your posts</string>
+		<string>BarterX needs access to your camera to take photos for your posts</string>
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-		<string>Yempover needs access to your location to show nearby items and set your current location when creating posts</string>
+		<string>BarterX needs access to your location to show nearby items and set your current location when creating posts</string>
 		<key>NSLocationAlwaysUsageDescription</key>
-		<string>Yempover needs access to your location to show nearby items and set your current location when creating posts</string>
+		<string>BarterX needs access to your location to show nearby items and set your current location when creating posts</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
-		<string>Yempover needs access to your location to show nearby items and set your current location when creating posts</string>
+		<string>BarterX needs access to your location to show nearby items and set your current location when creating posts</string>
 		<key>NSMicrophoneUsageDescription</key>
-		<string>Yempover needs access to your microphone for video recording</string>
+		<string>BarterX needs access to your microphone for video recording</string>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>Yempover needs access to your photo library to select images for your posts</string>
+		<string>BarterX needs access to your photo library to select images for your posts</string>
 		<key>UIApplicationSceneManifest</key>
 		<dict>
 			<key>UIApplicationSupportsMultipleScenes</key>

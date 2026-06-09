@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 
 class PaymentScreen extends StatefulWidget {
   final String plan;

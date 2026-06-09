@@ -1,7 +1,10 @@
 import 'dart:ui';
 
 class ApiConstants {
-  static const String baseUrl = 'http://3.208.20.90:3000/api/mobile';
+  static const String serverApiUrl = 'http://3.208.20.90:3000/api';
+  static const String baseUrl = '$serverApiUrl/mobile';
+
+  static String updateUser(String userId) => '$serverApiUrl/users/$userId';
 
   // Auth Endpoints
   static const String register = '$baseUrl/auth/register';
@@ -118,7 +121,7 @@ class ApiConstants {
 }
 
 class AppConstants {
-  static const String appName = 'Yempover';
+  static const String appName = 'BarterX';
   static const String appTagline = 'Exchange Platform';
   static const int defaultPageSize = 10;
   static const double defaultRadius = 10.0;

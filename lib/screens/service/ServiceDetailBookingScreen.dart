@@ -1,13 +1,13 @@
-import 'package:YemPover_app/screens/service/ServiceAvailabilityScreen.dart';
-import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
-import 'package:YemPover_app/services/service_booking_service.dart';
-import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/screens/service/ServiceAvailabilityScreen.dart';
+import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:yempover_app/services/service_booking_service.dart';
+import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 
 enum ServiceDetailUiState { loadingService, serviceReady, serviceError }
 

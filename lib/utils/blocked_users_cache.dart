@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:YemPover_app/models/favorites_response.dart';
-import 'package:YemPover_app/services/blocked_user_service.dart';
+import 'package:yempover_app/models/favorites_response.dart';
+import 'package:yempover_app/services/blocked_user_service.dart';
 
 /// Cached blocked-user IDs used to hide posts across the app.
 class BlockedUsersCache extends ChangeNotifier {

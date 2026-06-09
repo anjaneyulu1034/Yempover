@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/trade_history_model.dart';
 import '../services/trade_history_service.dart';
 import 'TradeDetailScreen.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
 
 class TradeHistoryScreen extends StatefulWidget {
   const TradeHistoryScreen({super.key});

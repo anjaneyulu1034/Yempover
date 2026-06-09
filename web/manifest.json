@@ -1,11 +1,11 @@
 {
-    "name": "Yempover",
-    "short_name": "Yempover",
+    "name": "BarterX",
+    "short_name": "BarterX",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Yempover mobile application.",
+    "description": "BarterX mobile application.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

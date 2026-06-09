@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/services/inquiry_service.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/services/inquiry_service.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 
 class HelpSupportScreen extends StatefulWidget {
   const HelpSupportScreen({super.key});
@@ -226,7 +226,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     _buildContactInfo(
                       Icons.email,
                       'Email',
-                      'support@YemPover.com',
+                      'support@yempover.com',
                       Colors.blue,
                     ),
                     const SizedBox(height: 12),
@@ -256,7 +256,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     _buildContactInfo(
                       Icons.language,
                       'Website',
-                      'www.YemPover.com',
+                      'www.yempover.com',
                       Colors.purple,
                     ),
                   ],
@@ -403,7 +403,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   }
 
   Future<void> _openWhatsAppSupport() async {
-    const text = 'Hi YemPower Support, I need help with the app.';
+    const text = 'Hi BarterX Support, I need help with the app.';
     final encodedText = Uri.encodeComponent(text);
     final whatsappAppUri = Uri.parse(
       'whatsapp://send?phone=91$_supportPhoneNumber&text=$encodedText',

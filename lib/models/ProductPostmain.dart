@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/utils/post_availability_utils.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/utils/post_availability_utils.dart';
 
 // Post Types
 enum PostType { product, service }

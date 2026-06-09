@@ -1,6 +1,6 @@
 // lib/screens/notification_preferences_screen.dart
-import 'package:YemPover_app/utils/loading_widget.dart';
-import 'package:YemPover_app/utils/notification_provider.dart';
+import 'package:yempover_app/utils/loading_widget.dart';
+import 'package:yempover_app/utils/notification_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

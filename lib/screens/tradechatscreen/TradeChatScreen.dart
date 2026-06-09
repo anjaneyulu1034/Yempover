@@ -1,13 +1,13 @@
-import 'package:YemPover_app/screens/Home_screen.dart';
-import 'package:YemPover_app/services/socket_io/socket_service.dart';
+import 'package:yempover_app/screens/Home_screen.dart';
+import 'package:yempover_app/services/socket_io/socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:YemPover_app/models/chats/trade_chat.dart';
-import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:YemPover_app/utils/error_widget.dart';
-import 'package:YemPover_app/utils/loading_widget.dart';
+import 'package:yempover_app/models/chats/trade_chat.dart';
+import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/utils/error_widget.dart';
+import 'package:yempover_app/utils/loading_widget.dart';
 
 class TradeChatScreen extends StatefulWidget {
   const TradeChatScreen({super.key});
