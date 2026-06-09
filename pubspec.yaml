@@ -38,22 +38,22 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
   flutter_native_splash: ^2.4.6
 
-flutter_icons:
+flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/BarterX_applogo.png"
+  image_path: "assets/Yempover_Org-logo.png"
   min_sdk_android: 21
 
   # Android 12+ adaptive icon fix (prevents small icon issue)
   adaptive_icon_background: "#2F55D4"
-  adaptive_icon_foreground: "assets/BarterX_applogo.png"
+  adaptive_icon_foreground: "assets/Yempover_Org-logo.png"
 
   # iOS icon fix
   remove_alpha_ios: true
 
 flutter_native_splash:
   color: "#FFFFFF"
-  image: assets/BarterX_applogo.png
+  image: assets/Yempover_Org-logo.png
   android: true
   ios: true
   web: false
@@ -62,7 +62,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/BarterX_applogo.png
+    - assets/Yempover_Org-logo.png
     - assets/Yempover_logo.png
     - assets/icons_logo.png
     - assets/chat-message-icon.jpg

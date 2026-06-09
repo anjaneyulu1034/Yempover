@@ -182,7 +182,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Image.asset(
-                        'assets/BarterX_applogo.png',
+                        'assets/Yempover_Org-logo.png',
                         fit: BoxFit.contain,
                       ),
                     ),
