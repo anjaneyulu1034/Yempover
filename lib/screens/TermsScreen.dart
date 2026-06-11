@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:yempover_app/services/content_service.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/widgets/rich_content.dart';
 
 class TermsScreen extends StatefulWidget {
   const TermsScreen({super.key});
@@ -140,9 +141,9 @@ class _TermsScreenState extends State<TermsScreen> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.grey.shade200),
                     ),
-                    child: Text(
-                      _content,
-                      style: const TextStyle(
+                    child: RichContent(
+                      html: _content,
+                      baseTextStyle: const TextStyle(
                         fontSize: 16,
                         height: 1.6,
                         color: Colors.black87,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:yempover_app/services/content_service.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/widgets/rich_content.dart';
 
 class PrivacyScreen extends StatefulWidget {
   const PrivacyScreen({super.key});
@@ -198,9 +199,9 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                         ),
                       ],
                     ),
-                    child: Text(
-                      _content,
-                      style: const TextStyle(
+                    child: RichContent(
+                      html: _content,
+                      baseTextStyle: const TextStyle(
                         fontSize: 15,
                         height: 1.7,
                         color: Colors.black87,

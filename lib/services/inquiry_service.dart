@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/inquiry_model.dart';
 import 'package:yempover_app/services/api_service.dart';
 import 'package:yempover_app/utils/error_message_utils.dart';
 
@@ -14,7 +15,7 @@ class InquiryService {
 
   final ApiService _apiService = ApiService();
 
-  Future<void> submitInquiry({
+  Future<Inquiry> submitInquiry({
     required String message,
     String? name,
     String? email,
@@ -53,7 +54,20 @@ class InquiryService {
 
     if (response.statusCode == 201 || response.statusCode == 200) {
       debugPrint('✅ InquiryService: Inquiry submitted successfully');
-      return;
+      final decoded = json.decode(response.body);
+      if (decoded is Map &&
+          decoded['data'] is Map &&
+          (decoded['data'] as Map)['inquiry'] is Map) {
+        return Inquiry.fromJson(
+          Map<String, dynamic>.from(
+            (decoded['data'] as Map)['inquiry'] as Map,
+          ),
+        );
+      }
+      throw ApiException(
+        'Inquiry submitted but response could not be parsed',
+        statusCode: response.statusCode,
+      );
     }
 
     String errorMessage = 'Failed to submit inquiry';
