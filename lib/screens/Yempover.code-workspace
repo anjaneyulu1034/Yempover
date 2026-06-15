@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../yempover-admin-ui"
+		},
+		{
+			"path": "../../../YemPower"
+		}
+	],
+	"settings": {}
+}

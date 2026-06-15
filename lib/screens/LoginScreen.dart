@@ -209,7 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Padding(
                             padding: const EdgeInsets.all(10),
                             child: Image.asset(
-                              'assets/Yempover_Org-logo.png',
+                              'assets/BarterX_applogo.png',
                               fit: BoxFit.contain,
                             ),
                           ),
