@@ -8,6 +8,14 @@ class RichContent extends StatelessWidget {
 
   const RichContent({super.key, required this.html, this.baseTextStyle});
 
+  static final RegExp _htmlTagPattern = RegExp(
+    r'<\s*\/?\s*[a-z][^>]*>',
+    caseSensitive: false,
+  );
+
+  static bool looksLikeHtml(String content) =>
+      _htmlTagPattern.hasMatch(content);
+
   @override
   Widget build(BuildContext context) {
     final content = html;
@@ -15,9 +23,16 @@ class RichContent extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final style = baseTextStyle ?? Theme.of(context).textTheme.bodyMedium;
+
+    // Legacy plain-text pages (saved before admin stored HTML) — keep line breaks.
+    if (!looksLikeHtml(content)) {
+      return Text(content, style: style);
+    }
+
     return HtmlWidget(
       content,
-      textStyle: baseTextStyle ?? Theme.of(context).textTheme.bodyMedium,
+      textStyle: style,
       onTapUrl: (url) async {
         final uri = Uri.tryParse(url);
         if (uri == null) return false;
