@@ -1927,10 +1927,34 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   /// Product/service owner is always [responderId] in initiate-chat flows.
   String get _listingOwnerId => _currentChat.responderId;
 
+  /// Who owes coins on this deal, and to whom.
+  ///
+  /// - PRICE offers (Condition 3, pure purchase): there is no bartered item,
+  ///   so the buyer (non-owner) always pays the listing owner, regardless of
+  ///   who typed the number into the offer.
+  /// - BOTH offers (Condition 2, barter + price difference): the offer maker
+  ///   is proposing "my item + this much money", so whoever made the accepted
+  ///   BOTH offer is always the one who owes the difference — that could be
+  ///   either the initiator or the listing owner, depending on whose item is
+  ///   worth less.
+  /// - BARTER offers (Condition 1) never require payment.
+  String? get _dealPayerId {
+    if (!_dealRequiresCoinPayment()) return null;
+    final offer = _currentChat.latestAcceptedOffer;
+    if (offer != null && offer.isBothOffer) {
+      return offer.madeById;
+    }
+    return widget.currentUserId != _listingOwnerId
+        ? widget.currentUserId
+        : _currentChat.initiatorId;
+  }
+
+  String get _otherParticipantId => widget.currentUserId == _currentChat.initiatorId
+      ? _currentChat.responderId
+      : _currentChat.initiatorId;
+
   bool _currentUserPaysOnDealComplete() {
-    if (!_dealRequiresCoinPayment()) return false;
-    // Buyer (non-owner) pays the listing owner when completing the deal.
-    return widget.currentUserId != _listingOwnerId;
+    return _dealPayerId == widget.currentUserId;
   }
 
   int _coinAmountFromPrice(dynamic priceValue) {
@@ -1974,7 +1998,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
 
     await _coinService.pay(
-      toUserId: _listingOwnerId,
+      toUserId: _otherParticipantId,
       amount: amount,
       referenceId: _currentChat.id,
       referenceType: 'ORDER_PAYMENT',

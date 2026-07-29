@@ -176,9 +176,20 @@ class Trades {
           .whereType<Map>()
           .map((e) => TradeItem.fromJson(Map<String, dynamic>.from(e)))
           .toList(),
+      // The backend already separates barter exchanges into their own
+      // bucket (Transaction.type === 'BARTER'); tag each item explicitly
+      // here rather than trying to re-derive "is this a barter trade" from
+      // Product.barterStatus once items are flattened into one list — that
+      // field only ever says whether a product is *open* for barter, not
+      // whether a given completed trade was a barter or a cash sale.
       barterExchanges: _asList(json['barterExchanges'])
           .whereType<Map>()
-          .map((e) => TradeItem.fromJson(Map<String, dynamic>.from(e)))
+          .map(
+            (e) => TradeItem.fromJson(
+              Map<String, dynamic>.from(e),
+              isBarterExchange: true,
+            ),
+          )
           .toList(),
     );
   }
@@ -218,6 +229,7 @@ class TradeItem {
   final String? initiatorRemarks;
   final String participantRemarks;
   final Product product;
+  final bool isBarterExchange;
 
   TradeItem({
     required this.id,
@@ -228,9 +240,13 @@ class TradeItem {
     this.initiatorRemarks,
     required this.participantRemarks,
     required this.product,
+    this.isBarterExchange = false,
   });
 
-  factory TradeItem.fromJson(Map<String, dynamic> json) {
+  factory TradeItem.fromJson(
+    Map<String, dynamic> json, {
+    bool isBarterExchange = false,
+  }) {
     return TradeItem(
       id: _asString(json['id']),
       completedDate: _asDateTime(json['completedDate']),
@@ -240,6 +256,7 @@ class TradeItem {
       initiatorRemarks: json['initiatorRemarks']?.toString(),
       participantRemarks: _asString(json['participantRemarks']),
       product: Product.fromJson(_asMap(json['product'])),
+      isBarterExchange: isBarterExchange,
     );
   }
 
@@ -253,11 +270,13 @@ class TradeItem {
       'initiatorRemarks': initiatorRemarks,
       'participantRemarks': participantRemarks,
       'product': product.toJson(),
+      'isBarterExchange': isBarterExchange,
     };
   }
 
   // Determine trade type based on who posted the product
   String getTradeType(String currentUserId) {
+    if (isBarter) return 'Barter';
     if (product.postedById == currentUserId) {
       return 'Sold';
     } else {
@@ -266,7 +285,7 @@ class TradeItem {
   }
 
   // Check if it's a barter trade
-  bool get isBarter => product.barterStatus == 'BARTER';
+  bool get isBarter => isBarterExchange;
 
   // Get display price
   double? get displayPrice => sellingPrice ?? product.price;

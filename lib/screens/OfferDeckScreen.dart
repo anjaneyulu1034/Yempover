@@ -201,6 +201,17 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   double get _selectedBarterItemsCoinTotal =>
       _selectedItems.fold<double>(0, (sum, item) => sum + item.value);
 
+  /// Condition 1 (pure barter): the swapped items must be worth the same.
+  /// A mismatch here belongs in Condition 2 ("Barter + Price") instead, so a
+  /// pure barter offer is only allowed to proceed once values line up.
+  double? get _pureBarterValueGap {
+    if (widget.offerMode != OfferSubmissionMode.barter) return null;
+    final targetPrice = widget.post.price;
+    if (targetPrice <= 0) return null;
+    final gap = _selectedBarterItemsCoinTotal - targetPrice;
+    return gap.abs() < 0.01 ? null : gap;
+  }
+
   /// Minimum coins to quote when offering barter items toward a priced listing.
   /// If the selected items already cover (or exceed) the listing price, no
   /// top-up is owed — the proposer should never be forced to overpay.
@@ -544,6 +555,19 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       return;
     }
 
+    final barterValueGap = _pureBarterValueGap;
+    if (barterValueGap != null) {
+      final message = barterValueGap > 0
+          ? 'Your items are worth ${CoinFormat.amount(barterValueGap)} coins '
+                'more than this listing. Use "Barter + Price" to offer the '
+                'difference, or adjust your selected items.'
+          : 'Your items are worth ${CoinFormat.amount(barterValueGap.abs())} '
+                'coins less than this listing. Use "Barter + Price" to add '
+                'the difference, or adjust your selected items.';
+      SnackbarUtils.showInfo(context, message);
+      return;
+    }
+
     if (quotedPriceError != null) {
       SnackbarUtils.showInfo(context, quotedPriceError);
       return;
@@ -724,6 +748,29 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                         ),
                       ],
                     ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              if (widget.offerMode == OfferSubmissionMode.barter &&
+                  _selectedItems.isNotEmpty &&
+                  widget.post.price > 0) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    _pureBarterValueGap == null
+                        ? 'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins · Values match ✓'
+                        : 'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins · '
+                              'Listing: ${CoinFormat.amount(widget.post.price)} coins · '
+                              'Values must match for a pure barter offer',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _pureBarterValueGap == null
+                          ? Colors.green.shade700
+                          : Colors.orange.shade800,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
