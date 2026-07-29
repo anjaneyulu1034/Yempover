@@ -676,6 +676,16 @@ class TradeChatService {
           'barterItemImages': [],
           'barterWishCategories': [],
         };
+      } else if (offerType == 'BOTH') {
+        body = {
+          'offerType': 'BOTH',
+          'price': price ?? 0,
+          'currency': currency ?? 'USD',
+          'barterItemTitle': barterItemTitle ?? '',
+          'barterItemDescription': barterItemDescription ?? '',
+          'barterItemImages': barterItemImages,
+          'barterWishCategories': barterWishCategories,
+        };
       } else {
         body = {
           'offerType': 'BARTER',
@@ -740,6 +750,16 @@ class TradeChatService {
           'barterItemImages': [],
           'barterWishCategories': [],
         };
+      } else if (offerType == 'BOTH') {
+        body = {
+          'offerType': 'BOTH',
+          'price': price ?? 0,
+          'currency': currency ?? 'USD',
+          'barterItemTitle': barterItemTitle ?? '',
+          'barterItemDescription': barterItemDescription ?? '',
+          'barterItemImages': barterItemImages,
+          'barterWishCategories': barterWishCategories,
+        };
       } else {
         body = {
           'offerType': 'BARTER',
@@ -803,6 +823,16 @@ class TradeChatService {
           'barterItemDescription': '',
           'barterItemImages': [],
           'barterWishCategories': [],
+        };
+      } else if (offerType == 'BOTH') {
+        body = {
+          'offerType': 'BOTH',
+          'price': price ?? 0,
+          'currency': currency ?? 'USD',
+          'barterItemTitle': barterItemTitle ?? '',
+          'barterItemDescription': barterItemDescription ?? '',
+          'barterItemImages': barterItemImages,
+          'barterWishCategories': barterWishCategories,
         };
       } else {
         body = {

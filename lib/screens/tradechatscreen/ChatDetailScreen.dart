@@ -1078,6 +1078,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               subtitle: const Text('Offer an item for trade'),
               onTap: () => Navigator.pop(context, {'type': 'barter'}),
             ),
+            ListTile(
+              leading: const Icon(Icons.add_circle_outline, color: Colors.teal),
+              title: const Text('Barter + Coins Offer'),
+              subtitle: const Text('Offer an item plus a price difference'),
+              onTap: () => Navigator.pop(context, {'type': 'both'}),
+            ),
           ],
         ),
       ),
@@ -1089,6 +1095,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       _showPriceOfferDialog();
     } else if (result['type'] == 'barter') {
       _showBarterOfferDialog();
+    } else if (result['type'] == 'both') {
+      _showBothOfferDialog();
     }
   }
 
@@ -1356,6 +1364,184 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
   }
 
+  /// Condition 2: barter item plus the coin difference, bundled into a
+  /// single offer (rather than two separate Coins/Barter offers, which
+  /// carries no relationship between them).
+  Future<void> _showBothOfferDialog() async {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final priceController = TextEditingController();
+    String? dialogError;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final border = OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade500, width: 1.2),
+          );
+
+          return AlertDialog(
+            scrollable: true,
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: Colors.grey.shade300, width: 1.2),
+            ),
+            title: const Text('Barter + Coins Offer'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (dialogError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        dialogError!,
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  TextField(
+                    controller: titleController,
+                    decoration: InputDecoration(
+                      labelText: 'Item Title',
+                      border: border,
+                      enabledBorder: border,
+                      focusedBorder: border.copyWith(
+                        borderSide: const BorderSide(
+                          color: Color(0xFF2E5BFF),
+                          width: 1.8,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descriptionController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      labelText: 'Description (Optional)',
+                      border: border,
+                      enabledBorder: border,
+                      focusedBorder: border.copyWith(
+                        borderSide: const BorderSide(
+                          color: Color(0xFF2E5BFF),
+                          width: 1.8,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: priceController,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) {
+                      if (dialogError != null) {
+                        setDialogState(() => dialogError = null);
+                      }
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Coins to Pay',
+                      prefixIcon: coinInputPrefix(),
+                      prefixIconConstraints: coinPrefixIconConstraints,
+                      border: border,
+                      enabledBorder: border,
+                      focusedBorder: border.copyWith(
+                        borderSide: const BorderSide(
+                          color: Color(0xFF2E5BFF),
+                          width: 1.8,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF2E5BFF),
+                  side: const BorderSide(color: Color(0xFF2E5BFF), width: 1.2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                ),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (titleController.text.trim().isEmpty) {
+                    setDialogState(() => dialogError = 'Enter an item title');
+                    return;
+                  }
+
+                  final trimmedPrice = priceController.text.trim();
+                  if (trimmedPrice.isEmpty) {
+                    setDialogState(() => dialogError = 'Enter coins to pay');
+                    return;
+                  }
+
+                  final parsed = double.tryParse(trimmedPrice);
+                  if (parsed == null || parsed < 0) {
+                    setDialogState(
+                      () => dialogError = 'Enter a valid coin amount',
+                    );
+                    return;
+                  }
+
+                  final validationError =
+                      _validateOfferPriceAgainstListing(parsed);
+                  if (validationError != null) {
+                    setDialogState(() => dialogError = validationError);
+                    return;
+                  }
+
+                  Navigator.pop(context, true);
+                },
+                child: const Text('Create Offer'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (result != true || titleController.text.trim().isEmpty) return;
+
+    final parsedPrice = double.tryParse(priceController.text.trim());
+    if (parsedPrice == null) return;
+
+    if (!mounted) return;
+    final canAfford = await WalletOfferGuard.ensureCanAfford(
+      context,
+      requiredCoins: parsedPrice,
+      itemName: _currentChat.postTitle,
+    );
+    if (!canAfford || !mounted) return;
+
+    await _createBothOffer(
+      title: titleController.text.trim(),
+      description: descriptionController.text.trim().isNotEmpty
+          ? descriptionController.text.trim()
+          : null,
+      price: parsedPrice,
+    );
+  }
+
   Future<void> _showCounterOfferDialog(TradeOffer originalOffer) async {
     if (!_currentChat.isActive || _currentChat.hasAcceptedOffer) {
       if (mounted) {
@@ -1378,6 +1564,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     if (originalOffer.isPriceOffer) {
       await _showCounterPriceOfferDialog(originalOffer);
+      return;
+    }
+
+    if (originalOffer.isBothOffer) {
+      await _showCounterBothOfferDialog(originalOffer);
       return;
     }
 
@@ -1637,6 +1828,197 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
+  /// Counter a Barter + Price ("Both") offer. Reusing the plain barter
+  /// counter dialog here would silently drop the price side of the deal
+  /// (Condition 2: barter + price difference), so this keeps both the
+  /// barter item fields and the coin amount editable together.
+  Future<void> _showCounterBothOfferDialog(TradeOffer originalOffer) async {
+    final titleController = TextEditingController(
+      text: originalOffer.barterItemTitle ?? '',
+    );
+    final descriptionController = TextEditingController(
+      text: originalOffer.barterItemDescription ?? '',
+    );
+    final priceController = TextEditingController(
+      text: originalOffer.price != null && originalOffer.price! > 0
+          ? (originalOffer.price == originalOffer.price!.roundToDouble()
+                ? originalOffer.price!.toInt().toString()
+                : originalOffer.price!.toStringAsFixed(2))
+          : '',
+    );
+    String? dialogError;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final border = OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade500, width: 1.2),
+          );
+
+          return AlertDialog(
+            scrollable: true,
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: Colors.grey.shade300, width: 1.2),
+            ),
+            title: const Text('Counter Barter + Coins Offer'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (dialogError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        dialogError!,
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  TextField(
+                    controller: titleController,
+                    decoration: InputDecoration(
+                      labelText: 'Item Title',
+                      border: border,
+                      enabledBorder: border,
+                      focusedBorder: border.copyWith(
+                        borderSide: const BorderSide(
+                          color: Color(0xFF2E5BFF),
+                          width: 1.8,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descriptionController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      labelText: 'Description (Optional)',
+                      border: border,
+                      enabledBorder: border,
+                      focusedBorder: border.copyWith(
+                        borderSide: const BorderSide(
+                          color: Color(0xFF2E5BFF),
+                          width: 1.8,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: priceController,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) {
+                      if (dialogError != null) {
+                        setDialogState(() => dialogError = null);
+                      }
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Coins to Pay',
+                      prefixIcon: coinInputPrefix(),
+                      prefixIconConstraints: coinPrefixIconConstraints,
+                      border: border,
+                      enabledBorder: border,
+                      focusedBorder: border.copyWith(
+                        borderSide: const BorderSide(
+                          color: Color(0xFF2E5BFF),
+                          width: 1.8,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF2E5BFF),
+                  side: const BorderSide(color: Color(0xFF2E5BFF), width: 1.2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                ),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (titleController.text.trim().isEmpty) {
+                    setDialogState(() => dialogError = 'Enter an item title');
+                    return;
+                  }
+
+                  final trimmedPrice = priceController.text.trim();
+                  if (trimmedPrice.isEmpty) {
+                    setDialogState(() => dialogError = 'Enter coins to pay');
+                    return;
+                  }
+
+                  final parsed = double.tryParse(trimmedPrice);
+                  if (parsed == null || parsed < 0) {
+                    setDialogState(
+                      () => dialogError = 'Enter a valid coin amount',
+                    );
+                    return;
+                  }
+
+                  final validationError =
+                      _validateOfferPriceAgainstListing(parsed);
+                  if (validationError != null) {
+                    setDialogState(() => dialogError = validationError);
+                    return;
+                  }
+
+                  Navigator.pop(dialogContext, true);
+                },
+                child: const Text('Send Counter'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (result != true || titleController.text.trim().isEmpty) return;
+
+    final parsedPrice = double.tryParse(priceController.text.trim());
+    if (parsedPrice == null) return;
+
+    if (!mounted) return;
+    final canAfford = await WalletOfferGuard.ensureCanAfford(
+      context,
+      requiredCoins: parsedPrice,
+      itemName: _currentChat.postTitle,
+    );
+    if (!canAfford || !mounted) return;
+
+    await _createCounterOffer(
+      originalOffer: originalOffer,
+      offerType: 'BOTH',
+      price: parsedPrice,
+      barterItemTitle: titleController.text.trim(),
+      barterItemDescription: descriptionController.text.trim().isNotEmpty
+          ? descriptionController.text.trim()
+          : null,
+    );
+  }
+
   Future<TradeOffer?> _createCounterOffer({
     required TradeOffer originalOffer,
     required String offerType,
@@ -1652,7 +2034,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       return null;
     }
 
-    if (offerType == 'PRICE' && price != null) {
+    if ((offerType == 'PRICE' || offerType == 'BOTH') && price != null) {
       final validationError = _validateOfferPriceAgainstListing(price);
       if (validationError != null) {
         await _showOfferMessageDialog(validationError);
@@ -1686,6 +2068,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             sentById: 'system',
             messageText: offerType == 'PRICE'
                 ? 'Counter offer sent: ${CoinFormat.amount(price)} coins'
+                : offerType == 'BOTH'
+                ? 'Counter offer sent: ${barterItemTitle ?? 'Barter item'} + '
+                      '${CoinFormat.amount(price)} coins'
                 : 'Counter offer sent: ${barterItemTitle ?? 'Barter item'}',
             messageType: MessageType.SYSTEM,
             isRead: true,
@@ -1795,6 +2180,61 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         tradeChatId: _currentChat.id,
         sentById: 'system',
         messageText: 'Barter offer created: $title',
+        messageType: MessageType.SYSTEM,
+        isRead: true,
+        createdAt: DateTime.now(),
+        offerId: offer.id,
+      );
+
+      setState(() {
+        _currentChat.offers.add(offer);
+        _messages.add(systemMessage);
+        _isLoading = false;
+      });
+
+      _scrollToBottom();
+      widget.onChatUpdated(_currentChat);
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+
+      _showErrorToast(e);
+    }
+  }
+
+  Future<void> _createBothOffer({
+    required String title,
+    String? description,
+    required double price,
+  }) async {
+    if (!_currentChat.isActive ||
+        _currentChat.hasAcceptedOffer ||
+        _isReferenceUnavailable) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final offer = await _chatService.createBothOffer(
+        chatId: _currentChat.id,
+        price: price,
+        barterItemTitle: title,
+        barterItemDescription: description,
+      );
+
+      // Emit socket event
+      _socketService.emitOfferCreated(_currentChat.id, offer.toJson());
+
+      final systemMessage = ChatMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        tradeChatId: _currentChat.id,
+        sentById: 'system',
+        messageText:
+            'Barter + Coins offer created: $title + ${CoinFormat.amount(price)} coins',
         messageType: MessageType.SYSTEM,
         isRead: true,
         createdAt: DateTime.now(),
@@ -2024,7 +2464,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => _DealCompletionDialog(
-        isPriceOffer: _dealRequiresCoinPayment(),
+        // Only the participant who actually owes coins should see the
+        // "coins will be deducted" prompt — the other side of the deal
+        // never gets charged (see _currentUserPaysOnDealComplete).
+        isPriceOffer: _dealRequiresCoinPayment() && _currentUserPaysOnDealComplete(),
         acceptedPrice: (acceptedOffer != null && acceptedOffer.isBarterOffer)
             ? null
             : (acceptedOffer?.price ?? _currentChat.product?.price),
