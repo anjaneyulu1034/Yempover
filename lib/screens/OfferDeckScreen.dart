@@ -202,12 +202,14 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       _selectedItems.fold<double>(0, (sum, item) => sum + item.value);
 
   /// Minimum coins to quote when offering barter items toward a priced listing.
+  /// If the selected items already cover (or exceed) the listing price, no
+  /// top-up is owed — the proposer should never be forced to overpay.
   int get _minimumQuotedCoinsForBoth {
     final targetPrice = widget.post.price;
-    if (targetPrice <= 0) return 1;
+    if (targetPrice <= 0) return 0;
 
     final gap = targetPrice - _selectedBarterItemsCoinTotal;
-    if (gap <= 0) return 1;
+    if (gap <= 0) return 0;
 
     return gap.ceil();
   }
@@ -221,7 +223,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     }
 
     final parsed = double.tryParse(trimmed);
-    if (parsed == null || parsed <= 0) {
+    if (parsed == null || parsed < 0) {
       return 'Enter a valid price';
     }
 

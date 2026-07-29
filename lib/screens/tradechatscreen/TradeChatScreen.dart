@@ -259,11 +259,12 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     chats.sort((a, b) => b.lastInteraction.compareTo(a.lastInteraction));
   }
 
+  // Only an explicit archive should remove a chat from the list. Hiding on
+  // COMPLETED/INACTIVE/CANCELLED here used to make the chat vanish for the
+  // other user as soon as one side acted, before they'd had a chance to
+  // respond (e.g. give their own deal-completion consent).
   bool _shouldHideChat(TradeChat chat) {
-    return chat.status == ChatStatus.COMPLETED ||
-        chat.status == ChatStatus.INACTIVE ||
-        chat.status == ChatStatus.CANCELLED ||
-        chat.status == ChatStatus.ARCHIVED;
+    return chat.status == ChatStatus.ARCHIVED;
   }
 
   String _buildMessagePreview(List<ChatMessage> messages) {
@@ -864,7 +865,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
                         ),
                       ),
                       const SizedBox(width: 8),
-                      if (chat.status == ChatStatus.COMPLETED)
+                      if (chat.isCompleted)
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -876,10 +877,14 @@ class _TradeChatScreenState extends State<TradeChatScreen>
                           ),
                           child: const Text(
                             'Completed',
-                            style: TextStyle(color: Colors.green, fontSize: 10),
+                            style: TextStyle(
+                              color: Colors.green,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      if (chat.status == ChatStatus.CANCELLED)
+                      if (chat.isCancelled)
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,

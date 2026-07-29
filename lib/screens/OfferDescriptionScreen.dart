@@ -368,7 +368,10 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
     }
 
     final parsed = double.tryParse(trimmed);
-    if (parsed == null || parsed <= 0) {
+    // A "Both" offer may legitimately quote 0 when the barter items already
+    // cover the listing price; a pure "Price" offer must still be > 0.
+    final minAllowed = widget.offerMode == OfferSubmissionMode.both ? 0 : 0.01;
+    if (parsed == null || parsed < minAllowed) {
       return 'Enter a valid price';
     }
 

@@ -15,6 +15,7 @@ import 'package:yempover_app/utils/blocked_users_cache.dart';
 import 'package:yempover_app/services/coin_service.dart';
 import 'package:yempover_app/screens/CoinsWalletScreen.dart';
 import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/wallet_offer_guard.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final TradeChat chat;
@@ -58,6 +59,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Timer? _typingTimer;
 
   bool get _isReferenceUnavailable {
+    // The backend marks the product/service SOLD as soon as an offer is
+    // accepted (to reserve it) — well before both users have given deal
+    // completion consent. Treat the reference as available for the whole
+    // "accepted but not yet fully completed" window so the second user can
+    // still see and act on the "Deal Ready to Complete" banner.
+    if (_currentChat.hasAcceptedOffer && !_currentChat.isCompleted) {
+      return false;
+    }
+
     final productStatus = _currentChat.product?.status.trim().toUpperCase();
     if (productStatus != null &&
         (productStatus == 'SOLD' ||
@@ -1233,6 +1243,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final parsedPrice = double.tryParse(priceController.text.trim());
     if (parsedPrice == null) return;
 
+    if (!mounted) return;
+    final canAfford = await WalletOfferGuard.ensureCanAfford(
+      context,
+      requiredCoins: parsedPrice,
+      itemName: _currentChat.postTitle,
+    );
+    if (!canAfford || !mounted) return;
+
     await _createPriceOffer(
       price: parsedPrice,
       currency: selectedCurrency,
@@ -1498,6 +1516,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     final parsedPrice = double.tryParse(priceController.text.trim());
     if (parsedPrice == null) return;
+
+    if (!mounted) return;
+    final canAfford = await WalletOfferGuard.ensureCanAfford(
+      context,
+      requiredCoins: parsedPrice,
+      itemName: _currentChat.postTitle,
+    );
+    if (!canAfford || !mounted) return;
 
     await _createCounterOffer(
       originalOffer: originalOffer,
@@ -1871,7 +1897,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return (_resolveDealPaymentAmount() ?? 0) > 0;
   }
 
-  /// Offer price first, then product listing price.
+  /// Offer price first, then product listing price — but only when there is
+  /// no accepted offer to read from. A pure barter (item-for-item) offer has
+  /// no price by design (Condition 1: equal-value swap, no coins change
+  /// hands), so it must never fall back to charging the full listing price.
   int? _resolveDealPaymentAmount({String? dialogPriceText}) {
     if (dialogPriceText != null && dialogPriceText.trim().isNotEmpty) {
       final fromDialog = _coinAmountFromPrice(dialogPriceText);
@@ -1879,8 +1908,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
 
     final offer = _currentChat.latestAcceptedOffer;
-    if (offer?.price != null && offer!.price! > 0) {
-      return _coinAmountFromPrice(offer.price);
+    if (offer != null) {
+      if (offer.isBarterOffer) return null;
+      if (offer.price != null && offer.price! > 0) {
+        return _coinAmountFromPrice(offer.price);
+      }
+      return null;
     }
 
     final productPrice = _currentChat.product?.price;
@@ -1968,8 +2001,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       context: context,
       builder: (context) => _DealCompletionDialog(
         isPriceOffer: _dealRequiresCoinPayment(),
-        acceptedPrice:
-            acceptedOffer?.price ?? _currentChat.product?.price,
+        acceptedPrice: (acceptedOffer != null && acceptedOffer.isBarterOffer)
+            ? null
+            : (acceptedOffer?.price ?? _currentChat.product?.price),
       ),
     );
 
@@ -2013,9 +2047,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         _currentChat = updatedChat;
         _appendSystemMessageIfNotDuplicate(
           result['isCompleted'] == true
-              ? (updatedChat.isActive
-                    ? 'Completion consent sent. Waiting for other user.'
-                    : 'Deal completed successfully')
+              ? (updatedChat.isCompleted
+                    ? 'Deal completed successfully'
+                    : 'Completion consent sent. Waiting for other user.')
               : 'Deal marked as not completed',
         );
         _isLoading = false;

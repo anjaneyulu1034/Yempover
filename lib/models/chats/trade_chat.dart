@@ -623,11 +623,18 @@ class TradeChat {
   }
 
   // Helper getters
-  bool get isActive => status == ChatStatus.ACTIVE;
-  bool get isCompleted => status == ChatStatus.COMPLETED;
+  bool get isActive =>
+      status == ChatStatus.ACTIVE || status == ChatStatus.ACCEPTED;
+  // Only truly complete once both sides have given completion consent
+  // (dealCompletedAt is set by the backend at that point) — a single user
+  // completing their side must not flip this, or the chat looks "done" and
+  // disappears for the other user before they've had a chance to respond.
+  bool get isCompleted =>
+      status == ChatStatus.COMPLETED ||
+      (dealCompletion != null && dealCompletion!.dealCompletedAt != null);
   bool get isCancelled => status == ChatStatus.CANCELLED;
   bool get isArchived => status == ChatStatus.ARCHIVED;
-  bool get isInactive => status == ChatStatus.INACTIVE;
+  bool get isInactive => status == ChatStatus.INACTIVE && !isCompleted;
 
   String get postTitle {
     if (product != null) return product!.title;
