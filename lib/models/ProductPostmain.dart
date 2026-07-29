@@ -13,6 +13,8 @@ enum PostStatus {
   DELETED,
   ARCHIVED,
   SOLD,
+  BARTERED,
+  EXPIRED,
 }
 
 enum BarterStatus { NO_BARTER, OPEN_FOR_BARTER }
@@ -343,7 +345,7 @@ class Post {
   }
 
   static PostStatus _parsePostStatus(String status) {
-    switch (status) {
+    switch (status.trim().toUpperCase()) {
       case 'FOR_SALE':
         return PostStatus.FOR_SALE;
       case 'FOR_BARTER':
@@ -352,6 +354,16 @@ class Post {
         return PostStatus.PROVIDE_SERVICE;
       case 'LOOKING_FOR_SERVICE':
         return PostStatus.LOOKING_FOR_SERVICE;
+      case 'DELETED':
+        return PostStatus.DELETED;
+      case 'ARCHIVED':
+        return PostStatus.ARCHIVED;
+      case 'SOLD':
+        return PostStatus.SOLD;
+      case 'BARTERED':
+        return PostStatus.BARTERED;
+      case 'EXPIRED':
+        return PostStatus.EXPIRED;
       default:
         return PostStatus.FOR_SALE;
     }

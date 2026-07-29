@@ -82,6 +82,13 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
     return remaining > 0 ? '$firstTwo +$remaining more' : firstTwo;
   }
 
+  List<String> _buildOfferImages() {
+    return widget.selectedItems
+        .map((item) => item.imageUrl)
+        .where((url) => url.trim().isNotEmpty)
+        .toList();
+  }
+
   String _buildOfferDescription() {
     final userDescription = _descriptionController.text.trim();
     final selectedItemNames = widget.selectedItems
@@ -287,6 +294,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           chatId: chat.id,
           barterItemTitle: _buildOfferTitle(),
           barterItemDescription: _buildOfferDescription(),
+          barterItemImages: _buildOfferImages(),
         );
       } else {
         createdOffer = await _chatService.createBothOffer(
@@ -294,6 +302,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           price: parsedPrice!,
           barterItemTitle: _buildOfferTitle(),
           barterItemDescription: _buildOfferDescription(),
+          barterItemImages: _buildOfferImages(),
         );
       }
 

@@ -230,6 +230,13 @@ class TradeItem {
   final String participantRemarks;
   final Product product;
   final bool isBarterExchange;
+  // Snapshot of the actual item swapped on a barter/both offer — distinct
+  // from `product`, which is only the listing the chat was opened on. Null
+  // for pure sale deals, or for trades completed before this was tracked.
+  final String? barterItemTitle;
+  final String? barterItemDescription;
+  final List<String> barterItemImages;
+  final bool? isMyBarterItem;
 
   TradeItem({
     required this.id,
@@ -241,6 +248,10 @@ class TradeItem {
     required this.participantRemarks,
     required this.product,
     this.isBarterExchange = false,
+    this.barterItemTitle,
+    this.barterItemDescription,
+    this.barterItemImages = const [],
+    this.isMyBarterItem,
   });
 
   factory TradeItem.fromJson(
@@ -257,6 +268,14 @@ class TradeItem {
       participantRemarks: _asString(json['participantRemarks']),
       product: Product.fromJson(_asMap(json['product'])),
       isBarterExchange: isBarterExchange,
+      barterItemTitle: json['barterItemTitle']?.toString(),
+      barterItemDescription: json['barterItemDescription']?.toString(),
+      barterItemImages: _asList(
+        json['barterItemImages'],
+      ).map((e) => e.toString()).toList(),
+      isMyBarterItem: json['isMyBarterItem'] is bool
+          ? json['isMyBarterItem'] as bool
+          : null,
     );
   }
 
@@ -271,8 +290,17 @@ class TradeItem {
       'participantRemarks': participantRemarks,
       'product': product.toJson(),
       'isBarterExchange': isBarterExchange,
+      'barterItemTitle': barterItemTitle,
+      'barterItemDescription': barterItemDescription,
+      'barterItemImages': barterItemImages,
+      'isMyBarterItem': isMyBarterItem,
     };
   }
+
+  // True once the backend has recorded a distinct swapped item for this
+  // trade (added after the fix — older completed trades won't have this).
+  bool get hasBarterItemSnapshot =>
+      barterItemTitle != null && barterItemTitle!.trim().isNotEmpty;
 
   // Determine trade type based on who posted the product
   String getTradeType(String currentUserId) {

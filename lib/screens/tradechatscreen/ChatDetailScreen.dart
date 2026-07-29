@@ -3608,6 +3608,69 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     await _refreshChat();
   }
 
+  Widget _buildOfferItemThumb(String imageUrl) {
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        color: Colors.grey.shade200,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: imageUrl.isNotEmpty
+          ? Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.image_not_supported, color: Colors.grey),
+            )
+          : const Icon(Icons.image, color: Colors.grey),
+    );
+  }
+
+  Widget _buildBarterExchangePreview({
+    required String myImage,
+    required String myLabel,
+    required String theirImage,
+    required String theirLabel,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                myLabel,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 4),
+              _buildOfferItemThumb(myImage),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: Icon(Icons.swap_horiz, color: Colors.grey),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                theirLabel,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 4),
+              _buildOfferItemThumb(theirImage),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildOfferBanner() {
     if (_currentChat.offers.isEmpty) return const SizedBox();
 
@@ -3686,7 +3749,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   : 'This user is interested in your product. Here are their thoughts:',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 10),
+            _buildBarterExchangePreview(
+              myImage: _currentChat.postImage,
+              myLabel: isServiceChat ? 'Your service' : 'Your product',
+              theirImage: latestOffer.barterItemImages.isNotEmpty
+                  ? latestOffer.barterItemImages.first
+                  : '',
+              theirLabel: 'Offered item',
+            ),
+            const SizedBox(height: 10),
             Text(
               'Item: ${latestOffer.barterItemTitle ?? 'Unknown'}',
               style: const TextStyle(fontWeight: FontWeight.w500),
@@ -3696,6 +3768,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               Text(
                 latestOffer.barterItemDescription!,
                 style: const TextStyle(fontSize: 12),
+              ),
+            if (latestOffer.isBothOffer && (latestOffer.price ?? 0) > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '+ ${CoinFormat.amount(latestOffer.price)} coins added',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green,
+                  ),
+                ),
               ),
           ],
 
@@ -3889,6 +3972,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               ],
             ),
           ] else if (latestOffer.isBarterOffer || latestOffer.isBothOffer) ...[
+            _buildBarterExchangePreview(
+              myImage: latestOffer.barterItemImages.isNotEmpty
+                  ? latestOffer.barterItemImages.first
+                  : '',
+              myLabel: 'Your offered item',
+              theirImage: _currentChat.postImage,
+              theirLabel: isServiceChat ? 'Their service' : 'Their product',
+            ),
+            const SizedBox(height: 10),
             Text(
               'Item: ${latestOffer.barterItemTitle ?? 'Unknown'}',
               style: const TextStyle(fontWeight: FontWeight.w500),
@@ -3897,6 +3989,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               Text(
                 latestOffer.barterItemDescription!,
                 style: const TextStyle(fontSize: 12),
+              ),
+            if (latestOffer.isBothOffer && (latestOffer.price ?? 0) > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '+ ${CoinFormat.amount(latestOffer.price)} coins added',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green,
+                  ),
+                ),
               ),
           ],
         ],
