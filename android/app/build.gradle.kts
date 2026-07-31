@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.yempover"
+    namespace = "com.yempover.yempover"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -26,7 +26,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.yempover"
+        applicationId = "com.yempover.yempover"
 
         // ✅ For desugaring it's safest to have minSdk >= 21.
         // If your flutter.minSdkVersion is already 21+, keep it.
