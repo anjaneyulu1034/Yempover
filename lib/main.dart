@@ -245,11 +245,22 @@ class MyApp extends StatelessWidget {
           return LocationPermissionGate(
             child: Listener(
               behavior: HitTestBehavior.translucent,
-              onPointerDown: (_) {
+              onPointerDown: (event) {
                 final currentFocus = FocusManager.instance.primaryFocus;
-                if (currentFocus != null && !currentFocus.hasPrimaryFocus) {
-                  currentFocus.unfocus();
+                if (currentFocus == null || !currentFocus.hasFocus) return;
+
+                // Don't dismiss when the tap landed on the focused field
+                // itself (e.g. repositioning the cursor) — only when it's
+                // genuinely outside, which is what should close the
+                // keyboard on devices with no visible/gesture back button.
+                final renderObject = currentFocus.context?.findRenderObject();
+                if (renderObject is RenderBox && renderObject.attached) {
+                  final topLeft = renderObject.localToGlobal(Offset.zero);
+                  final bounds = topLeft & renderObject.size;
+                  if (bounds.contains(event.position)) return;
                 }
+
+                currentFocus.unfocus();
               },
               child: content,
             ),
