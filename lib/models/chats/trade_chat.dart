@@ -192,6 +192,7 @@ class ProductInfo {
   final List<String> images;
   final double? price;
   final String status;
+  final String barterStatus;
 
   ProductInfo({
     required this.id,
@@ -199,6 +200,7 @@ class ProductInfo {
     required this.images,
     this.price,
     required this.status,
+    this.barterStatus = 'NO_BARTER',
   });
 
   factory ProductInfo.fromJson(Map<String, dynamic> json) {
@@ -210,6 +212,7 @@ class ProductInfo {
           ? double.tryParse(json['price'].toString())
           : null,
       status: json['status'] ?? '',
+      barterStatus: json['barterStatus'] ?? 'NO_BARTER',
     );
   }
 
@@ -220,6 +223,7 @@ class ProductInfo {
       'images': images,
       'price': price,
       'status': status,
+      'barterStatus': barterStatus,
     };
   }
 
@@ -229,6 +233,10 @@ class ProductInfo {
     if (price! == price!.roundToDouble()) return price!.toInt().toString();
     return price!.toStringAsFixed(2);
   }
+
+  bool get allowsPrice => price != null && price! > 0;
+  bool get allowsBarter =>
+      barterStatus == 'OPEN_FOR_BARTER' || status == 'FOR_BARTER';
 }
 
 // Service Info Model
@@ -238,6 +246,7 @@ class ServiceInfo {
   final List<String> images;
   final double? price;
   final String status;
+  final String barterStatus;
 
   ServiceInfo({
     required this.id,
@@ -245,6 +254,7 @@ class ServiceInfo {
     required this.images,
     this.price,
     required this.status,
+    this.barterStatus = 'NO_BARTER',
   });
 
   factory ServiceInfo.fromJson(Map<String, dynamic> json) {
@@ -256,6 +266,7 @@ class ServiceInfo {
           ? double.tryParse(json['price'].toString())
           : null,
       status: json['status'] ?? '',
+      barterStatus: json['barterStatus'] ?? 'NO_BARTER',
     );
   }
 
@@ -266,10 +277,15 @@ class ServiceInfo {
       'images': images,
       'price': price,
       'status': status,
+      'barterStatus': barterStatus,
     };
   }
 
   String get firstImage => images.isNotEmpty ? images.first : '';
+
+  bool get allowsPrice => price != null && price! > 0;
+  bool get allowsBarter =>
+      barterStatus == 'OPEN_FOR_BARTER' || status == 'FOR_BARTER';
 }
 
 // ==================== CHAT MESSAGE MODEL ====================

@@ -295,6 +295,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           barterItemTitle: _buildOfferTitle(),
           barterItemDescription: _buildOfferDescription(),
           barterItemImages: _buildOfferImages(),
+          barterItemIds: widget.selectedItems.map((item) => item.id).toList(),
         );
       } else {
         createdOffer = await _chatService.createBothOffer(
@@ -303,6 +304,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           barterItemTitle: _buildOfferTitle(),
           barterItemDescription: _buildOfferDescription(),
           barterItemImages: _buildOfferImages(),
+          barterItemIds: widget.selectedItems.map((item) => item.id).toList(),
         );
       }
 

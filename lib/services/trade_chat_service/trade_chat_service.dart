@@ -279,6 +279,7 @@ class TradeChatService {
     String? barterItemDescription,
     List<String>? barterItemImages,
     List<String>? barterWishCategories,
+    List<String>? barterItemIds,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -291,6 +292,10 @@ class TradeChatService {
         'barterItemDescription': barterItemDescription,
         'barterItemImages': barterItemImages ?? [],
         'barterWishCategories': barterWishCategories ?? [],
+        // Real product ids of the offered items — lets the backend look up
+        // their actual listed price and enforce equal-value matching for a
+        // pure barter offer, instead of only trusting client-side math.
+        'barterItemIds': barterItemIds ?? [],
       });
 
       print('📤 Creating barter offer - URL: $url');
@@ -322,6 +327,7 @@ class TradeChatService {
     String? barterItemDescription,
     List<String>? barterItemImages,
     List<String>? barterWishCategories,
+    List<String>? barterItemIds,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -335,6 +341,7 @@ class TradeChatService {
         'barterItemDescription': barterItemDescription,
         'barterItemImages': barterItemImages ?? [],
         'barterWishCategories': barterWishCategories ?? [],
+        'barterItemIds': barterItemIds ?? [],
       });
 
       print('📤 Creating BOTH offer - URL: $url');

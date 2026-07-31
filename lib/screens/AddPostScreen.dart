@@ -13,6 +13,7 @@ import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/services/location_service.dart';
 import 'package:yempover_app/services/service_booking_service.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/utils/validators.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
@@ -1376,6 +1377,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
               : _willPayAmountController,
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+            LengthLimitingTextInputFormatter(Validators.maxAmountLength),
           ],
           onChanged: (_) {
             if (_priceValidationError != null) {
@@ -1941,6 +1943,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
         _showError('Please enter a valid price');
         return;
       }
+      if (amountText.length > Validators.maxAmountLength) {
+        setState(() {
+          _priceValidationError = 'Price is too large';
+        });
+        _showError('Price is too large');
+        return;
+      }
     } else {
       if (amountText.isEmpty) {
         setState(() {
@@ -1955,6 +1964,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
           _priceValidationError = 'Enter a valid amount';
         });
         _showError('Please enter a valid amount');
+        return;
+      }
+      if (amountText.length > Validators.maxAmountLength) {
+        setState(() {
+          _priceValidationError = 'Amount is too large';
+        });
+        _showError('Amount is too large');
         return;
       }
     }

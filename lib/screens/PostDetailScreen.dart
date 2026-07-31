@@ -5,6 +5,7 @@ import 'package:yempover_app/screens/OfferDescriptionScreen.dart';
 import 'package:yempover_app/screens/service/ServiceDetailBookingScreen.dart';
 import 'package:yempover_app/services/api_service.dart';
 import 'package:yempover_app/services/post_action_service.dart';
+import 'package:yempover_app/services/resume_state_service.dart';
 import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/utils/loading_widget.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
@@ -61,6 +62,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     _loadPostDetails();
     _checkIfFavorite(); // Check if post is already favorited
     _loadGuestFlag();
+    ResumeStateService.savePost(
+      widget.post.id,
+      isService: widget.post.type == PostType.service,
+    );
   }
 
   Future<void> _loadGuestFlag() async {
@@ -127,6 +132,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   @override
   void dispose() {
+    ResumeStateService.clearIfCurrent('post', widget.post.id);
     _imagePageController.dispose();
     super.dispose();
   }

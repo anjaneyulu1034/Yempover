@@ -4,6 +4,7 @@ import 'package:yempover_app/services/service_booking_service.dart';
 import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/utils/validators.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
@@ -726,9 +727,14 @@ class _ServiceDetailBookingScreenState
     }
 
     if (_isLookingForService) {
-      final quote = double.tryParse(_quoteController.text.trim());
+      final quoteText = _quoteController.text.trim();
+      final quote = double.tryParse(quoteText);
       if (quote == null || quote <= 0) {
         SnackbarUtils.showError(context, 'Please enter your quote price');
+        return;
+      }
+      if (quoteText.length > Validators.maxAmountLength) {
+        SnackbarUtils.showError(context, 'Quote price is too large');
         return;
       }
     }
@@ -1696,6 +1702,8 @@ class _ServiceDetailBookingScreenState
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
+                            inputFormatters:
+                                Validators.amountInputFormatters(),
                             decoration: AppInputDecoration.build(
                               label: 'Your Quote Price',
                               prefixIcon: coinInputPrefix(),

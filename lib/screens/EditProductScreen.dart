@@ -12,6 +12,7 @@ import '../services/add_post_service.dart';
 import '../services/category_service.dart';
 import '../services/location_service.dart';
 import '../services/my_posts_service.dart';
+import '../utils/validators.dart';
 
 class EditProductScreen extends StatefulWidget {
   final MyPost post;
@@ -946,6 +947,14 @@ class _EditProductScreenState extends State<EditProductScreen> {
                         prefixIcon: coinInputPrefix(),
                         prefixIconConstraints: coinPrefixIconConstraints,
                         isRequired: true,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d*\.?\d{0,2}'),
+                          ),
+                          LengthLimitingTextInputFormatter(
+                            Validators.maxAmountLength,
+                          ),
+                        ],
                         validator: (value) {
                           final priceText = value?.trim() ?? '';
                           if (priceText.isEmpty) {
@@ -959,6 +968,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
                           if (parsedPrice <= 0) {
                             return 'Price must be greater than 0';
+                          }
+
+                          if (priceText.length > Validators.maxAmountLength) {
+                            return 'Price is too large';
                           }
 
                           return null;
@@ -1433,6 +1446,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     Widget? suffixIcon,
     bool isRequired = false,
     String? Function(String?)? validator,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1454,6 +1468,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
             controller: controller,
             maxLines: maxLines,
             keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
             validator: validator,
             decoration: AppInputDecoration.build(
               label: isRequired ? '$label *' : label,

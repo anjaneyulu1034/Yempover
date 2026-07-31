@@ -16,6 +16,8 @@ import 'package:yempover_app/services/coin_service.dart';
 import 'package:yempover_app/screens/CoinsWalletScreen.dart';
 import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/wallet_offer_guard.dart';
+import 'package:yempover_app/utils/validators.dart';
+import 'package:yempover_app/services/resume_state_service.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final TradeChat chat;
@@ -117,10 +119,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     _initializeSocketListeners();
     Future.microtask(_initializeSocketAndJoin);
     WidgetsBinding.instance.addObserver(this);
+    ResumeStateService.saveChat(widget.chat.id);
   }
 
   @override
   void dispose() {
+    ResumeStateService.clearIfCurrent('chat', widget.chat.id);
     _messageController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -1059,6 +1063,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       return;
     }
 
+    // Only offer the combinations the listing actually supports: a pure
+    // price listing shouldn't be able to receive a barter offer, and vice
+    // versa. If capability data is missing entirely (older/incomplete
+    // listing payload), fall back to showing everything rather than
+    // dead-ending the user with zero options.
+    final allowsPrice = _listingAllowsPrice;
+    final allowsBarter = _listingAllowsBarter;
+    final noCapabilityData = !allowsPrice && !allowsBarter;
+    final showCoinsOption = allowsPrice || noCapabilityData;
+    final showBarterOption = allowsBarter || noCapabilityData;
+    final showBarterCoinsOption =
+        (allowsPrice && allowsBarter) || noCapabilityData;
+
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1066,24 +1083,30 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const CoinIcon(size: 36, iconSize: 22),
-              title: const Text('Coins Offer'),
-              subtitle: const Text('Offer coins'),
-              onTap: () => Navigator.pop(context, {'type': 'price'}),
-            ),
-            ListTile(
-              leading: const Icon(Icons.sync_alt, color: Colors.orange),
-              title: const Text('Barter Offer'),
-              subtitle: const Text('Offer an item for trade'),
-              onTap: () => Navigator.pop(context, {'type': 'barter'}),
-            ),
-            ListTile(
-              leading: const Icon(Icons.add_circle_outline, color: Colors.teal),
-              title: const Text('Barter + Coins Offer'),
-              subtitle: const Text('Offer an item plus a price difference'),
-              onTap: () => Navigator.pop(context, {'type': 'both'}),
-            ),
+            if (showCoinsOption)
+              ListTile(
+                leading: const CoinIcon(size: 36, iconSize: 22),
+                title: const Text('Coins Offer'),
+                subtitle: const Text('Offer coins'),
+                onTap: () => Navigator.pop(context, {'type': 'price'}),
+              ),
+            if (showBarterOption)
+              ListTile(
+                leading: const Icon(Icons.sync_alt, color: Colors.orange),
+                title: const Text('Barter Offer'),
+                subtitle: const Text('Offer an item for trade'),
+                onTap: () => Navigator.pop(context, {'type': 'barter'}),
+              ),
+            if (showBarterCoinsOption)
+              ListTile(
+                leading: const Icon(
+                  Icons.add_circle_outline,
+                  color: Colors.teal,
+                ),
+                title: const Text('Barter + Coins Offer'),
+                subtitle: const Text('Offer an item plus a price difference'),
+                onTap: () => Navigator.pop(context, {'type': 'both'}),
+              ),
           ],
         ),
       ),
@@ -1139,6 +1162,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 TextField(
                   controller: priceController,
                   keyboardType: TextInputType.number,
+                  inputFormatters: Validators.amountInputFormatters(
+                    allowDecimal: false,
+                  ),
                   onChanged: (_) {
                     if (dialogError != null) {
                       setDialogState(() => dialogError = null);
@@ -1444,6 +1470,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   TextField(
                     controller: priceController,
                     keyboardType: TextInputType.number,
+                    inputFormatters: Validators.amountInputFormatters(
+                      allowDecimal: false,
+                    ),
                     onChanged: (_) {
                       if (dialogError != null) {
                         setDialogState(() => dialogError = null);
@@ -1585,12 +1614,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return null;
   }
 
-  String? _validateOfferPriceAgainstListing(double price) {
-    final listing = _listingPrice;
-    if (listing == null) return null;
+  bool get _listingAllowsPrice =>
+      (_currentChat.product?.allowsPrice ?? false) ||
+      (_currentChat.service?.allowsPrice ?? false);
 
+  bool get _listingAllowsBarter =>
+      (_currentChat.product?.allowsBarter ?? false) ||
+      (_currentChat.service?.allowsBarter ?? false);
+
+  String? _validateOfferPriceAgainstListing(double price) {
     if (price <= 0) {
       return 'Enter a valid price';
+    }
+
+    final listing = _listingPrice;
+    if (listing == null) {
+      // No listing price to bound against (e.g. barter-only listing) — fall
+      // back to the app-wide max so the field still can't take an
+      // arbitrarily large number.
+      if (price.toStringAsFixed(0).length > Validators.maxAmountLength) {
+        return 'Price is too large';
+      }
+      return null;
     }
 
     if (price.round() > listing.round()) {
@@ -1649,6 +1694,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 TextField(
                   controller: priceController,
                   keyboardType: TextInputType.number,
+                  inputFormatters: Validators.amountInputFormatters(
+                    allowDecimal: false,
+                  ),
                   onChanged: (_) {
                     if (dialogError != null) {
                       setDialogState(() => dialogError = null);
@@ -1919,6 +1967,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   TextField(
                     controller: priceController,
                     keyboardType: TextInputType.number,
+                    inputFormatters: Validators.amountInputFormatters(
+                      allowDecimal: false,
+                    ),
                     onChanged: (_) {
                       if (dialogError != null) {
                         setDialogState(() => dialogError = null);
@@ -3734,10 +3785,24 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           if (latestOffer.isPriceOffer) ...[
             Row(
               children: [
+                _buildOfferItemThumb(_currentChat.postImage),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    'Price: ${CoinFormat.amount(latestOffer.price)} coins',
-                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _currentChat.postTitle,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Price: ${CoinFormat.amount(latestOffer.price)} coins',
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -3963,10 +4028,24 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           if (latestOffer.isPriceOffer) ...[
             Row(
               children: [
+                _buildOfferItemThumb(_currentChat.postImage),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    'Price: ${CoinFormat.amount(latestOffer.price)} coins',
-                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _currentChat.postTitle,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Price: ${CoinFormat.amount(latestOffer.price)} coins',
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ],
                   ),
                 ),
               ],

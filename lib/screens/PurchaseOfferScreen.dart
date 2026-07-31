@@ -6,6 +6,7 @@ import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart
 import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
 import 'package:yempover_app/utils/wallet_offer_guard.dart';
+import 'package:yempover_app/utils/validators.dart';
 import 'package:yempover_app/widgets/app_text_field.dart';
 
 class PurchaseOfferScreen extends StatefulWidget {
@@ -52,6 +53,12 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
     if (price == null || price <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid price')),
+      );
+      return;
+    }
+    if (_priceController.text.trim().length > Validators.maxAmountLength) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Price is too large')),
       );
       return;
     }
@@ -332,6 +339,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                LengthLimitingTextInputFormatter(Validators.maxAmountLength),
               ],
               decoration: AppInputDecoration.build(
                 label: 'Offer Price',

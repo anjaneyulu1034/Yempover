@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:yempover_app/services/coin_service.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/utils/validators.dart';
 import 'package:yempover_app/widgets/app_text_field.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
 
@@ -136,6 +137,8 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
       amountError = 'Coins is required';
     } else if (amount == null || amount <= 0) {
       amountError = 'Enter a valid number of coins greater than 0';
+    } else if (amountText.length > Validators.maxAmountLength) {
+      amountError = 'Coins amount is too large';
     }
 
     if (description.isEmpty) {
@@ -257,7 +260,12 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                   TextField(
                     controller: _amountController,
                     keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(
+                        Validators.maxAmountLength,
+                      ),
+                    ],
                     onChanged: (_) {
                       if (_amountError != null) {
                         setState(() => _amountError = null);

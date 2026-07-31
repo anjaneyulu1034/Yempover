@@ -174,17 +174,16 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       ),
     );
 
-    // Temporarily hidden: coins/price chip is not needed right now.
-    // if (widget.post.price > 0) {
-    //   chips.add(
-    //     _buildMetaChip(
-    //       icon: Icons.attach_money,
-    //       label: widget.post.formattedPrice,
-    //       fg: const Color(0xFF1565C0),
-    //       bg: const Color(0xFFE3F2FD),
-    //     ),
-    //   );
-    // }
+    if (widget.post.price > 0) {
+      chips.add(
+        _buildMetaChip(
+          icon: Icons.attach_money,
+          label: '${CoinFormat.amount(widget.post.price)} coins',
+          fg: const Color(0xFF1565C0),
+          bg: const Color(0xFFE3F2FD),
+        ),
+      );
+    }
 
     return Wrap(spacing: 8, runSpacing: 8, children: chips);
   }
@@ -1196,15 +1195,32 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                                             alpha: 0.5,
                                           ),
                                         ),
-                                        child: Text(
-                                          item.name,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              item.name,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            if (item.value > 0)
+                                              Text(
+                                                '${CoinFormat.amount(item.value)} coins',
+                                                style: const TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 10,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                          ],
                                         ),
                                       ),
                                     ),
