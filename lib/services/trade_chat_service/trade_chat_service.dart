@@ -547,10 +547,8 @@ class TradeChatService {
       print('📥 Response status: ${response.statusCode}');
       print('📥 Response body: ${response.body}');
 
-      if (response.statusCode == 200) {
-        final jsonResponse = json.decode(response.body);
-        final chatResponse = TradeChatResponse.fromJson(jsonResponse);
-        return chatResponse.data;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return await getChatById(chatId);
       } else {
         throw await ErrorHandler.handleHttpError(response);
       }

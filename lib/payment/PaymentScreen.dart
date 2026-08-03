@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:yempover_app/widgets/app_text_field.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -96,6 +97,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
             TextField(
               controller: _cardNumberController,
               keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(19),
+              ],
               decoration: AppInputDecoration.build(
                 label: 'Card Number',
                 hint: '1234 5678 9012 3456',
@@ -130,6 +135,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       prefixIcon: const Icon(Icons.lock),
                     ),
                     keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(4),
+                    ],
                     obscureText: true,
                   ),
                 ),

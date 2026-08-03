@@ -376,6 +376,21 @@ class _EditProductScreenState extends State<EditProductScreen> {
     });
   }
 
+  int _maxExpiryValueFor(String unit) {
+    switch (unit) {
+      case 'Minutes':
+        return 60;
+      case 'Hours':
+        return 24;
+      case 'Days':
+        return 29;
+      case 'Months':
+        return 12;
+      default:
+        return 9999;
+    }
+  }
+
   DateTime? _computeEditedExpiryDate() {
     if (_selectedExpiryUnit == _expiredExpiryUnit) {
       return widget.post.validUntil;
@@ -439,6 +454,18 @@ class _EditProductScreenState extends State<EditProductScreen> {
           ),
           backgroundColor: Colors.red,
         ),
+      );
+      return false;
+    }
+
+    final maxExpiryValue = _maxExpiryValueFor(_selectedExpiryUnit);
+    if (value > maxExpiryValue) {
+      final message = '$_selectedExpiryUnit must be between 1 and $maxExpiryValue';
+      setState(() {
+        _expiryValidationError = message;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
       );
       return false;
     }
@@ -1404,7 +1431,12 @@ class _EditProductScreenState extends State<EditProductScreen> {
             TextFormField(
               controller: _expiryValueController,
               keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(
+                  _maxExpiryValueFor(_selectedExpiryUnit).toString().length,
+                ),
+              ],
               onChanged: (_) {
                 if (_expiryValidationError != null) {
                   setState(() {

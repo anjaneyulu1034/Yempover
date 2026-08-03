@@ -2534,9 +2534,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     });
 
     try {
-      final bool isCompleted = result['isCompleted'] == true;
-
-      if (isCompleted && _currentUserPaysOnDealComplete()) {
+      if (_currentUserPaysOnDealComplete()) {
         final amount = _resolveDealPaymentAmount(
           dialogPriceText: result['price']?.toString(),
         );
@@ -2554,21 +2552,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         }
       }
 
-      final updatedChat = isCompleted
-          ? await _chatService.markDealCompleted(
-              chatId: _currentChat.id,
-              remarks: result['remarks'] ?? 'accepted',
-            )
-          : await _chatService.cancelTrade(_currentChat.id);
+      final updatedChat = await _chatService.markDealCompleted(
+        chatId: _currentChat.id,
+        remarks: result['remarks'] ?? 'accepted',
+      );
 
       setState(() {
         _currentChat = updatedChat;
         _appendSystemMessageIfNotDuplicate(
-          result['isCompleted'] == true
-              ? (updatedChat.isCompleted
-                    ? 'Deal completed successfully'
-                    : 'Completion consent sent. Waiting for other user.')
-              : 'Deal marked as not completed',
+          updatedChat.isCompleted
+              ? 'Deal completed successfully'
+              : 'Completion consent sent. Waiting for other user.',
         );
         _isLoading = false;
       });
@@ -2594,38 +2588,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
   }
 
-  Future<void> _cancelTrade() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cancel Trade'),
-        content: const Text('Are you sure you want to cancel this trade?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('No'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Yes, Cancel'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
+  // No confirmation dialog by design — either side can call off a trade
+  // that fell through, and this should revert the post immediately.
+  Future<void> _markDealNotCompleted() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final cancelledChat = await _chatService.cancelTrade(_currentChat.id);
+      final updatedChat = await _chatService.cancelTrade(_currentChat.id);
 
       setState(() {
-        _currentChat = cancelledChat;
-        _appendSystemMessageIfNotDuplicate('Trade cancelled');
+        _currentChat = updatedChat;
+        _appendSystemMessageIfNotDuplicate('Deal marked as not completed');
         _isLoading = false;
       });
 
@@ -2639,10 +2614,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to cancel trade: ${e.toString()}'),
+            content: Text(
+              e.toString().replaceFirst('Exception: ', ''),
+            ),
             backgroundColor: Colors.red,
           ),
         );
+        await _refreshChat();
       }
     }
   }
@@ -4122,13 +4100,30 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             style: TextStyle(fontSize: 12),
           ),
           const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: _completeTrade,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              minimumSize: const Size(double.infinity, 40),
-            ),
-            child: const Text('Complete Deal'),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _completeTrade,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    minimumSize: const Size(double.infinity, 40),
+                  ),
+                  child: const Text('Deal Complete'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _markDealNotCompleted,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    minimumSize: const Size(double.infinity, 40),
+                  ),
+                  child: const Text('Deal Not Complete'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -4370,7 +4365,6 @@ class _DealCompletionDialog extends StatefulWidget {
 }
 
 class __DealCompletionDialogState extends State<_DealCompletionDialog> {
-  bool _isDealCompleted = true;
   final TextEditingController _remarksController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
 
@@ -4412,41 +4406,9 @@ class __DealCompletionDialogState extends State<_DealCompletionDialog> {
                   border: Border.all(color: Colors.blue.shade200),
                 ),
                 child: const Text(
-                  'Deal Completed: The trade has been completed. Completing a Deal will close further communication, and the chat becomes inactive. The item will be marked as sold, and the post will be deleted.\n\n'
-                  'Deal Not Completed: It closes Further Communication with the user and the chat becomes inactive. Since the item is not sold, it will be available on the Marketplace.',
+                  'Completing a deal will close further communication, and the chat becomes inactive. The item will be marked as sold, and the post will be removed from the Marketplace.',
                   style: TextStyle(fontSize: 12),
                 ),
-              ),
-              const SizedBox(height: 16),
-              RadioListTile<bool>(
-                contentPadding: EdgeInsets.zero,
-                visualDensity: const VisualDensity(
-                  horizontal: -4,
-                  vertical: -2,
-                ),
-                title: const Text('Deal Completed'),
-                value: true,
-                groupValue: _isDealCompleted,
-                onChanged: (value) {
-                  setState(() {
-                    _isDealCompleted = value ?? true;
-                  });
-                },
-              ),
-              RadioListTile<bool>(
-                contentPadding: EdgeInsets.zero,
-                visualDensity: const VisualDensity(
-                  horizontal: -4,
-                  vertical: -2,
-                ),
-                title: const Text('Deal Not Completed'),
-                value: false,
-                groupValue: _isDealCompleted,
-                onChanged: (value) {
-                  setState(() {
-                    _isDealCompleted = value ?? false;
-                  });
-                },
               ),
               const SizedBox(height: 16),
               TextField(
@@ -4469,7 +4431,7 @@ class __DealCompletionDialogState extends State<_DealCompletionDialog> {
                   ),
                 ),
               ),
-              if (_isDealCompleted && widget.isPriceOffer) ...[
+              if (widget.isPriceOffer) ...[
                 const SizedBox(height: 12),
                 Text(
                   'Coins will be deducted from your wallet when you complete this deal.',
@@ -4527,9 +4489,7 @@ class __DealCompletionDialogState extends State<_DealCompletionDialog> {
         ),
         ElevatedButton(
           onPressed: () {
-            if (_isDealCompleted &&
-                widget.isPriceOffer &&
-                _priceController.text.isEmpty) {
+            if (widget.isPriceOffer && _priceController.text.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Accepted offer price is unavailable'),
@@ -4540,17 +4500,12 @@ class __DealCompletionDialogState extends State<_DealCompletionDialog> {
             }
 
             Navigator.pop(context, {
-              'isCompleted': _isDealCompleted,
               'remarks': _remarksController.text,
               'price': _priceController.text,
             });
           },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _isDealCompleted ? Colors.green : Colors.orange,
-          ),
-          child: Text(
-            _isDealCompleted ? 'Complete Deal' : 'Mark Not Completed',
-          ),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+          child: const Text('Complete Deal'),
         ),
       ],
     );

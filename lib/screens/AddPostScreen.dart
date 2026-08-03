@@ -1269,6 +1269,21 @@ class _AddPostScreenState extends State<AddPostScreen> {
     });
   }
 
+  int _maxExpiryValueFor(String unit) {
+    switch (unit) {
+      case 'Minutes':
+        return 60;
+      case 'Hours':
+        return 24;
+      case 'Days':
+        return 29;
+      case 'Months':
+        return 12;
+      default:
+        return 9999;
+    }
+  }
+
   DateTime? _computeExpiryDate() {
     if (_selectedExpiryUnit == 'No expiry') {
       return null;
@@ -1336,7 +1351,12 @@ class _AddPostScreenState extends State<AddPostScreen> {
           TextField(
             controller: _expiryValueController,
             keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(
+                _maxExpiryValueFor(_selectedExpiryUnit).toString().length,
+              ),
+            ],
             onChanged: (_) {
               if (_expiryValidationError != null) {
                 setState(() {
@@ -1914,6 +1934,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
     if (_selectedExpiryUnit != 'No expiry') {
       final rawExpiry = _expiryValueController.text.trim();
       final expiryValue = int.tryParse(rawExpiry);
+      final maxExpiryValue = _maxExpiryValueFor(_selectedExpiryUnit);
       if (expiryValue == null || expiryValue <= 0) {
         setState(() {
           _expiryValidationError =
@@ -1921,6 +1942,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
         });
         _showError(
           'Please enter a valid ${_selectedExpiryUnit.toLowerCase()} value',
+        );
+        return;
+      }
+      if (expiryValue > maxExpiryValue) {
+        setState(() {
+          _expiryValidationError =
+              '$_selectedExpiryUnit must be between 1 and $maxExpiryValue';
+        });
+        _showError(
+          '$_selectedExpiryUnit must be between 1 and $maxExpiryValue',
         );
         return;
       }

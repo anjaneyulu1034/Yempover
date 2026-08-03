@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:yempover_app/constants/api_constants.dart';
 import 'package:yempover_app/services/inquiry_service.dart';
@@ -119,6 +120,10 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                         hint: 'Enter your phone number',
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(15),
+                        ],
                         fillColor: const Color(0xFFF6F6F6),
                       ),
                       const SizedBox(height: 20),
