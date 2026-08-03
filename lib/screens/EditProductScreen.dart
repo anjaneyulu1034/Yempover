@@ -36,6 +36,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     'Hours',
     'Days',
     'Months',
+    'Years',
     'No expiry',
   ];
 
@@ -383,9 +384,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
       case 'Hours':
         return 24;
       case 'Days':
-        return 29;
+        return 99;
       case 'Months':
-        return 12;
+        return 999;
+      case 'Years':
+        return 9999;
       default:
         return 9999;
     }
@@ -405,7 +408,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       return null;
     }
 
-    final value = int.tryParse(rawValue);
+    final value = double.tryParse(rawValue);
     if (value == null || value <= 0) {
       return null;
     }
@@ -413,20 +416,51 @@ class _EditProductScreenState extends State<EditProductScreen> {
     final now = DateTime.now();
     switch (_selectedExpiryUnit) {
       case 'Minutes':
-        return now.add(Duration(minutes: value));
+        return now.add(Duration(minutes: value.round()));
       case 'Hours':
-        return now.add(Duration(hours: value));
+        return now.add(Duration(hours: value.round()));
       case 'Days':
-        return now.add(Duration(days: value));
-      case 'Months':
-        return DateTime(
-          now.year,
-          now.month + value,
-          now.day,
-          now.hour,
-          now.minute,
-          now.second,
+        return now.add(
+          Duration(seconds: (value * Duration.secondsPerDay).round()),
         );
+      case 'Months':
+        {
+          final wholeMonths = value.truncate();
+          final fraction = value - wholeMonths;
+          var date = DateTime(
+            now.year,
+            now.month + wholeMonths,
+            now.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          if (fraction > 0) {
+            date = date.add(
+              Duration(seconds: (fraction * 30 * Duration.secondsPerDay).round()),
+            );
+          }
+          return date;
+        }
+      case 'Years':
+        {
+          final wholeYears = value.truncate();
+          final fraction = value - wholeYears;
+          var date = DateTime(
+            now.year + wholeYears,
+            now.month,
+            now.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          if (fraction > 0) {
+            date = date.add(
+              Duration(seconds: (fraction * 365 * Duration.secondsPerDay).round()),
+            );
+          }
+          return date;
+        }
       default:
         return null;
     }
@@ -441,7 +475,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       return true;
     }
 
-    final value = int.tryParse(_expiryValueController.text.trim());
+    final value = double.tryParse(_expiryValueController.text.trim());
     if (value == null || value <= 0) {
       setState(() {
         _expiryValidationError =
@@ -1430,13 +1464,25 @@ class _EditProductScreenState extends State<EditProductScreen> {
             const SizedBox(height: 10),
             TextFormField(
               controller: _expiryValueController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(
-                  _maxExpiryValueFor(_selectedExpiryUnit).toString().length,
-                ),
-              ],
+              keyboardType: _selectedExpiryUnit == 'Minutes' ||
+                      _selectedExpiryUnit == 'Hours'
+                  ? TextInputType.number
+                  : const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: _selectedExpiryUnit == 'Minutes' ||
+                      _selectedExpiryUnit == 'Hours'
+                  ? [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(
+                        _maxExpiryValueFor(_selectedExpiryUnit).toString().length,
+                      ),
+                    ]
+                  : [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,1}')),
+                      LengthLimitingTextInputFormatter(
+                        _maxExpiryValueFor(_selectedExpiryUnit).toString().length +
+                            2,
+                      ),
+                    ],
               onChanged: (_) {
                 if (_expiryValidationError != null) {
                   setState(() {
@@ -1451,7 +1497,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
                     ? 'Hours'
                     : _selectedExpiryUnit == 'Days'
                     ? 'Days'
-                    : 'Months',
+                    : _selectedExpiryUnit == 'Months'
+                    ? 'Months'
+                    : 'Years',
                 hint: 'Enter value',
                 errorText: _expiryValidationError,
                 fillColor: Colors.white,

@@ -3,6 +3,7 @@
 import 'package:yempover_app/screens/LoginScreen.dart';
 import 'package:yempover_app/services/shared_prefs_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:yempover_app/screens/OnboardingScreen.dart';
 import 'package:yempover_app/screens/Home_screen.dart';
 import 'package:yempover_app/screens/PostDetailScreen.dart';
@@ -142,66 +143,69 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // App Logo/Icon
-            Container(
-              width: 170,
-              height: 170,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 20,
-                    spreadRadius: 2,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF2E5BFF),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // App Logo/Icon
+              Container(
+                width: 170,
+                height: 170,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Image.asset(
+                    'assets/BarterX_applogo.png',
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 30),
+              // App Name
+              const Column(
+                children: [
+                  Text(
+                    AppConstants.appName,
+                    style: TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    AppConstants.appTagline,
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Image.asset(
-                  'assets/BarterX_applogo.png',
-                  fit: BoxFit.contain,
-                ),
+              const SizedBox(height: 50),
+              // Loading Indicator
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                strokeWidth: 2,
               ),
-            ),
-            const SizedBox(height: 30),
-            // App Name
-            const Column(
-              children: [
-                Text(
-                  AppConstants.appName,
-                  style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF111827),
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  AppConstants.appTagline,
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Color(0xFF6B7280),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 50),
-            // Loading Indicator
-            const CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1A73E8)),
-              strokeWidth: 2,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

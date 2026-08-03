@@ -398,6 +398,20 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     _quotedPriceError = _validateQuotedPrice(_quotedPriceController.text);
   }
 
+  /// Keeps the price field filled with at least the required minimum as the
+  /// item selection changes, so picking items is enough to make the offer
+  /// valid without the user having to work the difference out by hand. A
+  /// quote the user already raised above the minimum is left untouched.
+  void _syncQuotedPriceWithMinimum() {
+    if (!_requiresQuotedPrice) return;
+
+    final minimum = _minimumQuotedCoinsForBoth;
+    final current = int.tryParse(_quotedPriceController.text.trim());
+    if (current == null || current < minimum) {
+      _quotedPriceController.text = minimum.toString();
+    }
+  }
+
   void _toggleItemSelection(UserItem item) {
     setState(() {
       final existingIndex = _selectedItems.indexWhere((i) => i.id == item.id);
@@ -406,6 +420,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       } else {
         _selectedItems.add(item);
       }
+      _syncQuotedPriceWithMinimum();
       _revalidateQuotedPrice();
     });
   }
@@ -413,6 +428,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   void _removeSelectedItem(UserItem item) {
     setState(() {
       _selectedItems.removeWhere((i) => i.id == item.id);
+      _syncQuotedPriceWithMinimum();
       _revalidateQuotedPrice();
     });
   }
@@ -738,7 +754,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                         Text(
                           widget.post.price > 0
                               ? 'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins · '
-                                  'Minimum quote: ${CoinFormat.amount(_minimumQuotedCoinsForBoth)} coins'
+                                    'Minimum quote: ${CoinFormat.amount(_minimumQuotedCoinsForBoth)} coins'
                               : 'Your items total: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins',
                           style: TextStyle(
                             fontSize: 12,

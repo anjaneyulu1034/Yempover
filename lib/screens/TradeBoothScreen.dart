@@ -28,7 +28,10 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
   int _totalPages = 1;
   bool _isLoadingMore = false;
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
   Timer? _countdownTimer;
+  String _searchQuery = '';
+  String _statusFilter = 'All';
 
   @override
   void initState() {
@@ -36,14 +39,52 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     _fetchMyPosts();
     _startCountdownTimer();
     _scrollController.addListener(_onScroll);
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.trim().toLowerCase();
+      });
+    });
   }
 
   @override
   void dispose() {
     _countdownTimer?.cancel();
     _scrollController.dispose();
+    _searchController.dispose();
     // _postsService.dispose();
     super.dispose();
+  }
+
+  bool _isPostSold(MyPost post) {
+    final status = post.status.trim().toUpperCase();
+    return status == 'SOLD' || status == 'BARTERED' || status == 'COMPLETED';
+  }
+
+  bool _isPostExpired(MyPost post) {
+    if (_isPostSold(post)) return false;
+    if (post.hasExpired) return true;
+    final validUntil = post.validUntil;
+    return validUntil != null && !validUntil.isAfter(DateTime.now());
+  }
+
+  List<MyPost> get _visiblePosts {
+    return _posts.where((post) {
+      switch (_statusFilter) {
+        case 'Active':
+          if (_isPostSold(post) || _isPostExpired(post)) return false;
+          break;
+        case 'Expired':
+          if (!_isPostExpired(post)) return false;
+          break;
+        case 'Sold':
+          if (!_isPostSold(post)) return false;
+          break;
+      }
+
+      if (_searchQuery.isEmpty) return true;
+      return post.title.toLowerCase().contains(_searchQuery) ||
+          post.description.toLowerCase().contains(_searchQuery);
+    }).toList();
   }
 
   void _startCountdownTimer() {
@@ -378,6 +419,64 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
               ),
             ),
           ),
+          if (!_isLoading && _errorMessage == null && _posts.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search your posts',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchQuery.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => _searchController.clear(),
+                        ),
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+              child: SizedBox(
+                height: 34,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: ['All', 'Active', 'Expired', 'Sold']
+                      .map(
+                        (filter) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(filter),
+                            selected: _statusFilter == filter,
+                            onSelected: (_) {
+                              setState(() {
+                                _statusFilter = filter;
+                              });
+                            },
+                            selectedColor: const Color(0xFF2E5BFF),
+                            labelStyle: TextStyle(
+                              color: _statusFilter == filter
+                                  ? Colors.white
+                                  : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            backgroundColor: Colors.grey.shade100,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+            ),
+          ],
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -432,6 +531,33 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                       ],
                     ),
                   )
+                : _visiblePosts.isEmpty
+                ? _buildPullToRefreshState(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search_off,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No posts match',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Try a different search or filter',
+                          style: TextStyle(color: Colors.grey[500]),
+                        ),
+                      ],
+                    ),
+                  )
                 : RefreshIndicator(
                     onRefresh: _refreshPosts,
                     color: const Color(0xFF2E5BFF),
@@ -442,15 +568,16 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                       controller: _scrollController,
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _posts.length + (_isLoadingMore ? 1 : 0),
+                      itemCount:
+                          _visiblePosts.length + (_isLoadingMore ? 1 : 0),
                       itemBuilder: (context, index) {
-                        if (index == _posts.length) {
+                        if (index == _visiblePosts.length) {
                           return const Padding(
                             padding: EdgeInsets.all(16.0),
                             child: Center(child: CircularProgressIndicator()),
                           );
                         }
-                        return _buildPostCard(_posts[index]);
+                        return _buildPostCard(_visiblePosts[index]);
                       },
                     ),
                   ),

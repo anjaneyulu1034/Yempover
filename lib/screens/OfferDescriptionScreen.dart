@@ -53,6 +53,24 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
       widget.offerMode == OfferSubmissionMode.barter ||
       widget.offerMode == OfferSubmissionMode.both;
 
+  double get _selectedItemsCoinTotal =>
+      widget.selectedItems.fold<double>(0, (sum, item) => sum + item.value);
+
+  /// Minimum coins that must be quoted so the price + offered items cover the
+  /// listing's value. Kept in sync with OfferDeckScreen's own calculation so
+  /// editing the price on this screen can't undercut it.
+  int get _minimumQuotedCoinsForBoth {
+    if (widget.offerMode != OfferSubmissionMode.both) return 0;
+
+    final targetPrice = widget.post.price;
+    if (targetPrice <= 0) return 0;
+
+    final gap = targetPrice - _selectedItemsCoinTotal;
+    if (gap <= 0) return 0;
+
+    return gap.ceil();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -390,6 +408,15 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
       return 'Price is too large';
     }
 
+    if (widget.offerMode == OfferSubmissionMode.both) {
+      final minimum = _minimumQuotedCoinsForBoth;
+      if (parsed.round() < minimum) {
+        return 'Quoted price must be at least $minimum coins '
+            '(listing ${CoinFormat.amount(widget.post.price)} − '
+            'your items ${CoinFormat.amount(_selectedItemsCoinTotal)})';
+      }
+    }
+
     return null;
   }
 
@@ -616,6 +643,18 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
+                              if (widget.offerMode == OfferSubmissionMode.both)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    '+ ${_priceController.text.trim().isEmpty ? '0' : _priceController.text.trim()} coins',
+                                    style: TextStyle(
+                                      color: Colors.green.shade700,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
                             ] else
                               Text(
                                 _priceController.text.trim().isEmpty
@@ -654,7 +693,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                 ),
               TextField(
                 controller: _priceController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
                   LengthLimitingTextInputFormatter(9),

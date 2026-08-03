@@ -37,6 +37,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
     'Hours',
     'Days',
     'Months',
+    'Years',
     'No expiry',
   ];
 
@@ -1276,9 +1277,11 @@ class _AddPostScreenState extends State<AddPostScreen> {
       case 'Hours':
         return 24;
       case 'Days':
-        return 29;
+        return 99;
       case 'Months':
-        return 12;
+        return 999;
+      case 'Years':
+        return 9999;
       default:
         return 9999;
     }
@@ -1295,27 +1298,58 @@ class _AddPostScreenState extends State<AddPostScreen> {
     }
 
     final now = DateTime.now();
-    final value = int.tryParse(rawValue);
+    final value = double.tryParse(rawValue);
     if (value == null || value <= 0) {
       return null;
     }
 
     switch (_selectedExpiryUnit) {
       case 'Minutes':
-        return now.add(Duration(minutes: value));
+        return now.add(Duration(minutes: value.round()));
       case 'Hours':
-        return now.add(Duration(hours: value));
+        return now.add(Duration(hours: value.round()));
       case 'Days':
-        return now.add(Duration(days: value));
-      case 'Months':
-        return DateTime(
-          now.year,
-          now.month + value,
-          now.day,
-          now.hour,
-          now.minute,
-          now.second,
+        return now.add(
+          Duration(seconds: (value * Duration.secondsPerDay).round()),
         );
+      case 'Months':
+        {
+          final wholeMonths = value.truncate();
+          final fraction = value - wholeMonths;
+          var date = DateTime(
+            now.year,
+            now.month + wholeMonths,
+            now.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          if (fraction > 0) {
+            date = date.add(
+              Duration(seconds: (fraction * 30 * Duration.secondsPerDay).round()),
+            );
+          }
+          return date;
+        }
+      case 'Years':
+        {
+          final wholeYears = value.truncate();
+          final fraction = value - wholeYears;
+          var date = DateTime(
+            now.year + wholeYears,
+            now.month,
+            now.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          if (fraction > 0) {
+            date = date.add(
+              Duration(seconds: (fraction * 365 * Duration.secondsPerDay).round()),
+            );
+          }
+          return date;
+        }
       default:
         return null;
     }
@@ -1350,13 +1384,25 @@ class _AddPostScreenState extends State<AddPostScreen> {
           const SizedBox(height: 10),
           TextField(
             controller: _expiryValueController,
-            keyboardType: TextInputType.number,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(
-                _maxExpiryValueFor(_selectedExpiryUnit).toString().length,
-              ),
-            ],
+            keyboardType: _selectedExpiryUnit == 'Minutes' ||
+                    _selectedExpiryUnit == 'Hours'
+                ? TextInputType.number
+                : const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: _selectedExpiryUnit == 'Minutes' ||
+                    _selectedExpiryUnit == 'Hours'
+                ? [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(
+                      _maxExpiryValueFor(_selectedExpiryUnit).toString().length,
+                    ),
+                  ]
+                : [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,1}')),
+                    LengthLimitingTextInputFormatter(
+                      _maxExpiryValueFor(_selectedExpiryUnit).toString().length +
+                          2,
+                    ),
+                  ],
             onChanged: (_) {
               if (_expiryValidationError != null) {
                 setState(() {
@@ -1371,7 +1417,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
                   ? 'Enter hours'
                   : _selectedExpiryUnit == 'Days'
                   ? 'Enter days'
-                  : 'Enter months',
+                  : _selectedExpiryUnit == 'Months'
+                  ? 'Enter months'
+                  : 'Enter years',
               errorText: _expiryValidationError,
             ),
           ),
@@ -1933,7 +1981,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
     if (_selectedExpiryUnit != 'No expiry') {
       final rawExpiry = _expiryValueController.text.trim();
-      final expiryValue = int.tryParse(rawExpiry);
+      final expiryValue = double.tryParse(rawExpiry);
       final maxExpiryValue = _maxExpiryValueFor(_selectedExpiryUnit);
       if (expiryValue == null || expiryValue <= 0) {
         setState(() {
