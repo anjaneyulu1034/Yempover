@@ -1287,6 +1287,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
     }
   }
 
+  /// Minutes/Hours/Days are whole-number units (no decimal precision).
+  /// Months/Years allow a single decimal digit (e.g. "6.5" months).
+  bool get _isIntegerOnlyExpiryUnit =>
+      _selectedExpiryUnit == 'Minutes' ||
+      _selectedExpiryUnit == 'Hours' ||
+      _selectedExpiryUnit == 'Days';
+
   DateTime? _computeExpiryDate() {
     if (_selectedExpiryUnit == 'No expiry') {
       return null;
@@ -1384,12 +1391,10 @@ class _AddPostScreenState extends State<AddPostScreen> {
           const SizedBox(height: 10),
           TextField(
             controller: _expiryValueController,
-            keyboardType: _selectedExpiryUnit == 'Minutes' ||
-                    _selectedExpiryUnit == 'Hours'
+            keyboardType: _isIntegerOnlyExpiryUnit
                 ? TextInputType.number
                 : const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: _selectedExpiryUnit == 'Minutes' ||
-                    _selectedExpiryUnit == 'Hours'
+            inputFormatters: _isIntegerOnlyExpiryUnit
                 ? [
                     FilteringTextInputFormatter.digitsOnly,
                     LengthLimitingTextInputFormatter(

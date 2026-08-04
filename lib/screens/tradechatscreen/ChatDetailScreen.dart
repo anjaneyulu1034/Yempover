@@ -470,6 +470,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           sentById: 'system',
           messageText: newOffer.isPriceOffer
               ? 'Price offer created: ${CoinFormat.amount(newOffer.price)} coins'
+              : newOffer.isBothOffer && (newOffer.price ?? 0) > 0
+              ? 'Barter offer created: ${newOffer.barterItemTitle} '
+                    '+ ${CoinFormat.amount(newOffer.price)} coins'
               : 'Barter offer created: ${newOffer.barterItemTitle}',
           messageType: MessageType.SYSTEM,
           isRead: true,

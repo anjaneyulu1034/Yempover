@@ -485,7 +485,14 @@ class TradeOffer {
           : price!.toStringAsFixed(2);
       return 'Price: $amount coins';
     } else if (isBarterOffer || isBothOffer) {
-      return 'Barter: ${barterItemTitle ?? 'Item'}';
+      final itemSummary = 'Barter: ${barterItemTitle ?? 'Item'}';
+      if (isBothOffer && price != null && price! > 0) {
+        final amount = price! == price!.roundToDouble()
+            ? price!.toInt().toString()
+            : price!.toStringAsFixed(2);
+        return '$itemSummary + $amount coins';
+      }
+      return itemSummary;
     } else if (isServiceOffer) {
       return 'Service Offer';
     }

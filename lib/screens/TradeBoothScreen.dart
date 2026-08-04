@@ -296,6 +296,81 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     SnackbarUtils.showError(context, message);
   }
 
+  static const List<String> _statusFilterOptions = [
+    'All',
+    'Active',
+    'Expired',
+    'Sold',
+  ];
+
+  Widget _buildStatusFilterButton() {
+    final isActive = _statusFilter != 'All';
+
+    return Material(
+      color: isActive ? const Color(0xFF2E5BFF) : Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _showStatusFilterSheet,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Icon(
+            Icons.filter_list,
+            color: isActive ? Colors.white : Colors.black87,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showStatusFilterSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
+                child: Text(
+                  'Filter by status',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+              ..._statusFilterOptions.map((filter) {
+                final selected = _statusFilter == filter;
+                return ListTile(
+                  title: Text(
+                    filter,
+                    style: TextStyle(
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected ? const Color(0xFF2E5BFF) : Colors.black87,
+                    ),
+                  ),
+                  trailing: selected
+                      ? const Icon(Icons.check, color: Color(0xFF2E5BFF))
+                      : null,
+                  onTap: () {
+                    setState(() {
+                      _statusFilter = filter;
+                    });
+                    Navigator.pop(sheetContext);
+                  },
+                );
+              }),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   String _formatPrice(MyPost post) {
     if (post.price != null && post.price! > 0) {
       if (post.isForSale) {
@@ -422,58 +497,35 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
           if (!_isLoading && _errorMessage == null && _posts.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search your posts',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchQuery.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => _searchController.clear(),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search your posts',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchQuery.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () => _searchController.clear(),
+                              ),
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 0,
                         ),
-                  filled: true,
-                  fillColor: Colors.grey.shade100,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
-              child: SizedBox(
-                height: 34,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: ['All', 'Active', 'Expired', 'Sold']
-                      .map(
-                        (filter) => Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            label: Text(filter),
-                            selected: _statusFilter == filter,
-                            onSelected: (_) {
-                              setState(() {
-                                _statusFilter = filter;
-                              });
-                            },
-                            selectedColor: const Color(0xFF2E5BFF),
-                            labelStyle: TextStyle(
-                              color: _statusFilter == filter
-                                  ? Colors.white
-                                  : Colors.black87,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            backgroundColor: Colors.grey.shade100,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
+                  const SizedBox(width: 10),
+                  _buildStatusFilterButton(),
+                ],
               ),
             ),
           ],

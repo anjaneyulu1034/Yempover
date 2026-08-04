@@ -597,6 +597,9 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
           itemName: widget.post.title,
         );
         if (!canAfford || !mounted) return;
+
+        await _showCoinDeductionNotice(quoted.round());
+        if (!mounted) return;
       }
     }
 
@@ -621,6 +624,49 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
           offerMode: widget.offerMode,
           initialQuotedPrice: _quotedPriceController.text.trim(),
         ),
+      ),
+    );
+  }
+
+  /// Purely informational notice so the user knows upfront how many coins
+  /// this "Barter + Price" offer will cost them if the other party accepts it.
+  Future<void> _showCoinDeductionNotice(int coins) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('Coins to be Deducted'),
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const CoinIcon(size: 22, iconSize: 14),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'If this offer is accepted, ${CoinFormat.amount(coins)} '
+                'coins will be deducted from your wallet.',
+                style: const TextStyle(fontSize: 14.5, height: 1.35),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Okay'),
+          ),
+        ],
       ),
     );
   }
