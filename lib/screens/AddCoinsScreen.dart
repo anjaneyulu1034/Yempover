@@ -1,7 +1,6 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:yempover_app/services/coin_service.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:yempover_app/utils/validators.dart';
@@ -260,12 +259,9 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                   TextField(
                     controller: _amountController,
                     keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(
-                        Validators.maxAmountLength,
-                      ),
-                    ],
+                    inputFormatters: Validators.amountInputFormatters(
+                      allowDecimal: false,
+                    ),
                     onChanged: (_) {
                       if (_amountError != null) {
                         setState(() => _amountError = null);

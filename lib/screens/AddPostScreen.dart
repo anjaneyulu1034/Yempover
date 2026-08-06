@@ -1,6 +1,5 @@
 // ignore: file_names
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:yempover_app/models/my_post_model.dart';
@@ -1394,20 +1393,10 @@ class _AddPostScreenState extends State<AddPostScreen> {
             keyboardType: _isIntegerOnlyExpiryUnit
                 ? TextInputType.number
                 : const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: _isIntegerOnlyExpiryUnit
-                ? [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(
-                      _maxExpiryValueFor(_selectedExpiryUnit).toString().length,
-                    ),
-                  ]
-                : [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,1}')),
-                    LengthLimitingTextInputFormatter(
-                      _maxExpiryValueFor(_selectedExpiryUnit).toString().length +
-                          2,
-                    ),
-                  ],
+            inputFormatters: Validators.boundedCounterFormatters(
+              max: _maxExpiryValueFor(_selectedExpiryUnit),
+              allowDecimal: !_isIntegerOnlyExpiryUnit,
+            ),
             onChanged: (_) {
               if (_expiryValidationError != null) {
                 setState(() {
@@ -1448,10 +1437,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
           controller: _selectedOption == 1
               ? _priceController
               : _willPayAmountController,
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-            LengthLimitingTextInputFormatter(Validators.maxAmountLength),
-          ],
+          inputFormatters: Validators.amountInputFormatters(),
           onChanged: (_) {
             if (_priceValidationError != null) {
               setState(() {

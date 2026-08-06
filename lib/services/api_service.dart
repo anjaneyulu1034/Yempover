@@ -5,6 +5,7 @@ import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/utils/subscription_gate.dart';
 import '../constants/api_constants.dart';
 import '../models/auth_models.dart';
 import 'token_service.dart';
@@ -41,6 +42,11 @@ class ApiService {
         response = await request(newToken);
       }
     }
+
+    // Safety net: catches a subscription that lapses mid-session even when
+    // the token still claims ACTIVE. See SubscriptionGate for the primary,
+    // login-time check.
+    SubscriptionGate.checkResponse(response);
 
     return response;
   }

@@ -1528,7 +1528,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   }
 
                   final parsed = double.tryParse(trimmedPrice);
-                  if (parsed == null || parsed < 0) {
+                  if (parsed == null || parsed <= 0) {
                     setDialogState(
                       () => dialogError = 'Enter a valid coin amount',
                     );
@@ -2025,7 +2025,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   }
 
                   final parsed = double.tryParse(trimmedPrice);
-                  if (parsed == null || parsed < 0) {
+                  if (parsed == null || parsed <= 0) {
                     setDialogState(
                       () => dialogError = 'Enter a valid coin amount',
                     );

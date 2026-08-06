@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:yempover_app/models/ProductPostmain.dart';
 import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
 import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
@@ -337,10 +336,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
             TextField(
               controller: _priceController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                LengthLimitingTextInputFormatter(Validators.maxAmountLength),
-              ],
+              inputFormatters: Validators.amountInputFormatters(),
               decoration: AppInputDecoration.build(
                 label: 'Offer Price',
                 hint: 'Enter your offer in coins',

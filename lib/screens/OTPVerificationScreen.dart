@@ -10,6 +10,7 @@ import 'package:yempover_app/screens/SignupScreen.dart';
 import 'package:yempover_app/screens/SignupPhotoVerificationScreen.dart';
 import 'package:yempover_app/services/profile_session_manager.dart';
 import 'package:yempover_app/utils/blocked_users_cache.dart';
+import 'package:yempover_app/utils/subscription_gate.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -219,7 +220,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       debugPrint('✅ Login success notification shown');
 
       // Show success dialog for login (similar style)
-      _showLoginSuccessDialog(responseData.user);
+      _showLoginSuccessDialog(responseData);
     }
   }
 
@@ -422,7 +423,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   }
 
   // Success dialog for login (similar style)
-  void _showLoginSuccessDialog(User? user) {
+  void _showLoginSuccessDialog(VerifyOtpResponseData responseData) {
+    final user = responseData.user;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -460,6 +462,15 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                 onPressed: () {
                   Navigator.of(context).pop(); // Close the dialog
                   widget.onVerificationSuccess(user); // Pass user data
+
+                  final subscription = responseData.subscription;
+                  if (subscription != null && !subscription.isValid) {
+                    // Let the post-login navigation (e.g. to Home) finish
+                    // its first frame before gating on top of it.
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      SubscriptionGate.showIfNeeded();
+                    });
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppConstants.primaryColor,

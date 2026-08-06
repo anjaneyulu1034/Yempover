@@ -394,6 +394,13 @@ class _EditProductScreenState extends State<EditProductScreen> {
     }
   }
 
+  /// Minutes/Hours/Days are whole-number units (no decimal precision).
+  /// Months/Years allow a single decimal digit (e.g. "6.5" months).
+  bool get _isIntegerOnlyExpiryUnit =>
+      _selectedExpiryUnit == 'Minutes' ||
+      _selectedExpiryUnit == 'Hours' ||
+      _selectedExpiryUnit == 'Days';
+
   DateTime? _computeEditedExpiryDate() {
     if (_selectedExpiryUnit == _expiredExpiryUnit) {
       return widget.post.validUntil;
@@ -1008,14 +1015,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                         prefixIcon: coinInputPrefix(),
                         prefixIconConstraints: coinPrefixIconConstraints,
                         isRequired: true,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                            RegExp(r'^\d*\.?\d{0,2}'),
-                          ),
-                          LengthLimitingTextInputFormatter(
-                            Validators.maxAmountLength,
-                          ),
-                        ],
+                        inputFormatters: Validators.amountInputFormatters(),
                         validator: (value) {
                           final priceText = value?.trim() ?? '';
                           if (priceText.isEmpty) {
@@ -1464,25 +1464,13 @@ class _EditProductScreenState extends State<EditProductScreen> {
             const SizedBox(height: 10),
             TextFormField(
               controller: _expiryValueController,
-              keyboardType: _selectedExpiryUnit == 'Minutes' ||
-                      _selectedExpiryUnit == 'Hours'
+              keyboardType: _isIntegerOnlyExpiryUnit
                   ? TextInputType.number
                   : const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: _selectedExpiryUnit == 'Minutes' ||
-                      _selectedExpiryUnit == 'Hours'
-                  ? [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(
-                        _maxExpiryValueFor(_selectedExpiryUnit).toString().length,
-                      ),
-                    ]
-                  : [
-                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,1}')),
-                      LengthLimitingTextInputFormatter(
-                        _maxExpiryValueFor(_selectedExpiryUnit).toString().length +
-                            2,
-                      ),
-                    ],
+              inputFormatters: Validators.boundedCounterFormatters(
+                max: _maxExpiryValueFor(_selectedExpiryUnit),
+                allowDecimal: !_isIntegerOnlyExpiryUnit,
+              ),
               onChanged: (_) {
                 if (_expiryValidationError != null) {
                   setState(() {
