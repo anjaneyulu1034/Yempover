@@ -32,9 +32,15 @@ class ErrorMessageUtils {
     String message = error.toString().trim();
     if (message.isEmpty) return safeFallback;
 
-    message = message.replaceFirst('Exception: ', '').trim();
-    message = message.replaceFirst('ApiException: ', '').trim();
-    message = message.replaceFirst('Error: ', '').trim();
+    // Anchored to the start of the string on purpose: a blind
+    // replaceFirst('Exception: ', '') also matches mid-string, e.g.
+    // "ClientException: Connection closed..." → "ClientConnection closed...",
+    // mangling the message and hiding it from the ClientException check below.
+    for (final prefix in ['Exception: ', 'ApiException: ', 'Error: ']) {
+      if (message.startsWith(prefix)) {
+        message = message.substring(prefix.length).trim();
+      }
+    }
 
     final extractedFromJson = _extractMessageFromJson(message);
     if (extractedFromJson != null && extractedFromJson.isNotEmpty) {
@@ -74,8 +80,10 @@ class ErrorMessageUtils {
     }
     if (lower.contains('socketconnection') ||
         lower.contains('connection refused') ||
+        lower.contains('connection closed') ||
         lower.contains('failed host lookup') ||
-        lower.contains('clientexception')) {
+        lower.contains('clientexception') ||
+        lower.contains('httpexception')) {
       return 'Network issue. Please check your internet connection and try again.';
     }
     if (lower.contains('session expired') ||

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:yempover_app/models/ProductPostmain.dart';
 import 'package:yempover_app/services/api_service.dart';
 import 'package:yempover_app/services/post_action_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/post_availability_utils.dart';
 import 'package:yempover_app/screens/PostDetailScreen.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
@@ -128,7 +129,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = ErrorMessageUtils.sanitize(e);
       });
 
       if (mounted) {
@@ -199,10 +200,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       });
 
       if (mounted) {
-        SnackbarUtils.showError(
-          context,
-          e.toString().replaceAll('Exception: ', ''),
-        );
+        SnackbarUtils.showError(context, e);
       }
     }
   }
@@ -253,6 +251,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       case 'FOR_SALE':
         return 'For Sale';
       case 'SOLD':
+        return 'Sold';
+      case 'BARTERED':
         return 'Sold';
       case 'LOOKING_FOR_SERVICE':
         return 'Looking for Service';
@@ -770,6 +770,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         return PostStatus.FOR_SALE;
       case 'SOLD':
         return PostStatus.SOLD;
+      case 'BARTERED':
+        return PostStatus.BARTERED;
       case 'LOOKING_FOR_SERVICE':
         return PostStatus.LOOKING_FOR_SERVICE;
       case 'PROVIDE_SERVICE':

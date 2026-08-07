@@ -6,6 +6,7 @@ import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/error_widget.dart';
 import 'package:yempover_app/utils/loading_widget.dart';
 
@@ -458,7 +459,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     } catch (e) {
       debugPrint('❌ TradeChatScreen: Error loading all chats: $e');
       setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = ErrorMessageUtils.sanitize(e);
         _isLoading = false;
         _isLoadingMoreAllChats = false;
       });

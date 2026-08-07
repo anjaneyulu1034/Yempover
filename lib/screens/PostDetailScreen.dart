@@ -411,10 +411,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         _isFavorite = previousFavoriteState;
       });
 
-      SnackbarUtils.showError(
-        context,
-        e.toString().replaceAll('Exception: ', ''),
-      );
+      SnackbarUtils.showError(context, e);
     }
   }
 

@@ -8,6 +8,7 @@ import 'package:yempover_app/services/my_posts_service.dart';
 import 'package:yempover_app/screens/OfferDescriptionScreen.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
 import 'package:yempover_app/screens/AddPostScreen.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:yempover_app/utils/wallet_offer_guard.dart';
 import 'package:yempover_app/widgets/app_text_field.dart';
@@ -211,19 +212,6 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     return gap.abs() < 0.01 ? null : gap;
   }
 
-  /// Minimum coins to quote when offering barter items toward a priced listing.
-  /// If the selected items already cover (or exceed) the listing price, no
-  /// top-up is owed — the proposer should never be forced to overpay.
-  int get _minimumQuotedCoinsForBoth {
-    final targetPrice = widget.post.price;
-    if (targetPrice <= 0) return 0;
-
-    final gap = targetPrice - _selectedBarterItemsCoinTotal;
-    if (gap <= 0) return 0;
-
-    return gap.ceil();
-  }
-
   String? _validateQuotedPrice(String value) {
     if (!_requiresQuotedPrice) return null;
 
@@ -239,19 +227,6 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
     if (trimmed.length > 9) {
       return 'Price is too large';
-    }
-
-    if (_selectedItems.isNotEmpty) {
-      final quotedCoins = parsed.round();
-      final minimum = _minimumQuotedCoinsForBoth;
-      if (quotedCoins < minimum) {
-        if (widget.post.price > 0) {
-          return 'Quoted price must be at least $minimum coins '
-              '(listing ${CoinFormat.amount(widget.post.price)} − '
-              'your items ${CoinFormat.amount(_selectedBarterItemsCoinTotal)})';
-        }
-        return 'Quoted price must be at least $minimum coins';
-      }
     }
 
     return null;
@@ -300,7 +275,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
       setState(() {
         _isLoading = false;
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = ErrorMessageUtils.sanitize(e);
       });
 
       if (_errorMessage!.contains('Session expired') ||
@@ -398,17 +373,15 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     _quotedPriceError = _validateQuotedPrice(_quotedPriceController.text);
   }
 
-  /// Keeps the price field filled with at least the required minimum as the
-  /// item selection changes, so picking items is enough to make the offer
-  /// valid without the user having to work the difference out by hand. A
-  /// quote the user already raised above the minimum is left untouched.
+  /// Keeps the price field non-empty as the item selection changes, so
+  /// picking items doesn't leave the field blank. There's no required
+  /// minimum to quote — barter items alone are a valid "Both" offer, so this
+  /// only fills in "0" and never overwrites a value the user already typed.
   void _syncQuotedPriceWithMinimum() {
     if (!_requiresQuotedPrice) return;
 
-    final minimum = _minimumQuotedCoinsForBoth;
-    final current = int.tryParse(_quotedPriceController.text.trim());
-    if (current == null || current < minimum) {
-      _quotedPriceController.text = minimum.toString();
+    if (_quotedPriceController.text.trim().isEmpty) {
+      _quotedPriceController.text = '0';
     }
   }
 
@@ -798,10 +771,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                       if (_selectedItems.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(
-                          widget.post.price > 0
-                              ? 'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins · '
-                                    'Minimum quote: ${CoinFormat.amount(_minimumQuotedCoinsForBoth)} coins'
-                              : 'Your items total: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins',
+                          'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade600,

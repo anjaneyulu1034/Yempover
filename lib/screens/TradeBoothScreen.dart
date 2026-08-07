@@ -5,6 +5,7 @@ import 'package:yempover_app/screens/ProductDetailScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import '../models/my_post_model.dart';
 import '../services/my_posts_service.dart';
@@ -160,7 +161,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      final errorMessage = e.toString().replaceAll('Exception: ', '');
+      final errorMessage = ErrorMessageUtils.sanitize(e);
 
       setState(() {
         _isLoading = false;
@@ -225,7 +226,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
         _isLoadingMore = false;
       });
 
-      final errorMessage = e.toString().replaceAll('Exception: ', '');
+      final errorMessage = ErrorMessageUtils.sanitize(e);
       if (errorMessage.contains('Session expired')) {
         _handleSessionExpired();
       } else {
@@ -246,7 +247,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
         _totalPages = response.data.pagination.pages;
       });
     } catch (e) {
-      final errorMessage = e.toString().replaceAll('Exception: ', '');
+      final errorMessage = ErrorMessageUtils.sanitize(e);
       if (errorMessage.contains('Session expired')) {
         _handleSessionExpired();
       } else {

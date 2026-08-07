@@ -8,6 +8,7 @@ import 'package:yempover_app/models/get_my_profile_response.dart';
 import 'package:yempover_app/models/profile_update_request.dart';
 import 'package:yempover_app/services/profile_service.dart';
 import 'package:yempover_app/services/profile_session_manager.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/loading_overlay.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:yempover_app/widgets/app_text_field.dart';
@@ -321,7 +322,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
+            content: Text(ErrorMessageUtils.sanitize(e)),
             backgroundColor: Colors.red,
           ),
         );

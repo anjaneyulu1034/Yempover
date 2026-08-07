@@ -12,6 +12,7 @@ import '../services/add_post_service.dart';
 import '../services/category_service.dart';
 import '../services/location_service.dart';
 import '../services/my_posts_service.dart';
+import '../utils/error_message_utils.dart';
 import '../utils/validators.dart';
 
 class EditProductScreen extends StatefulWidget {
@@ -283,7 +284,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       if (!mounted) return;
       setState(() {
         _isLoadingCategories = false;
-        _categoryLoadError = e.toString().replaceAll('Exception: ', '');
+        _categoryLoadError = ErrorMessageUtils.sanitize(e);
       });
     }
   }
@@ -776,12 +777,20 @@ class _EditProductScreenState extends State<EditProductScreen> {
       if (!mounted) return;
 
       final raw = e.toString().toLowerCase();
-      String message = 'Unable to save changes right now. Please try again.';
+      String message;
       if (raw.contains('please add at least one image') ||
           raw.contains('at least one image')) {
         message = 'Please add at least one image to continue.';
       } else if (raw.contains('maximum 5 images')) {
         message = 'You can upload a maximum of 5 images.';
+      } else {
+        // Surface the real reason (validation error, session expiry, network
+        // issue, etc.) instead of always showing the same generic message
+        // no matter what actually went wrong.
+        message = ErrorMessageUtils.sanitize(
+          e,
+          fallback: 'Unable to save changes right now. Please try again.',
+        );
       }
 
       ScaffoldMessenger.of(context).showSnackBar(

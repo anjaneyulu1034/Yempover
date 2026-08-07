@@ -11,6 +11,7 @@ import 'package:yempover_app/screens/service/ServiceAvailabilityScreen.dart';
 import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/services/location_service.dart';
 import 'package:yempover_app/services/service_booking_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:yempover_app/utils/validators.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
@@ -380,7 +381,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
     } catch (e) {
       setState(() {
         _isLoadingCategories = false;
-        _categoryError = e.toString().replaceAll('Exception: ', '');
+        _categoryError = ErrorMessageUtils.sanitize(e);
       });
       _showErrorSnackBar('Failed to load categories: ${e.toString()}');
     }

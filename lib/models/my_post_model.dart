@@ -187,7 +187,13 @@ class MyPost {
   bool get isForSale => status == 'FOR_SALE';
   bool get isProvidingService => status == 'PROVIDE_SERVICE';
   bool get isOpenForBarter => barterStatus == 'OPEN_FOR_BARTER';
-  bool get isSold => status == 'SOLD';
+  // A trade can complete on either side of a deal: the listing itself is
+  // marked SOLD, while the item the other party bartered in exchange for it
+  // is marked BARTERED (services use COMPLETED instead). All three mean this
+  // listing is done and should read as "sold" everywhere in the UI — not
+  // just the SOLD side of the trade.
+  bool get isSold =>
+      status == 'SOLD' || status == 'BARTERED' || status == 'COMPLETED';
   bool get hasAcceptedOffer =>
       openOffersCount > 0; // Adjust based on actual logic
 
