@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:yempover_app/utils/notification_provider.dart';
+import 'package:yempover_app/utils/chat_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
@@ -347,6 +348,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
         if (mounted) {
           Provider.of<NotificationProvider>(context, listen: false).reset();
+          Provider.of<ChatProvider>(context, listen: false).reset();
         }
         ProfileSessionManager.instance.clearSession();
       }
@@ -376,6 +378,10 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!_isGuestUser)
           _loadUnreadNotificationCount().catchError((e) {
             debugPrint('🔴 Notification error: $e');
+          }),
+        if (!_isGuestUser)
+          _loadChatUnreadCount().catchError((e) {
+            debugPrint('🔴 Chat unread count error: $e');
           }),
         _loadFilterCategories().catchError((e) {
           debugPrint('🔴 Filter category error: $e');
@@ -532,6 +538,15 @@ class _HomeScreenState extends State<HomeScreen> {
       await provider.loadUnreadCount();
     } catch (e) {
       debugPrint('🔴 Error loading unread count: $e');
+    }
+  }
+
+  Future<void> _loadChatUnreadCount() async {
+    try {
+      final provider = Provider.of<ChatProvider>(context, listen: false);
+      await provider.loadUnreadCount();
+    } catch (e) {
+      debugPrint('🔴 Error loading chat unread count: $e');
     }
   }
 
@@ -1593,7 +1608,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const TradeChatScreen()),
-    );
+    ).then((_) => _loadChatUnreadCount());
   }
 
   void _navigateToTradeBooth() async {
@@ -2736,7 +2751,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   _navItem(Icons.home_filled, 'Marketplace', true),
                   const SizedBox(width: 40),
-                  Consumer<NotificationProvider>(
+                  Consumer<ChatProvider>(
                     builder: (context, provider, child) {
                       final badgeCount = _isGuestUser ? 0 : provider.unreadCount;
                       return _navItem(

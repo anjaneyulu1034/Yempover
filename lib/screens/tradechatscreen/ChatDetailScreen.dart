@@ -114,6 +114,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     super.initState();
     _currentChat = widget.chat;
     _messages = List.from(_currentChat.messages);
+    if (_currentChat.otherUserOnline != null) {
+      _isOtherUserOnline = _currentChat.otherUserOnline!;
+    }
     Future.microtask(_refreshChat);
     _scrollToBottom();
     _initializeSocketListeners();
@@ -301,7 +304,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
   }
 
-  void _handleOfferAccepted(dynamic data) {
+  Future<void> _handleOfferAccepted(dynamic data) async {
     if (!mounted) return;
 
     try {
@@ -310,6 +313,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       final offerData = data['offer'];
 
       if (chatId != _currentChat.id) return;
+
+      // The room broadcast this came from also reaches the sender's own
+      // socket — if this offer is already marked ACCEPTED, it's the echo of
+      // an accept this client just performed and applied optimistically.
+      // Skip it to avoid a duplicate system message and success toast.
+      final existingIndex = _currentChat.offers.indexWhere(
+        (o) => o.id == offerId,
+      );
+      if (existingIndex != -1 &&
+          _currentChat.offers[existingIndex].offerStatus ==
+              OfferStatus.ACCEPTED) {
+        return;
+      }
 
       setState(() {
         // Update the offer in the list
@@ -340,55 +356,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 );
           _currentChat.offers[index] = updatedOffer;
         }
-
-        // Add system message
-        final systemMessage = ChatMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          tradeChatId: _currentChat.id,
-          sentById: 'system',
-          messageText: 'Offer accepted',
-          messageType: MessageType.SYSTEM,
-          isRead: true,
-          createdAt: DateTime.now(),
-          offerId: offerId,
-        );
-
-        _messages.add(systemMessage);
-        _currentChat = TradeChat(
-          id: _currentChat.id,
-          initiatorId: _currentChat.initiatorId,
-          responderId: _currentChat.responderId,
-          productId: _currentChat.productId,
-          serviceId: _currentChat.serviceId,
-          status: _currentChat.status,
-          lastMessageAt: _currentChat.lastMessageAt,
-          createdAt: _currentChat.createdAt,
-          updatedAt: DateTime.now(),
-          initiator: _currentChat.initiator,
-          responder: _currentChat.responder,
-          product: _currentChat.product,
-          service: _currentChat.service,
-          messages: _messages,
-          offers: _currentChat.offers,
-        );
       });
+
+      // The real "Offer accepted" system message is persisted server-side —
+      // refresh to pick it up instead of fabricating a local one that could
+      // drift from (or duplicate) what's actually in the chat's history.
+      await _refreshChat();
 
       _scrollToBottom();
       widget.onChatUpdated(_currentChat);
 
       // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Offer accepted successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Offer accepted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
       print('Error handling offer accepted: $e');
     }
   }
 
-  void _handleOfferRejected(dynamic data) {
+  Future<void> _handleOfferRejected(dynamic data) async {
     if (!mounted) return;
 
     try {
@@ -397,6 +389,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       final offerData = data['offer'];
 
       if (chatId != _currentChat.id) return;
+
+      // Same self-echo case as accept: skip if this offer is already marked
+      // REJECTED locally, since that means this client just rejected it
+      // itself and already applied the update optimistically.
+      final existingIndex = _currentChat.offers.indexWhere(
+        (o) => o.id == offerId,
+      );
+      if (existingIndex != -1 &&
+          _currentChat.offers[existingIndex].offerStatus ==
+              OfferStatus.REJECTED) {
+        return;
+      }
 
       setState(() {
         // Update the offer in the list
@@ -427,21 +431,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 );
           _currentChat.offers[index] = updatedOffer;
         }
-
-        // Add system message
-        final systemMessage = ChatMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          tradeChatId: _currentChat.id,
-          sentById: 'system',
-          messageText: 'Offer rejected',
-          messageType: MessageType.SYSTEM,
-          isRead: true,
-          createdAt: DateTime.now(),
-          offerId: offerId,
-        );
-
-        _messages.add(systemMessage);
       });
+
+      // The real "Offer rejected" system message is persisted server-side —
+      // refresh to pick it up instead of fabricating a local one.
+      await _refreshChat();
 
       _scrollToBottom();
       widget.onChatUpdated(_currentChat);
@@ -450,7 +444,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
   }
 
-  void _handleOfferCreated(dynamic data) {
+  Future<void> _handleOfferCreated(dynamic data) async {
     if (!mounted) return;
 
     try {
@@ -461,27 +455,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
       final newOffer = TradeOffer.fromJson(offer);
 
+      // The room broadcast this came from also reaches the sender's own
+      // socket — if this offer is already in the list, it's the echo of an
+      // offer this client just created and added optimistically. Skip it to
+      // avoid adding the same offer/system message a second time.
+      if (_currentChat.offers.any((o) => o.id == newOffer.id)) {
+        return;
+      }
+
       setState(() {
         _currentChat.offers.add(newOffer);
-
-        final systemMessage = ChatMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          tradeChatId: _currentChat.id,
-          sentById: 'system',
-          messageText: newOffer.isPriceOffer
-              ? 'Price offer created: ${CoinFormat.amount(newOffer.price)} coins'
-              : newOffer.isBothOffer && (newOffer.price ?? 0) > 0
-              ? 'Barter offer created: ${newOffer.barterItemTitle} '
-                    '+ ${CoinFormat.amount(newOffer.price)} coins'
-              : 'Barter offer created: ${newOffer.barterItemTitle}',
-          messageType: MessageType.SYSTEM,
-          isRead: true,
-          createdAt: DateTime.now(),
-          offerId: newOffer.id,
-        );
-
-        _messages.add(systemMessage);
       });
+
+      // The real "Offer sent"/"Counter offer sent" system message is
+      // persisted server-side — refresh to pick it up.
+      await _refreshChat();
 
       _scrollToBottom();
       widget.onChatUpdated(_currentChat);
@@ -498,6 +486,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       final offerId = data['offerId'];
 
       if (chatId != _currentChat.id) return;
+
+      // Same self-echo case as accept/reject: skip if this offer is already
+      // marked WITHDRAWN locally, since that means this client just
+      // withdrew it itself and already applied the update optimistically.
+      final existingIndex = _currentChat.offers.indexWhere(
+        (o) => o.id == offerId,
+      );
+      if (existingIndex != -1 &&
+          _currentChat.offers[existingIndex].offerStatus ==
+              OfferStatus.WITHDRAWN) {
+        return;
+      }
 
       setState(() {
         final index = _currentChat.offers.indexWhere((o) => o.id == offerId);
@@ -836,6 +836,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       setState(() {
         _currentChat = updatedChat;
         _messages = List.from(updatedChat.messages);
+        if (updatedChat.otherUserOnline != null) {
+          _isOtherUserOnline = updatedChat.otherUserOnline!;
+        }
       });
       _scrollToBottom();
     } catch (e) {
@@ -934,44 +937,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       // Emit socket event
       _socketService.emitOfferAccepted(_currentChat.id, offer.id);
 
-      // Add system message
-      final systemMessage = ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        tradeChatId: _currentChat.id,
-        sentById: 'system',
-        messageText: 'Offer accepted',
-        messageType: MessageType.SYSTEM,
-        isRead: true,
-        createdAt: DateTime.now(),
-        offerId: acceptedOffer.id,
-      );
-
       setState(() {
         final index = _currentChat.offers.indexWhere((o) => o.id == offer.id);
         if (index != -1) {
           _currentChat.offers[index] = acceptedOffer;
         }
-        _messages.add(systemMessage);
-        _currentChat = TradeChat(
-          id: _currentChat.id,
-          initiatorId: _currentChat.initiatorId,
-          responderId: _currentChat.responderId,
-          productId: _currentChat.productId,
-          serviceId: _currentChat.serviceId,
-          status: _currentChat.status,
-          lastMessageAt: _currentChat.lastMessageAt,
-          createdAt: _currentChat.createdAt,
-          updatedAt: DateTime.now(),
-          initiator: _currentChat.initiator,
-          responder: _currentChat.responder,
-          product: _currentChat.product,
-          service: _currentChat.service,
-          messages: _messages,
-          offers: _currentChat.offers,
-        );
       });
 
-      // Refresh entire chat to get latest state
+      // Refresh entire chat to get latest state, including the real
+      // "Offer accepted" system message persisted server-side.
       await _refreshChat();
 
       _scrollToBottom();
@@ -1022,27 +996,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       // Emit socket event
       _socketService.emitOfferRejected(_currentChat.id, offer.id);
 
-      // Add system message
-      final systemMessage = ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        tradeChatId: _currentChat.id,
-        sentById: 'system',
-        messageText: 'Offer rejected',
-        messageType: MessageType.SYSTEM,
-        isRead: true,
-        createdAt: DateTime.now(),
-        offerId: rejectedOffer.id,
-      );
-
       setState(() {
         final index = _currentChat.offers.indexWhere((o) => o.id == offer.id);
         if (index != -1) {
           _currentChat.offers[index] = rejectedOffer;
         }
-        _messages.add(systemMessage);
       });
 
-      // Refresh entire chat to get latest state
+      // Refresh entire chat to get latest state, including the real
+      // "Offer rejected" system message persisted server-side.
       await _refreshChat();
 
       _scrollToBottom();
@@ -1667,8 +1629,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   }
 
   Future<void> _showCounterPriceOfferDialog(TradeOffer originalOffer) async {
+    // Coins are whole numbers (see allowDecimal: false below), so the
+    // starting text must be too — a leftover ".00" from toStringAsFixed(2)
+    // makes every edit fail the digits-only formatter and silently revert,
+    // which looks like the field can't be edited at all.
     final priceController = TextEditingController(
-      text: originalOffer.price?.toStringAsFixed(2) ?? '',
+      text: originalOffer.price != null && originalOffer.price! > 0
+          ? (originalOffer.price == originalOffer.price!.roundToDouble()
+                ? originalOffer.price!.toInt().toString()
+                : originalOffer.price!.toStringAsFixed(2))
+          : '',
     );
     String? dialogError;
 
@@ -2115,24 +2085,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
       setState(() {
         _currentChat.offers.add(counterOffer);
-        _messages.add(
-          ChatMessage(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            tradeChatId: _currentChat.id,
-            sentById: 'system',
-            messageText: offerType == 'PRICE'
-                ? 'Counter offer sent: ${CoinFormat.amount(price)} coins'
-                : offerType == 'BOTH'
-                ? 'Counter offer sent: ${barterItemTitle ?? 'Barter item'} + '
-                      '${CoinFormat.amount(price)} coins'
-                : 'Counter offer sent: ${barterItemTitle ?? 'Barter item'}',
-            messageType: MessageType.SYSTEM,
-            isRead: true,
-            createdAt: DateTime.now(),
-            offerId: counterOffer.id,
-          ),
-        );
       });
+
+      // Picks up the real "Counter offer sent" system message persisted
+      // server-side.
+      await _refreshChat();
 
       _scrollToBottom();
       widget.onChatUpdated(_currentChat);
@@ -2176,21 +2133,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       // Emit socket event
       _socketService.emitOfferCreated(_currentChat.id, offer.toJson());
 
-      final systemMessage = ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        tradeChatId: _currentChat.id,
-        sentById: 'system',
-        messageText:
-            'Price offer created: ${CoinFormat.amount(price)} coins',
-        messageType: MessageType.SYSTEM,
-        isRead: true,
-        createdAt: DateTime.now(),
-        offerId: offer.id,
-      );
-
       setState(() {
         _currentChat.offers.add(offer);
-        _messages.add(systemMessage);
+      });
+
+      // Picks up the real "Offer sent" system message persisted server-side.
+      await _refreshChat();
+
+      setState(() {
         _isLoading = false;
       });
 
@@ -2229,20 +2179,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       // Emit socket event
       _socketService.emitOfferCreated(_currentChat.id, offer.toJson());
 
-      final systemMessage = ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        tradeChatId: _currentChat.id,
-        sentById: 'system',
-        messageText: 'Barter offer created: $title',
-        messageType: MessageType.SYSTEM,
-        isRead: true,
-        createdAt: DateTime.now(),
-        offerId: offer.id,
-      );
-
       setState(() {
         _currentChat.offers.add(offer);
-        _messages.add(systemMessage);
+      });
+
+      // Picks up the real "Offer sent" system message persisted server-side.
+      await _refreshChat();
+
+      setState(() {
         _isLoading = false;
       });
 
@@ -2283,21 +2227,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       // Emit socket event
       _socketService.emitOfferCreated(_currentChat.id, offer.toJson());
 
-      final systemMessage = ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        tradeChatId: _currentChat.id,
-        sentById: 'system',
-        messageText:
-            'Barter + Coins offer created: $title + ${CoinFormat.amount(price)} coins',
-        messageType: MessageType.SYSTEM,
-        isRead: true,
-        createdAt: DateTime.now(),
-        offerId: offer.id,
-      );
-
       setState(() {
         _currentChat.offers.add(offer);
-        _messages.add(systemMessage);
+      });
+
+      // Picks up the real "Offer sent" system message persisted server-side.
+      await _refreshChat();
+
+      setState(() {
         _isLoading = false;
       });
 
@@ -2555,6 +2492,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         }
       }
 
+      // markDealCompleted already re-fetches the full chat server-side, so
+      // updatedChat.messages carries the real, persisted system message for
+      // whichever outcome happened (fully completed, or waiting on the
+      // other party) — sync from it instead of fabricating local text.
       final updatedChat = await _chatService.markDealCompleted(
         chatId: _currentChat.id,
         remarks: result['remarks'] ?? 'accepted',
@@ -2562,11 +2503,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
       setState(() {
         _currentChat = updatedChat;
-        _appendSystemMessageIfNotDuplicate(
-          updatedChat.isCompleted
-              ? 'Deal completed successfully'
-              : 'Completion consent sent. Waiting for other user.',
-        );
+        _messages = List.from(updatedChat.messages);
         _isLoading = false;
       });
 
@@ -2591,19 +2528,104 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
   }
 
-  // No confirmation dialog by design — either side can call off a trade
-  // that fell through, and this should revert the post immediately.
+  /// Prompts for why the deal fell through. Returns the trimmed reason, or
+  /// null if the user backed out without submitting one.
+  Future<String?> _showDealNotCompletedReasonDialog() async {
+    final reasonController = TextEditingController();
+    String? dialogError;
+
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Deal Not Completed'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Let the other person know why this deal fell through. '
+                  'The item goes back on the marketplace immediately.',
+                  style: TextStyle(fontSize: 13, color: Colors.black54),
+                ),
+                const SizedBox(height: 12),
+                if (dialogError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      dialogError!,
+                      style: const TextStyle(color: Colors.red, fontSize: 13),
+                    ),
+                  ),
+                TextField(
+                  controller: reasonController,
+                  autofocus: true,
+                  maxLines: 3,
+                  maxLength: 300,
+                  onChanged: (_) {
+                    if (dialogError != null) {
+                      setDialogState(() => dialogError = null);
+                    }
+                  },
+                  decoration: const InputDecoration(
+                    labelText: 'Reason',
+                    hintText: 'e.g. Buyer did not show up, item condition '
+                        'mismatch...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Back'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                ),
+                onPressed: () {
+                  final reason = reasonController.text.trim();
+                  if (reason.isEmpty) {
+                    setDialogState(
+                      () => dialogError = 'Please enter a reason',
+                    );
+                    return;
+                  }
+                  Navigator.pop(dialogContext, reason);
+                },
+                child: const Text('Submit'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _markDealNotCompleted() async {
+    final reason = await _showDealNotCompletedReasonDialog();
+    if (reason == null) return;
+
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final updatedChat = await _chatService.cancelTrade(_currentChat.id);
+      // cancelTrade already re-fetches the full chat server-side, so
+      // updatedChat.messages carries the real, persisted "Deal marked as
+      // not completed: <reason>" system message — sync from it instead of
+      // fabricating local text.
+      final updatedChat = await _chatService.cancelTrade(
+        _currentChat.id,
+        reason: reason,
+      );
 
       setState(() {
         _currentChat = updatedChat;
-        _appendSystemMessageIfNotDuplicate('Deal marked as not completed');
+        _messages = List.from(updatedChat.messages);
         _isLoading = false;
       });
 
@@ -2794,14 +2816,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
+  // This screen calls _scrollToBottom() from ~20 places (initial load,
+  // refresh, every socket event, sending a message, ...), often within
+  // milliseconds of each other — e.g. initState's call and _refreshChat's
+  // call race on every single open. An animateTo() gets interrupted by the
+  // next call before it finishes, so the scroll position settles wherever
+  // the last interruption happened instead of the true bottom, which is
+  // why the chat was opening on old messages instead of the latest one.
+  // jumpTo() has no animation to interrupt, so every call is idempotent —
+  // it always lands exactly on the current bottom.
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
       }
     });
   }
@@ -2891,6 +2918,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       ),
     );
   }
+
+  /// Messages should render oldest-first regardless of the order they
+  /// landed in [_messages]. Offer-related system messages are fabricated
+  /// locally the moment each client processes an offer event (create,
+  /// counter, accept, reject, withdraw) rather than being persisted and
+  /// fetched in order, so a socket event that arrives late (reconnect,
+  /// brief lag, screen just opened) lands at the end of the list even
+  /// though it happened earlier. Sorting by createdAt at render time fixes
+  /// the display regardless of arrival order.
+  List<ChatMessage> get _sortedMessages =>
+      List<ChatMessage>.from(_messages)
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
   Widget _buildMessageBubble(ChatMessage message) {
     final isCurrentUser = _isMessageFromCurrentUser(message);
@@ -3703,6 +3742,52 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
+  /// The offer these two banners would each show, used only to order the
+  /// banners themselves — mirrors the "latest" selection each builder does
+  /// internally so the two stay consistent with what's actually displayed.
+  TradeOffer? get _latestIncomingOfferForBanner {
+    final visibleOffers = _currentChat.offers
+        .where((offer) => !offer.isWithdrawn)
+        .toList();
+    if (visibleOffers.isEmpty) return null;
+    visibleOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final latest = visibleOffers.last;
+    return latest.madeById != widget.currentUserId ? latest : null;
+  }
+
+  TradeOffer? get _latestMyOfferForBanner {
+    final myOffers = _currentChat.offers
+        .where(
+          (offer) =>
+              offer.madeById == widget.currentUserId && !offer.isWithdrawn,
+        )
+        .toList();
+    if (myOffers.isEmpty) return null;
+    myOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return myOffers.last;
+  }
+
+  /// The incoming-offer and my-offer banners are otherwise independent
+  /// widgets, each always rendered incoming-first — so whichever offer is
+  /// actually more recent could end up on top instead of at the bottom
+  /// nearest the latest activity. Order them by their offer's createdAt so
+  /// the newer one is always the one closer to the message list, matching
+  /// _sortedMessages' oldest-top/newest-bottom ordering below.
+  List<Widget> _buildOfferBannersInOrder() {
+    final incomingOffer = _latestIncomingOfferForBanner;
+    final myOffer = _latestMyOfferForBanner;
+    final incomingBanner = _buildOfferBanner();
+    final myBanner = _buildMyOfferBanner();
+
+    if (incomingOffer != null &&
+        myOffer != null &&
+        myOffer.createdAt.isBefore(incomingOffer.createdAt)) {
+      return [myBanner, incomingBanner];
+    }
+
+    return [incomingBanner, myBanner];
+  }
+
   Widget _buildOfferBanner() {
     if (_currentChat.offers.isEmpty) return const SizedBox();
 
@@ -4245,9 +4330,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 children: [
                   Text(otherUser.firstName),
                   Text(
-                    (_currentChat.isActive && _isOtherUserOnline)
-                        ? 'Active'
-                        : 'Inactive',
+                    // Presence-only: whether this deal/chat is still open is a
+                    // separate concept (shown elsewhere) and must not make an
+                    // actually-online user read as "Inactive" here.
+                    _isOtherUserOnline ? 'Active' : 'Inactive',
                     style: const TextStyle(fontSize: 12),
                   ),
                 ],
@@ -4281,10 +4367,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                             vertical: 8,
                           ),
                           children: [
-                            _buildOfferBanner(),
-                            _buildMyOfferBanner(),
+                            ..._buildOfferBannersInOrder(),
                             _buildDealCompletionBanner(),
-                            ..._messages.map((msg) => _buildMessageBubble(msg)),
+                            ..._sortedMessages.map(_buildMessageBubble),
                           ],
                         ),
                       ),

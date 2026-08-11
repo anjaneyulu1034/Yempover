@@ -2,10 +2,12 @@ import 'package:yempover_app/screens/Home_screen.dart';
 import 'package:yempover_app/services/socket_io/socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/utils/chat_provider.dart';
 import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/error_widget.dart';
 import 'package:yempover_app/utils/loading_widget.dart';
@@ -30,6 +32,10 @@ class _TradeChatScreenState extends State<TradeChatScreen>
   List<String> _userProducts = [];
   final Map<String, String> _lastMessagePreviewCache = {};
   final Set<String> _previewFetchInProgress = {};
+  // Live "is this user online right now" map, keyed by userId — the single
+  // source of truth for the green dot, kept in sync with ChatDetailScreen's
+  // own presence tracking via the same socket event.
+  final Map<String, bool> _onlineStatusByUserId = {};
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -70,6 +76,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     _socketService.off('offer_created', _handleOfferCreated);
     _socketService.off('deal_completed', _handleChatStatusChanged);
     _socketService.off('deal_cancelled', _handleChatStatusChanged);
+    _socketService.off('user_presence', _handleUserPresence);
 
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
@@ -138,6 +145,39 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     _socketService.on('offer_created', _handleOfferCreated);
     _socketService.on('deal_completed', _handleChatStatusChanged);
     _socketService.on('deal_cancelled', _handleChatStatusChanged);
+    _socketService.on('user_presence', _handleUserPresence);
+  }
+
+  // Same event ChatDetailScreen listens to — keeps the list's green dot and
+  // the open chat's "Active"/"Inactive" label driven by one real signal
+  // instead of two different, inconsistent ones.
+  void _handleUserPresence(dynamic data) {
+    if (!mounted || data == null) return;
+    try {
+      final userId = data['userId']?.toString();
+      if (userId == null || userId.isEmpty) return;
+      final isOnline = data['isOnline'] == true;
+      setState(() {
+        _onlineStatusByUserId[userId] = isOnline;
+      });
+    } catch (e) {
+      debugPrint('Error handling user presence in chat list: $e');
+    }
+  }
+
+  // Seeds the live presence map from each chat's REST-provided snapshot, so
+  // the dot is accurate immediately on load instead of waiting for a
+  // connect/disconnect event to happen to fire after this screen mounts.
+  void _seedOnlineStatusFromChats(List<TradeChat> chats) {
+    if (_currentUserId == null) return;
+    final updates = <String, bool>{};
+    for (final chat in chats) {
+      final otherUser = chat.getOtherUserInfo(_currentUserId!);
+      if (otherUser.id.isEmpty || chat.otherUserOnline == null) continue;
+      updates[otherUser.id] = chat.otherUserOnline!;
+    }
+    if (updates.isEmpty) return;
+    setState(() => _onlineStatusByUserId.addAll(updates));
   }
 
   void _handleChatUpdated(dynamic data) {
@@ -182,9 +222,17 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       final chatId = data?['chatId']?.toString();
       if (chatId == null || chatId.isEmpty) return;
       _refreshSingleChat(chatId);
+      _refreshGlobalUnreadCount();
     } catch (e) {
       debugPrint('Error handling new message in list screen: $e');
     }
+  }
+
+  // Keeps the bottom-nav Chat badge in sync with this screen's own view of
+  // unread messages, without this screen owning that global count itself.
+  void _refreshGlobalUnreadCount() {
+    if (!mounted) return;
+    Provider.of<ChatProvider>(context, listen: false).loadUnreadCount();
   }
 
   void _joinLoadedChatRooms(List<TradeChat> chats) {
@@ -253,6 +301,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       }
     });
 
+    _seedOnlineStatusFromChats([updatedChat]);
     _hydrateMessagePreviews([updatedChat]);
   }
 
@@ -455,6 +504,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       });
 
       _joinLoadedChatRooms(visibleChats);
+      _seedOnlineStatusFromChats(visibleChats);
       _hydrateMessagePreviews(visibleChats);
     } catch (e) {
       debugPrint('❌ TradeChatScreen: Error loading all chats: $e');
@@ -515,6 +565,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       });
 
       _joinLoadedChatRooms(visibleChats);
+      _seedOnlineStatusFromChats(visibleChats);
       _hydrateMessagePreviews(visibleChats);
     } catch (e) {
       debugPrint('❌ TradeChatScreen: Error loading inbox chats: $e');
@@ -569,6 +620,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       });
 
       _joinLoadedChatRooms(visibleChats);
+      _seedOnlineStatusFromChats(visibleChats);
       _hydrateMessagePreviews(visibleChats);
     } catch (e) {
       debugPrint('❌ TradeChatScreen: Error loading outbox chats: $e');
@@ -710,7 +762,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
           onChatUpdated: _updateChat,
         ),
       ),
-    );
+    ).then((_) => _refreshGlobalUnreadCount());
   }
 
   void _updateChat(TradeChat updatedChat) {
@@ -736,9 +788,8 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     }
 
     final otherUser = chat.getOtherUserInfo(_currentUserId!);
-    final unreadCount = chat.messages
-        .where((msg) => !msg.isRead && msg.sentById != _currentUserId)
-        .length;
+    final unreadCount = chat.getUnreadCount(_currentUserId!);
+    final isOtherUserOnline = _onlineStatusByUserId[otherUser.id] ?? false;
 
     return InkWell(
       onTap: () => _openChatDetail(chat),
@@ -769,7 +820,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
                       ? Text(otherUser.firstName[0].toUpperCase())
                       : null,
                 ),
-                if (chat.isActive)
+                if (isOtherUserOnline)
                   Positioned(
                     right: 0,
                     bottom: 0,

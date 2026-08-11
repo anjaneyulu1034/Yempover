@@ -567,6 +567,12 @@ class TradeChat {
   final DealCompletionInfo? dealCompletion;
   final List<ChatMessage> messages;
   final List<TradeOffer> offers;
+  // Server-computed snapshot as of this fetch: whether the other party is
+  // currently connected, and how many of their messages are unread. Null
+  // when the backend response didn't include them (older cached data) —
+  // callers should treat null as "unknown", not "offline"/"zero".
+  final bool? otherUserOnline;
+  final int? unreadCount;
 
   TradeChat({
     required this.id,
@@ -585,6 +591,8 @@ class TradeChat {
     this.dealCompletion,
     required this.messages,
     required this.offers,
+    this.otherUserOnline,
+    this.unreadCount,
   });
 
   factory TradeChat.fromJson(Map<String, dynamic> json) {
@@ -621,6 +629,10 @@ class TradeChat {
       offers: (json['offers'] as List? ?? [])
           .map((offer) => TradeOffer.fromJson(offer))
           .toList(),
+      otherUserOnline: json['otherUserOnline'] as bool?,
+      unreadCount: json['unreadCount'] is int
+          ? json['unreadCount'] as int
+          : int.tryParse('${json['unreadCount'] ?? ''}'),
     );
   }
 
@@ -717,8 +729,11 @@ class TradeChat {
     return currentUserId == responderId;
   }
 
-  // Get unread count for a user
+  // Get unread count for a user. Prefers the server-computed snapshot
+  // (accurate even when `messages` wasn't hydrated on this fetch); falls
+  // back to counting locally-loaded messages when the server didn't send one.
   int getUnreadCount(String userId) {
+    if (unreadCount != null) return unreadCount!;
     return messages
         .where((msg) => !msg.isRead && msg.sentById != userId)
         .length;

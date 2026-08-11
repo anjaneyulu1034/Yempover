@@ -73,6 +73,8 @@ class ApiConstants {
   // Inbox/Outbox endpoints
   static const String tradeChatInbox = '$baseUrl/trade-chat/inbox';
   static const String tradeChatOutbox = '$baseUrl/trade-chat/outbox';
+  static const String tradeChatUnreadCount =
+      '$baseUrl/trade-chat/unread-count';
 
   // Offer actions - FIXED ENDPOINTS
   static String acceptOffer(String chatId, String offerId) =>

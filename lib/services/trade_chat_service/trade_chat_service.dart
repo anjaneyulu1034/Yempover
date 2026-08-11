@@ -535,14 +535,20 @@ class TradeChatService {
   }
 
   // 14. Cancel a trade
-  Future<TradeChat> cancelTrade(String chatId) async {
+  Future<TradeChat> cancelTrade(String chatId, {String? reason}) async {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse(ApiConstants.tradeChatCancel(chatId));
+      final body = json.encode({'reason': reason ?? ''});
 
       print('📤 Cancelling trade - URL: $url');
+      print('📤 Body: $body');
 
-      final response = await _client.patch(url, headers: headers);
+      final response = await _client.patch(
+        url,
+        headers: headers,
+        body: body,
+      );
 
       print('📥 Response status: ${response.statusCode}');
       print('📥 Response body: ${response.body}');
@@ -934,6 +940,27 @@ class TradeChatService {
       }
     } catch (e) {
       print('❌ Error blocking user: $e');
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
+  // Total unread trade-chat messages across all of the user's chats — for a
+  // persistent badge (nav bar, profile icon), not tied to any one loaded page.
+  Future<int> getUnreadMessageCount() async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatUnreadCount);
+
+      final response = await _client.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        return (jsonResponse['data']?['unreadCount'] as num?)?.toInt() ?? 0;
+      } else {
+        throw await ErrorHandler.handleHttpError(response);
+      }
+    } catch (e) {
+      print('❌ Error getting trade-chat unread count: $e');
       throw ErrorHandler.handleError(e);
     }
   }

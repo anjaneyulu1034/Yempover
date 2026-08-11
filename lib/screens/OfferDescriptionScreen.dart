@@ -57,11 +57,14 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   void initState() {
     super.initState();
 
+    // Only pre-fill from a quote already entered on the previous screen
+    // (the "Both" barter + price flow). Don't default to the listing's
+    // price here — that's not an offer, it's just paying full price, and
+    // it's too easy to submit without noticing. The user should always
+    // type the amount they actually want to offer.
     final initialQuotedPrice = widget.initialQuotedPrice?.trim() ?? '';
     if (initialQuotedPrice.isNotEmpty) {
       _priceController.text = initialQuotedPrice;
-    } else if (widget.post.price > 0) {
-      _priceController.text = widget.post.price.toStringAsFixed(2);
     }
   }
 
@@ -403,12 +406,8 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
       return 'Description must contain text';
     }
 
-    if (RegExp(r'\d').hasMatch(trimmed)) {
-      return 'Description cannot contain numbers';
-    }
-
-    if (!RegExp(r"^[A-Za-z\s.,!?()'\-]+$").hasMatch(trimmed)) {
-      return 'Use only letters';
+    if (!RegExp(r"^[A-Za-z0-9\s.,!?()'\-]+$").hasMatch(trimmed)) {
+      return 'Use only letters, numbers, and basic punctuation';
     }
 
     if (trimmed.length < 3) {

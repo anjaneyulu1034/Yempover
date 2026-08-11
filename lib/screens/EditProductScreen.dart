@@ -445,7 +445,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
           );
           if (fraction > 0) {
             date = date.add(
-              Duration(seconds: (fraction * 30 * Duration.secondsPerDay).round()),
+              Duration(
+                seconds: (fraction * 30 * Duration.secondsPerDay).round(),
+              ),
             );
           }
           return date;
@@ -464,7 +466,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
           );
           if (fraction > 0) {
             date = date.add(
-              Duration(seconds: (fraction * 365 * Duration.secondsPerDay).round()),
+              Duration(
+                seconds: (fraction * 365 * Duration.secondsPerDay).round(),
+              ),
             );
           }
           return date;
@@ -502,7 +506,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
     final maxExpiryValue = _maxExpiryValueFor(_selectedExpiryUnit);
     if (value > maxExpiryValue) {
-      final message = '$_selectedExpiryUnit must be between 1 and $maxExpiryValue';
+      final message =
+          '$_selectedExpiryUnit must be between 1 and $maxExpiryValue';
       setState(() {
         _expiryValidationError = message;
       });
