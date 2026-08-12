@@ -14,6 +14,7 @@ import 'package:yempover_app/utils/loading_widget.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:yempover_app/utils/wallet_offer_guard.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/exchange_mode_sheet.dart';
 import 'package:yempover_app/widgets/safe_network_image.dart';
 import 'package:yempover_app/widgets/app_text_field.dart';
 
@@ -268,15 +269,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       return;
     }
 
-    final selectedOption = await _showExchangeModeSheet(options);
+    final selectedOption = await showExchangeModeSheet(context, options);
     if (!mounted || selectedOption == null) return;
 
     if (selectedOption.isCrossMode) {
-      final confirmed = await _confirmCrossModeOption(selectedOption);
+      final confirmed = await confirmCrossModeOption(context, selectedOption);
       if (!mounted || confirmed != true) return;
     }
 
-    final offerMode = _mapOfferTypeToSubmissionMode(selectedOption.offerType);
+    final offerMode = mapOfferTypeToSubmissionMode(selectedOption.offerType);
 
     if (!selectedOption.requiresProductSelection) {
       final hasEnoughBalance = await _ensureSufficientWalletBalance();
@@ -316,119 +317,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       context,
       requiredCoins: required,
       itemName: _post.title,
-    );
-  }
-
-  OfferSubmissionMode _mapOfferTypeToSubmissionMode(String offerType) {
-    switch (offerType) {
-      case 'BARTER':
-        return OfferSubmissionMode.barter;
-      case 'BOTH':
-        return OfferSubmissionMode.both;
-      default:
-        return OfferSubmissionMode.price;
-    }
-  }
-
-  // "This product is for pure price, but you can request a barter.
-  // Continue?" — shown before proceeding with a cross-mode option.
-  Future<bool?> _confirmCrossModeOption(ExchangeModeOption option) {
-    return showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(option.label),
-        content: Text(option.note),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<ExchangeModeOption?> _showExchangeModeSheet(
-    ExchangeModeOptions options,
-  ) async {
-    return showModalBottomSheet<ExchangeModeOption>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'How do you want to exchange?',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              if (options.listingPrice != null && options.listingPrice! > 0) ...[
-                const SizedBox(height: 4),
-                Text(
-                  'Listed at \$${options.listingPrice!.toStringAsFixed(2)}',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                ),
-              ],
-              const SizedBox(height: 14),
-              ...options.options.map(_buildExchangeModeCard),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExchangeModeCard(ExchangeModeOption option) {
-    final isBarterFlavored =
-        option.mode == 'PURE_BARTER' || option.mode == 'SERVICE_FOR_BARTER';
-
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: isBarterFlavored
-          ? const Icon(Icons.swap_horiz, color: Colors.orange, size: 32)
-          : const CoinIcon(size: 32, iconSize: 20),
-      title: Row(
-        children: [
-          Flexible(
-            child: Text(
-              option.label,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          if (option.isCrossMode) ...[
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                'Request',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.blue.shade700,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-      subtitle: Text(
-        option.note,
-        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-      ),
-      onTap: () => Navigator.pop(context, option),
     );
   }
 

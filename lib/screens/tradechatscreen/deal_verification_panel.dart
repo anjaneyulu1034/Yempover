@@ -3,6 +3,7 @@
 // mode/status/role/flags — no per-scenario branching here, the backend has
 // already derived everything (see DealVerification model).
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +15,8 @@ import 'package:yempover_app/utils/image_picker_utils.dart';
 import 'package:yempover_app/utils/wallet_offer_guard.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
 import 'package:yempover_app/widgets/deal_pin_input.dart';
+
+enum _PhotoSource { gallery, camera }
 
 class DealVerificationPanel extends StatefulWidget {
   final String chatId;
@@ -142,7 +145,7 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
   Future<void> _addPhotos() async {
     if (_isBusy) return;
 
-    final files = await ImagePickerUtils.pickImagesFromGallery();
+    final files = await _pickPhotoSource();
     if (files.isEmpty || !mounted) return;
 
     setState(() => _isBusy = true);
@@ -164,6 +167,49 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
       if (!mounted) return;
       setState(() => _isBusy = false);
       _showError(e);
+    }
+  }
+
+  // Lets the user choose gallery (multi-select) or camera (single shot),
+  // matching the source-picker pattern used elsewhere in the app.
+  Future<List<File>> _pickPhotoSource() async {
+    final source = await showModalBottomSheet<_PhotoSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Colors.blue),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(context, _PhotoSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Colors.green),
+              title: const Text('Take a Photo'),
+              onTap: () => Navigator.pop(context, _PhotoSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.cancel, color: Colors.red),
+              title: const Text('Cancel'),
+              onTap: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    switch (source) {
+      case _PhotoSource.gallery:
+        return ImagePickerUtils.pickImagesFromGallery();
+      case _PhotoSource.camera:
+        final photo = await ImagePickerUtils.takePhotoWithCamera();
+        return photo != null ? [photo] : [];
+      case null:
+        return [];
     }
   }
 
@@ -215,15 +261,18 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.message)));
       }
 
       // verify-pin doesn't return the full view (unlike fund/inspection),
       // so refetch to pick up the new status/flags/next PIN to share.
       await _fetchVerification(silent: true);
-      _socketService.emitDealUpdated(widget.chatId, _verification?.status.value);
+      _socketService.emitDealUpdated(
+        widget.chatId,
+        _verification?.status.value,
+      );
       // Also emit the dedicated deal:completed event — screens like the
       // chat list listen for that specifically, not deal:updated, to
       // refresh live instead of waiting for their next full reload.
@@ -279,7 +328,8 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
               maxLength: 300,
               decoration: const InputDecoration(
                 labelText: 'Reason (optional)',
-                hintText: 'e.g. Buyer did not show up, item condition '
+                hintText:
+                    'e.g. Buyer did not show up, item condition '
                     'mismatch...',
                 border: OutlineInputBorder(),
               ),
@@ -316,9 +366,9 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
       // Also emit the dedicated deal:cancelled event — the chat list
       // screen listens for that specifically to refresh live.
       _socketService.emitDealCancelled(widget.chatId);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
       // The DealVerification row is deleted server-side on close — once
       // the parent refetches, chat.dealVerification becomes null and this
       // panel stops being rendered.
@@ -693,7 +743,11 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
         ),
         child: Row(
           children: [
-            Icon(Icons.savings_outlined, color: Colors.green.shade700, size: 18),
+            Icon(
+              Icons.savings_outlined,
+              color: Colors.green.shade700,
+              size: 18,
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -815,9 +869,9 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
                 icon: const Icon(Icons.copy, color: Colors.white70, size: 20),
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: pin));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('PIN copied')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('PIN copied')));
                 },
               ),
             ],

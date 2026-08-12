@@ -161,6 +161,15 @@ class SocketService {
       _notifyListeners('deal_cancelled', data);
     });
 
+    // Deal PIN verification progressed (photos/ready/PIN entered/closed) —
+    // relayed to the room as-is so DealVerificationPanel can refetch its
+    // per-user view. This was previously only emitted, never subscribed to,
+    // so the other participant's panel never updated live.
+    _socket!.on('deal:updated', (data) {
+      print('🔔 Deal updated: $data');
+      _notifyListeners('deal:updated', data);
+    });
+
     _socket!.on('messages_read', (data) {
       _notifyListeners('messages_read', data);
     });

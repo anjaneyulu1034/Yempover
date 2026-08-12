@@ -132,7 +132,7 @@ class TradeDetailScreen extends StatelessWidget {
 
             // Item Section
             Text(
-              isBarter ? 'Item Bartered:' : 'Item Details:',
+              trade.hasBarterItemSnapshot ? 'Item Bartered:' : 'Item Details:',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -142,11 +142,17 @@ class TradeDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
 
             // A genuine two-item swap needs a distinct record for each side.
-            // Older trades (before that was tracked) and pure sales only
-            // ever have the one `product`, so show a single honestly-labeled
-            // card for those instead of duplicating it under fake
-            // "Their Item"/"My Item" cards.
-            if (isBarter && trade.hasBarterItemSnapshot)
+            // This isn't gated on `isBarter` — that flag just says which
+            // bucket the backend sorted the trade into (Sold/Bought vs
+            // Barter), not whether a barter item was actually part of the
+            // deal. A "Barter + Coins" offer accepted on a for-sale listing
+            // lands in the Bought/Sold bucket (isBarter == false) but still
+            // has a real barterItemTitle/Images snapshot that must be shown.
+            // Older trades (before that was tracked) and pure sales never
+            // have a snapshot, so they still fall through to the single,
+            // honestly-labeled card below instead of fake "Their Item"/"My
+            // Item" cards.
+            if (trade.hasBarterItemSnapshot)
               _buildBarterSwapCard(trade)
             else
               Card(
@@ -176,8 +182,15 @@ class TradeDetailScreen extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // Price Information (for Sold/Purchased)
-            if (!isBarter && price != null && actualPrice != null)
+            // Price Information: shown for Sold/Purchased trades, and also
+            // for a Barter + Coins deal that landed in the barter bucket but
+            // still had a real coin amount recorded (trade.sellingPrice).
+            // Excluded for a pure barter with no price component, since
+            // displayPrice would otherwise fall back to the listing's
+            // nominal price — a number that was never actually charged.
+            if ((!isBarter || trade.sellingPrice != null) &&
+                price != null &&
+                actualPrice != null)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
