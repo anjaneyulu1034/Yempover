@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:yempover_app/screens/OfferDeckScreen.dart';
 import 'package:yempover_app/screens/OfferDescriptionScreen.dart';
 import 'package:yempover_app/screens/service/ServiceDetailBookingScreen.dart';
+import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 import 'package:yempover_app/services/api_service.dart';
 import 'package:yempover_app/services/post_action_service.dart';
 import 'package:yempover_app/services/resume_state_service.dart';
 import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:yempover_app/utils/loading_widget.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:yempover_app/utils/wallet_offer_guard.dart';
@@ -32,6 +35,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   final ApiService _apiService = ApiService();
   final TokenService _tokenService = TokenService();
   final PostActionService _postActionService = PostActionService();
+  final TradeChatService _tradeChatService = TradeChatService();
+  bool _isOpeningExistingChat = false;
+  bool _isFetchingExchangeModes = false;
 
   late Post _post;
   bool _isLoading = false;
@@ -167,6 +173,34 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
+  // Feature 1: route into the viewer's existing chat/offer on this listing
+  // instead of letting them create a second one.
+  Future<void> _navigateToExistingChat() async {
+    final chatId = _post.existingOffer?.chatId;
+    if (chatId == null || chatId.isEmpty || _isOpeningExistingChat) return;
+
+    setState(() => _isOpeningExistingChat = true);
+    try {
+      final chat = await _tradeChatService.getChatById(chatId);
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatDetailScreen(
+            chat: chat,
+            currentUserId: _currentUserId!,
+            onChatUpdated: (_) {},
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      SnackbarUtils.showError(context, 'Could not open the chat: $e');
+    } finally {
+      if (mounted) setState(() => _isOpeningExistingChat = false);
+    }
+  }
+
   // Navigate to Offer Deck
   Future<void> _navigateToOfferDeck() async {
     if (_isNoLongerAvailable) return;
@@ -204,34 +238,47 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       return;
     }
 
-    final allowsBarter =
-        _post.barterStatus == BarterStatus.OPEN_FOR_BARTER ||
-        _post.status == PostStatus.FOR_BARTER;
+    // Feature 3: always offer the full exchange-mode picker (backend-driven,
+    // includes cross-mode requests like barter on a pure-price listing)
+    // instead of a static local list gated on the listing's native mode.
+    if (_isFetchingExchangeModes) return;
+    setState(() => _isFetchingExchangeModes = true);
 
-    if (!allowsBarter) {
-      if (_postRequiresCoinsToOffer) {
-        final hasEnoughBalance = await _ensureSufficientWalletBalance();
-        if (!mounted || !hasEnoughBalance) return;
-      }
+    ExchangeModeOptions options;
+    try {
+      options = await _tradeChatService.getExchangeModeOptions(
+        productId: _post.id,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isFetchingExchangeModes = false);
+      SnackbarUtils.showError(context, 'Could not load offer options: $e');
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _isFetchingExchangeModes = false);
 
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => OfferDescriptionScreen(
-            post: _post,
-            selectedItems: const [],
-            currentUserId: _currentUserId!,
-            offerMode: OfferSubmissionMode.price,
-          ),
+    if (!options.canRequest) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You cannot make an offer on this item right now'),
+          backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
-    final selectedMode = await _showOfferTypeSelector();
-    if (!mounted || selectedMode == null) return;
+    final selectedOption = await _showExchangeModeSheet(options);
+    if (!mounted || selectedOption == null) return;
 
-    if (selectedMode == OfferSubmissionMode.price) {
+    if (selectedOption.isCrossMode) {
+      final confirmed = await _confirmCrossModeOption(selectedOption);
+      if (!mounted || confirmed != true) return;
+    }
+
+    final offerMode = _mapOfferTypeToSubmissionMode(selectedOption.offerType);
+
+    if (!selectedOption.requiresProductSelection) {
       final hasEnoughBalance = await _ensureSufficientWalletBalance();
       if (!mounted || !hasEnoughBalance) return;
 
@@ -242,7 +289,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             post: _post,
             selectedItems: const [],
             currentUserId: _currentUserId!,
-            offerMode: OfferSubmissionMode.price,
+            offerMode: offerMode,
           ),
         ),
       );
@@ -255,7 +302,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         builder: (context) => OfferDeckScreen(
           post: _post,
           currentUserId: _currentUserId!,
-          offerMode: selectedMode,
+          offerMode: offerMode,
         ),
       ),
     );
@@ -272,15 +319,43 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
-  bool get _postRequiresCoinsToOffer {
-    if (_post.type == PostType.service) return _post.price > 0;
-    return _post.price > 0 &&
-        (_post.status == PostStatus.FOR_SALE ||
-            _post.barterStatus != BarterStatus.OPEN_FOR_BARTER);
+  OfferSubmissionMode _mapOfferTypeToSubmissionMode(String offerType) {
+    switch (offerType) {
+      case 'BARTER':
+        return OfferSubmissionMode.barter;
+      case 'BOTH':
+        return OfferSubmissionMode.both;
+      default:
+        return OfferSubmissionMode.price;
+    }
   }
 
-  Future<OfferSubmissionMode?> _showOfferTypeSelector() async {
-    return showModalBottomSheet<OfferSubmissionMode>(
+  // "This product is for pure price, but you can request a barter.
+  // Continue?" — shown before proceeding with a cross-mode option.
+  Future<bool?> _confirmCrossModeOption(ExchangeModeOption option) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(option.label),
+        content: Text(option.note),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<ExchangeModeOption?> _showExchangeModeSheet(
+    ExchangeModeOptions options,
+  ) async {
+    return showModalBottomSheet<ExchangeModeOption>(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -293,37 +368,67 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Choose Offer Type',
+                'How do you want to exchange?',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'How do you want to make this offer?',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-              ),
+              if (options.listingPrice != null && options.listingPrice! > 0) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Listed at \$${options.listingPrice!.toStringAsFixed(2)}',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+              ],
               const SizedBox(height: 14),
-              ListTile(
-                leading: const CoinIcon(size: 36, iconSize: 22),
-                title: const Text('Pure Price'),
-                subtitle: const Text('Quote a cash price only'),
-                onTap: () => Navigator.pop(context, OfferSubmissionMode.price),
-              ),
-              ListTile(
-                leading: const Icon(Icons.swap_horiz, color: Colors.orange),
-                title: const Text('Pure Barter'),
-                subtitle: const Text('Offer items only'),
-                onTap: () => Navigator.pop(context, OfferSubmissionMode.barter),
-              ),
-              ListTile(
-                leading: const Icon(Icons.tune, color: Colors.blue),
-                title: const Text('Both'),
-                subtitle: const Text('Offer items and quote a price'),
-                onTap: () => Navigator.pop(context, OfferSubmissionMode.both),
-              ),
+              ...options.options.map(_buildExchangeModeCard),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildExchangeModeCard(ExchangeModeOption option) {
+    final isBarterFlavored =
+        option.mode == 'PURE_BARTER' || option.mode == 'SERVICE_FOR_BARTER';
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: isBarterFlavored
+          ? const Icon(Icons.swap_horiz, color: Colors.orange, size: 32)
+          : const CoinIcon(size: 32, iconSize: 20),
+      title: Row(
+        children: [
+          Flexible(
+            child: Text(
+              option.label,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (option.isCrossMode) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                'Request',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.blue.shade700,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+      subtitle: Text(
+        option.note,
+        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+      ),
+      onTap: () => Navigator.pop(context, option),
     );
   }
 
@@ -1614,9 +1719,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ),
             ),
 
-      bottomNavigationBar: _isNoLongerAvailable
-          ? null
-          : SafeArea(
+      bottomNavigationBar: _buildBottomActionBar(),
+    );
+  }
+
+  // Feature 1: owners never see "Make an Offer"; a viewer with a prior
+  // offer/chat on this listing sees a banner routing into it instead of a
+  // fresh offer button, so this stays correct across re-searches/re-logins.
+  Widget? _buildBottomActionBar() {
+    if (_isNoLongerAvailable || _post.isOwner) return null;
+
+    final existingOffer = _post.existingOffer;
+    if (existingOffer != null) {
+      return SafeArea(
         top: false,
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -1629,26 +1744,105 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ),
             ],
           ),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => _navigateToOfferDeck(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E5BFF),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF4FF),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFC9DBFF)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.info_outline,
+                      color: Color(0xFF2E5BFF),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        existingOffer.displayText,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Text(
-                _post.type == PostType.service
-                    ? 'Open Service Booking'
-                    : 'Make an Offer',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isOpeningExistingChat
+                      ? null
+                      : _navigateToExistingChat,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E5BFF),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _isOpeningExistingChat
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Go to Chat',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => _navigateToOfferDeck(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2E5BFF),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              _post.type == PostType.service
+                  ? 'Open Service Booking'
+                  : 'Make an Offer',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
             ),
           ),

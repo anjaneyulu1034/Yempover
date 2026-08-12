@@ -174,6 +174,12 @@ class Post {
   final bool canClubItems;
   bool isFavorite;
   bool isHidden;
+  // Server-computed viewer context (post detail endpoint only — list
+  // endpoints don't send these). Defaults preserve pre-feature behavior
+  // (offer button shown) until the detail fetch completes.
+  final bool isOwner;
+  final bool canMakeOffer;
+  final ExistingOffer? existingOffer;
 
   Post({
     required this.id,
@@ -205,6 +211,9 @@ class Post {
     this.canClubItems = false,
     this.isFavorite = false,
     this.isHidden = false,
+    this.isOwner = false,
+    this.canMakeOffer = true,
+    this.existingOffer,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -269,6 +278,15 @@ class Post {
         'isClubbable',
         'canBeClubbed',
       ], defaultValue: false),
+      isOwner: json['isOwner'] == true,
+      canMakeOffer: json.containsKey('canMakeOffer')
+          ? json['canMakeOffer'] == true
+          : true,
+      existingOffer: json['existingOffer'] != null
+          ? ExistingOffer.fromJson(
+              Map<String, dynamic>.from(json['existingOffer']),
+            )
+          : null,
     );
   }
 
@@ -488,6 +506,49 @@ class Post {
         status: status.name,
         isListed: isListed,
       );
+}
+
+// The viewer's own prior offer/chat on a listing (post detail endpoint only).
+// Presence of this means "hide Make an Offer, route into this chat instead"
+// — never create a second chat when this is non-null.
+class ExistingOffer {
+  final String chatId;
+  final String chatStatus;
+  final String? offerId;
+  final String? offerType; // BARTER | PRICE | BOTH
+  final String? offerStatus; // PENDING | ACCEPTED | REJECTED | COUNTERED
+  final double? amount;
+  final String? currency;
+  final String? barterItemTitle;
+  final String displayText;
+
+  ExistingOffer({
+    required this.chatId,
+    required this.chatStatus,
+    this.offerId,
+    this.offerType,
+    this.offerStatus,
+    this.amount,
+    this.currency,
+    this.barterItemTitle,
+    required this.displayText,
+  });
+
+  factory ExistingOffer.fromJson(Map<String, dynamic> json) {
+    return ExistingOffer(
+      chatId: json['chatId'] ?? '',
+      chatStatus: json['chatStatus'] ?? '',
+      offerId: json['offerId'] as String?,
+      offerType: json['offerType'] as String?,
+      offerStatus: json['offerStatus'] as String?,
+      amount: json['amount'] != null
+          ? double.tryParse(json['amount'].toString())
+          : null,
+      currency: json['currency'] as String?,
+      barterItemTitle: json['barterItemTitle'] as String?,
+      displayText: json['displayText'] ?? 'You have already made an offer on this item.',
+    );
+  }
 }
 
 // Posts Response Model

@@ -444,6 +444,17 @@ class SocketService {
     });
   }
 
+  // Deal PIN verification progressed (photos/ready/fund/PIN entered/closed).
+  // The backend just relays this to the other participant so their
+  // ChatDetailScreen knows to refetch GET .../deal/verification — it does
+  // not derive or push state itself, so the client emits after every
+  // successful deal/* REST call.
+  void emitDealUpdated(String chatId, String? status) {
+    if (!_isConnected) return;
+
+    _socket?.emit('deal:updated', {'chatId': chatId, 'status': status});
+  }
+
   // Add event listener
   void on(String event, Function(dynamic) callback) {
     _listeners.putIfAbsent(event, () => []).add(callback);

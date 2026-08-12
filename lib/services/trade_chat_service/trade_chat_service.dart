@@ -965,6 +965,189 @@ class TradeChatService {
     }
   }
 
+  // Exchange-mode options for the "How do you want to exchange?" offer
+  // sheet, including cross-mode requests (e.g. requesting a barter on a
+  // pure-price listing). Works pre-chat, by productId or serviceId.
+  Future<ExchangeModeOptions> getExchangeModeOptions({
+    String? productId,
+    String? serviceId,
+  }) async {
+    assert(
+      (productId != null) != (serviceId != null),
+      'Provide exactly one of productId or serviceId',
+    );
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatExchangeModes).replace(
+        queryParameters: {
+          if (productId != null) 'productId': productId,
+          if (serviceId != null) 'serviceId': serviceId,
+        },
+      );
+
+      final response = await _client.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        return ExchangeModeOptions.fromJson(jsonResponse['data']);
+      } else {
+        throw await ErrorHandler.handleHttpError(response);
+      }
+    } catch (e) {
+      print('❌ Error getting exchange mode options: $e');
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
+  // ==================== DEAL PIN VERIFICATION ====================
+  // Replaces the legacy deal-completed/cancel flow above for any chat that
+  // has a DealVerification (i.e. hasDealVerification on TradeChat). All 6
+  // endpoints return the backend's real `message` verbatim on error (e.g.
+  // "Incorrect Deal PIN", "Too many incorrect PIN attempts. Please contact
+  // support.") — unlike ErrorHandler.handleHttpError's generic "Bad
+  // request: ..." prefixing used elsewhere in this file — since these
+  // messages are meant to be shown to the user as-is.
+  Never _throwDealError(http.Response response) {
+    String message = 'Something went wrong. Please try again.';
+    try {
+      final body = json.decode(response.body);
+      if (body is Map &&
+          body['message'] is String &&
+          (body['message'] as String).trim().isNotEmpty) {
+        message = body['message'] as String;
+      }
+    } catch (_) {
+      // Keep the generic fallback if the body isn't parseable JSON.
+    }
+    throw Exception(message);
+  }
+
+  // Get this user's Deal PIN view for a chat — the source of truth for the
+  // Deal panel (myPin, awaitingMyEntry, escrow, inspection state).
+  Future<DealVerification> getDealVerification(String chatId) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatDealVerification(chatId));
+
+      final response = await _client.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        return DealVerification.fromJson(jsonResponse['data']);
+      } else {
+        _throwDealError(response);
+      }
+    } catch (e) {
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
+  // Add product proof photos during the inspection stage. Each entry can be
+  // a pre-uploaded https URL or a base64 data URI — the backend uploads
+  // base64 to S3 itself.
+  Future<DealVerification> addInspectionImages(
+    String chatId,
+    List<String> images,
+  ) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatDealInspectionImages(chatId));
+
+      final response = await _client.post(
+        url,
+        headers: headers,
+        body: json.encode({'images': images}),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonResponse = json.decode(response.body);
+        return DealVerification.fromJson(jsonResponse['data']);
+      } else {
+        _throwDealError(response);
+      }
+    } catch (e) {
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
+  // Confirm (or withdraw) that this user has inspected and is satisfied.
+  // When both parties are ready the backend advances the deal to the PIN
+  // handover stage automatically.
+  Future<DealVerification> setDealReady(String chatId, bool ready) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatDealInspectionReady(chatId));
+
+      final response = await _client.post(
+        url,
+        headers: headers,
+        body: json.encode({'ready': ready}),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonResponse = json.decode(response.body);
+        return DealVerification.fromJson(jsonResponse['data']);
+      } else {
+        _throwDealError(response);
+      }
+    } catch (e) {
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
+  // Note: coins are now secured automatically in the background (when the
+  // payer confirms satisfied, or enters the Start PIN for a service) — the
+  // old separate "fund escrow" step is gone from the UI. The endpoint still
+  // exists server-side for compatibility, so no Dart method wraps it here.
+
+  // Submit a 4-digit Deal PIN. The backend decides which PIN is expected
+  // from the caller's role + the deal's current status.
+  Future<DealPinVerifyResult> verifyDealPin(String chatId, String pin) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatDealVerifyPin(chatId));
+
+      final response = await _client.post(
+        url,
+        headers: headers,
+        body: json.encode({'pin': pin}),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonResponse = json.decode(response.body);
+        return DealPinVerifyResult.fromJson(jsonResponse['data']);
+      } else {
+        _throwDealError(response);
+      }
+    } catch (e) {
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
+  // "Deal Not Completed" — available at every stage until COMPLETED.
+  // Refunds escrow, returns the item to the marketplace, and closes the chat.
+  Future<DealCloseResult> closeDeal(String chatId, {String? reason}) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatDealClose(chatId));
+
+      final response = await _client.post(
+        url,
+        headers: headers,
+        body: json.encode({if (reason != null) 'reason': reason}),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonResponse = json.decode(response.body);
+        return DealCloseResult.fromJson(jsonResponse['data']);
+      } else {
+        _throwDealError(response);
+      }
+    } catch (e) {
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
   // Close client
   void dispose() {
     _client.close();

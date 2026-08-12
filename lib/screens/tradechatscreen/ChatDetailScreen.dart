@@ -18,6 +18,7 @@ import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/wallet_offer_guard.dart';
 import 'package:yempover_app/utils/validators.dart';
 import 'package:yempover_app/services/resume_state_service.dart';
+import 'package:yempover_app/screens/tradechatscreen/deal_verification_panel.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final TradeChat chat;
@@ -93,6 +94,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (_isReferenceUnavailable) return false;
     return true;
   }
+
+  // Whether THIS user can start a brand-new offer right now — distinct from
+  // _canShowOfferActions (which is about responding to an existing
+  // incoming offer). Server-authoritative: correctly re-opens after a
+  // reject/counter/cancel and correctly blocks while my own offer is still
+  // PENDING, without the client having to reconstruct that logic itself.
+  bool get _canMakeNewOffer =>
+      _currentChat.canMakeOffer && !_isReferenceUnavailable;
 
   void _showErrorToast(Object error) {
     final raw = error.toString().replaceFirst('Exception: ', '').trim();
@@ -1023,8 +1032,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   }
 
   Future<void> _showMakeOfferDialog() async {
-    if (!_canShowOfferActions) {
-      _showErrorToast('Offers are no longer available for this chat.');
+    if (!_canMakeNewOffer) {
+      _showErrorToast(
+        _currentChat.myPendingOffer
+            ? 'Waiting for the other user to respond to your offer.'
+            : 'Offers are no longer available for this chat.',
+      );
       return;
     }
 
@@ -2938,16 +2951,42 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final isOfferMessage = message.messageType == MessageType.OFFER;
     final otherUser = _getOtherUser();
 
+    // Feature 2: the backend writes each deal-lifecycle event (offer made,
+    // accepted, exchange mode chosen, escrow funded, PIN verified, deal
+    // completed/closed, ...) as its own SYSTEM message — this is the
+    // authoritative, complete history. Render it as a centered timeline
+    // entry, distinct from left/right chat bubbles, not another bubble.
+    if (isSystemMessage) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 24),
+        child: Column(
+          children: [
+            Text(
+              message.messageText,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              _formatMessageTime(message.createdAt),
+              style: TextStyle(fontSize: 10, color: Colors.grey.shade400),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       child: Row(
-        mainAxisAlignment: isSystemMessage
-            ? MainAxisAlignment.center
-            : isCurrentUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
-          if (!isCurrentUser && !isSystemMessage)
+          if (!isCurrentUser)
             CircleAvatar(
               radius: 16,
               backgroundImage: otherUser.profileImage != null
@@ -2965,9 +3004,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               ),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isSystemMessage
-                    ? Colors.grey.shade200
-                    : isCurrentUser
+                color: isCurrentUser
                     ? Colors.blue.shade100
                     : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(16),
@@ -3091,7 +3128,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                           color: Colors.grey,
                         ),
                       ),
-                      if (isCurrentUser && !isSystemMessage) ...[
+                      if (isCurrentUser) ...[
                         const SizedBox(width: 4),
                         Icon(
                           message.isRead ? Icons.done_all : Icons.done,
@@ -4368,7 +4405,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                           ),
                           children: [
                             ..._buildOfferBannersInOrder(),
-                            _buildDealCompletionBanner(),
+                            if (_currentChat.hasDealVerification)
+                              DealVerificationPanel(
+                                key: ValueKey(_currentChat.id),
+                                chatId: _currentChat.id,
+                                currentUserId: widget.currentUserId,
+                                summary: _currentChat.dealVerification!,
+                                itemName: _currentChat.postTitle,
+                                onChatShouldRefresh: _refreshChat,
+                              )
+                            else
+                              _buildDealCompletionBanner(),
                             ..._sortedMessages.map(_buildMessageBubble),
                           ],
                         ),
@@ -4386,57 +4433,78 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Widget _buildMessageInput() {
     return SafeArea(
       top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Colors.grey.shade200)),
-        ),
-        child: Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.image, color: Colors.blue),
-              onPressed: _isSendingImage ? null : _pickAndSendImage,
-            ),
-            IconButton(
-              icon: const Icon(Icons.request_page, color: Colors.orange),
-              onPressed: _canShowOfferActions ? _showMakeOfferDialog : null,
-            ),
-            Expanded(
-              child: TextField(
-                controller: _messageController,
-                focusNode: _focusNode,
-                decoration: InputDecoration(
-                  hintText: 'Type a message...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(25),
-                    borderSide: BorderSide.none,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_currentChat.myPendingOffer)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.orange.shade50,
+              child: Row(
+                children: [
+                  Icon(Icons.hourglass_top, size: 14, color: Colors.orange.shade800),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Waiting for the other user to respond to your offer.',
+                    style: TextStyle(fontSize: 11.5, color: Colors.orange.shade900),
                   ),
-                  filled: true,
-                  fillColor: Colors.grey.shade100,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-                onChanged: (text) {
-                  _sendTypingStatus(text.isNotEmpty);
-                },
-                onSubmitted: (_) => _sendMessage(),
+                ],
               ),
             ),
-            IconButton(
-              icon: _isSendingImage
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send, color: Colors.blue),
-              onPressed: _isSendingImage ? null : _sendMessage,
+          Container(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Colors.grey.shade200)),
             ),
-          ],
-        ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.image, color: Colors.blue),
+                  onPressed: _isSendingImage ? null : _pickAndSendImage,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.request_page, color: Colors.orange),
+                  onPressed: _canMakeNewOffer ? _showMakeOfferDialog : null,
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    focusNode: _focusNode,
+                    decoration: InputDecoration(
+                      hintText: 'Type a message...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(25),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                    onChanged: (text) {
+                      _sendTypingStatus(text.isNotEmpty);
+                    },
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                IconButton(
+                  icon: _isSendingImage
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send, color: Colors.blue),
+                  onPressed: _isSendingImage ? null : _sendMessage,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

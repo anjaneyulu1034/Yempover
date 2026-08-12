@@ -65,6 +65,20 @@ class ApiConstants {
       '$baseUrl/trade-chat/$id/block-user';
   static String tradeChatDealCompleted(String id) =>
       '$baseUrl/trade-chat/$id/deal-completed';
+
+  // Deal PIN verification (replaces deal-completed/cancel for chats that
+  // have a DealVerification — see TradeChatService's deal/* methods).
+  static String tradeChatDealVerification(String id) =>
+      '$baseUrl/trade-chat/$id/deal/verification';
+  static String tradeChatDealInspectionImages(String id) =>
+      '$baseUrl/trade-chat/$id/deal/inspection/images';
+  static String tradeChatDealInspectionReady(String id) =>
+      '$baseUrl/trade-chat/$id/deal/inspection/ready';
+  static String tradeChatDealVerifyPin(String id) =>
+      '$baseUrl/trade-chat/$id/deal/verify-pin';
+  static String tradeChatDealClose(String id) =>
+      '$baseUrl/trade-chat/$id/deal/close';
+
   static const String tradeChatBlockedUsers =
       '$baseUrl/trade-chat/blocked-users';
   static String tradeChatUnblockUser(String blockedUserId) =>
@@ -75,6 +89,8 @@ class ApiConstants {
   static const String tradeChatOutbox = '$baseUrl/trade-chat/outbox';
   static const String tradeChatUnreadCount =
       '$baseUrl/trade-chat/unread-count';
+  static const String tradeChatExchangeModes =
+      '$baseUrl/trade-chat/exchange-modes';
 
   // Offer actions - FIXED ENDPOINTS
   static String acceptOffer(String chatId, String offerId) =>
