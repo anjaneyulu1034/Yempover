@@ -9,6 +9,7 @@ import 'package:yempover_app/models/ProductPostmain.dart';
 import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:yempover_app/screens/OfferDeckScreen.dart';
 import 'package:yempover_app/screens/OfferDescriptionScreen.dart';
+import 'package:yempover_app/screens/PostDetailScreen.dart';
 import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
 import 'package:yempover_app/services/api_service.dart';
 import 'package:yempover_app/services/token_service.dart';
@@ -65,6 +66,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   bool _isTyping = false;
   bool _isOtherUserOnline = false;
   bool _isPreparingOffer = false;
+  bool _isOpeningPostDetail = false;
   Timer? _typingTimer;
 
   bool get _isReferenceUnavailable {
@@ -122,6 +124,37 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
+  }
+
+  // Deep-link to the post detail screen (Point 7) — used by both the
+  // tappable header card and the tappable CHAT_STARTED system card. Fetches
+  // the full Post since the chat only carries a lightweight product/service
+  // summary (id, title, images, price).
+  Future<void> _openPostDetail() async {
+    final postId = _currentChat.productId ?? _currentChat.serviceId;
+    if (postId == null || _isOpeningPostDetail) return;
+    final isService = _currentChat.serviceId != null;
+
+    setState(() => _isOpeningPostDetail = true);
+    try {
+      final response = await ApiService().getPostDetail(
+        postId: postId,
+        type: isService ? PostType.service : PostType.product,
+      );
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              PostDetailScreen(post: response.post, userItems: const []),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showErrorToast(e);
+    } finally {
+      if (mounted) setState(() => _isOpeningPostDetail = false);
+    }
   }
 
   @override
@@ -1149,7 +1182,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       final hasEnoughBalance = await _ensureSufficientWalletBalance(post);
       if (!mounted || !hasEnoughBalance) return;
 
-      Navigator.push(
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => OfferDescriptionScreen(
@@ -1161,10 +1194,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           ),
         ),
       );
+      // Covers the "backed out without submitting" case — refresh so a
+      // listingUnavailable/canMakeOffer change that happened meanwhile
+      // (Point 8's race: a deal on this item completed elsewhere) shows up
+      // immediately instead of waiting for the next natural refresh.
+      if (mounted) unawaited(_refreshChat());
       return;
     }
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => OfferDeckScreen(
@@ -1175,6 +1213,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         ),
       ),
     );
+    if (mounted) unawaited(_refreshChat());
   }
 
   // Pre-flight check against the listing price before even navigating to
@@ -2439,6 +2478,84 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       List<ChatMessage>.from(_messages)
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
+  // Deterministic icon/color per structured eventType (Point 6) — the
+  // authoritative source when present. DEAL_COMPLETED/DEAL_NOT_COMPLETED are
+  // the two terminal states the spec calls out by color (green/red) and get
+  // a bolder card treatment below.
+  ({IconData icon, Color color})? _eventTypeStyle(String? eventType) {
+    switch (eventType) {
+      case 'OFFER_PENDING':
+        return (icon: Icons.local_offer_outlined, color: Colors.blue.shade600);
+      case 'OFFER_ACCEPTED':
+        return (icon: Icons.check_circle_outline, color: Colors.green.shade600);
+      case 'OFFER_REJECTED':
+        return (icon: Icons.cancel_outlined, color: Colors.red.shade600);
+      case 'EXCHANGE_MODE_SELECTED':
+        return (icon: Icons.handshake_outlined, color: Colors.indigo.shade400);
+      case 'ESCROW_SECURED':
+        return (icon: Icons.shield_outlined, color: Colors.blue.shade600);
+      case 'DEAL_COMPLETED_PENDING_OTHER':
+        return (icon: Icons.hourglass_top, color: Colors.orange.shade700);
+      case 'DEAL_COMPLETED':
+        return (icon: Icons.check_circle, color: Colors.green.shade600);
+      case 'DEAL_NOT_COMPLETED':
+        return (icon: Icons.cancel_outlined, color: Colors.red.shade600);
+      case 'CHAT_STARTED':
+        return (icon: Icons.chat_bubble_outline, color: Colors.blueGrey.shade400);
+      case 'ITEM_UNAVAILABLE':
+        return (icon: Icons.info_outline, color: Colors.orange.shade700);
+      default:
+        return null;
+    }
+  }
+
+  // Fallback for older SYSTEM messages that predate eventType — matched
+  // from the persisted text itself. Ordered most-specific first so
+  // overlapping keywords (e.g. "completed" appearing in both a full
+  // completion and a "waiting on the other side" message) resolve right.
+  ({IconData icon, Color color}) _systemMessageStyle(String text) {
+    final t = text.toLowerCase();
+
+    if (t.contains('not completed') ||
+        t.contains('rejected') ||
+        t.contains('withdrawn') ||
+        t.contains('cancelled')) {
+      return (icon: Icons.cancel_outlined, color: Colors.red.shade600);
+    }
+    if (t.contains('marked the deal as completed') || t.contains('waiting')) {
+      return (icon: Icons.hourglass_top, color: Colors.orange.shade700);
+    }
+    if (t.contains('deal completed') ||
+        t.contains('completed by both') ||
+        t.contains('verified with deal pins')) {
+      return (icon: Icons.check_circle, color: Colors.green.shade600);
+    }
+    if (t.contains('accepted')) {
+      return (icon: Icons.check_circle_outline, color: Colors.green.shade600);
+    }
+    if (t.contains('coins') &&
+        (t.contains('secured') || t.contains('safe'))) {
+      return (icon: Icons.shield_outlined, color: Colors.blue.shade600);
+    }
+    if (t.contains('zero-coin')) {
+      return (icon: Icons.check_box_outlined, color: Colors.teal.shade600);
+    }
+    if (t.contains('exchange mode selected')) {
+      return (icon: Icons.handshake_outlined, color: Colors.indigo.shade400);
+    }
+    if (t.contains('inspection') || t.contains('photo')) {
+      return (icon: Icons.photo_camera_outlined, color: Colors.purple.shade400);
+    }
+    if (t.contains('offer sent') || t.contains('counter')) {
+      return (icon: Icons.local_offer_outlined, color: Colors.blue.shade600);
+    }
+    if (t.contains('chat started')) {
+      return (icon: Icons.chat_bubble_outline, color: Colors.blueGrey.shade400);
+    }
+
+    return (icon: Icons.info_outline, color: Colors.grey.shade500);
+  }
+
   Widget _buildMessageBubble(ChatMessage message) {
     final isCurrentUser = _isMessageFromCurrentUser(message);
     final isSystemMessage = message.messageType == MessageType.SYSTEM;
@@ -2452,20 +2569,69 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     // Render it as a centered timeline entry, distinct from left/right chat
     // bubbles, not another bubble.
     if (isSystemMessage) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 24),
-        child: Column(
+      final style = _eventTypeStyle(message.eventType) ??
+          _systemMessageStyle(message.messageText);
+      // The two terminal deal outcomes get a bolder card (spec calls them
+      // out explicitly by color) so they stand out from the rest of the
+      // step-by-step timeline.
+      final isTerminalEvent = message.eventType == 'DEAL_COMPLETED' ||
+          message.eventType == 'DEAL_NOT_COMPLETED';
+      // CHAT_STARTED deep-links to the post detail screen (Point 7) — same
+      // target as the header card above, using the chat's own product/
+      // service id rather than re-deriving it from eventData.
+      final isTappable = message.eventType == 'CHAT_STARTED' &&
+          (_currentChat.productId != null || _currentChat.serviceId != null);
+
+      final card = Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: isTerminalEvent ? 14 : 12,
+          vertical: isTerminalEvent ? 10 : 8,
+        ),
+        decoration: BoxDecoration(
+          color: style.color.withValues(alpha: isTerminalEvent ? 0.12 : 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: style.color.withValues(alpha: isTerminalEvent ? 0.35 : 0.2),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              message.messageText,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-                fontStyle: FontStyle.italic,
+            Icon(style.icon, size: isTerminalEvent ? 17 : 14, color: style.color),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                message.messageText,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: isTerminalEvent ? 12.5 : 12,
+                  color: const Color(0xFF374151),
+                  fontWeight: isTerminalEvent ? FontWeight.w700 : FontWeight.w500,
+                  height: 1.3,
+                ),
               ),
             ),
-            const SizedBox(height: 2),
+            if (isTappable) ...[
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right, size: 14, color: style.color),
+            ],
+          ],
+        ),
+      );
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 20),
+        child: Column(
+          children: [
+            isTappable
+                ? InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: _isOpeningPostDetail ? null : _openPostDetail,
+                    child: card,
+                  )
+                : card,
+            const SizedBox(height: 3),
             Text(
               _formatMessageTime(message.createdAt),
               style: TextStyle(fontSize: 10, color: Colors.grey.shade400),
@@ -3299,6 +3465,141 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return myOffers.last;
   }
 
+  // Tappable summary of what this chat is about (Point 7) — deep-links to
+  // the post detail screen. The chat only carries a lightweight
+  // product/service snapshot (id, title, images, price), which is enough
+  // for this card without an extra fetch.
+  Widget _buildPostHeaderCard() {
+    final title = _currentChat.postTitle;
+    final image = _currentChat.postImage;
+    final price = _currentChat.product?.price ?? _currentChat.service?.price;
+    final isService = _currentChat.serviceId != null;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: _isOpeningPostDetail ? null : _openPostDetail,
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: image.isNotEmpty
+                    ? Image.network(
+                        image,
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          width: 48,
+                          height: 48,
+                          color: Colors.grey.shade200,
+                          child: const Icon(Icons.image, size: 20),
+                        ),
+                      )
+                    : Container(
+                        width: 48,
+                        height: 48,
+                        color: Colors.grey.shade200,
+                        child: Icon(
+                          isService ? Icons.build_circle : Icons.inventory_2_outlined,
+                          size: 20,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    if (price != null && price > 0) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CoinIcon(size: 13, iconSize: 8),
+                          const SizedBox(width: 3),
+                          Text(
+                            '${CoinFormat.amount(price)} coins',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (_isOpeningPostDetail)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade400),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Point 8: once a deal on this listing completes in a competing chat, the
+  // backend closes this one out — canMakeOffer flips false and
+  // listingUnavailable becomes true. Surface it plainly instead of just
+  // silently hiding the offer button.
+  Widget _buildListingUnavailableBanner() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 18, color: Colors.orange.shade800),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'No longer available — a deal was completed with another user.',
+              style: TextStyle(fontSize: 12.5, color: Colors.orange.shade900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// The incoming-offer and my-offer banners are otherwise independent
   /// widgets, each always rendered incoming-first — so whichever offer is
   /// actually more recent could end up on top instead of at the bottom
@@ -3899,7 +4200,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                             vertical: 8,
                           ),
                           children: [
+                            _buildPostHeaderCard(),
+                            if (_currentChat.listingUnavailable)
+                              _buildListingUnavailableBanner(),
                             ..._buildOfferBannersInOrder(),
+                            ..._sortedMessages.map(_buildMessageBubble),
+                            // Current deal status belongs at the end of the
+                            // timeline (chronologically "now"), not pinned
+                            // above the whole conversation history.
                             if (_currentChat.hasDealVerification)
                               DealVerificationPanel(
                                 key: ValueKey(_currentChat.id),
@@ -3910,7 +4218,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                               )
                             else
                               _buildDealCompletionBanner(),
-                            ..._sortedMessages.map(_buildMessageBubble),
                           ],
                         ),
                       ),

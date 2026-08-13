@@ -86,6 +86,7 @@ class TradeChatService {
     int page = 1,
     int limit = 20,
     String? status,
+    String? search,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -94,6 +95,7 @@ class TradeChatService {
         'page': page.toString(),
         'limit': limit.toString(),
         if (status != null) 'status': status,
+        if (search != null && search.isNotEmpty) 'search': search,
       };
 
       final uri = Uri.parse(
@@ -639,6 +641,7 @@ class TradeChatService {
     int page = 1,
     int limit = 20,
     String? productId,
+    String? search,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -647,6 +650,7 @@ class TradeChatService {
         'page': page.toString(),
         'limit': limit.toString(),
         if (productId != null && productId.isNotEmpty) 'productId': productId,
+        if (search != null && search.isNotEmpty) 'search': search,
       };
 
       final uri = Uri.parse(
@@ -675,11 +679,16 @@ class TradeChatService {
   Future<InboxOutboxResponse> getOutboxChats({
     int page = 1,
     int limit = 20,
+    String? search,
   }) async {
     try {
       final headers = await _getHeaders();
 
-      final queryParams = {'page': page.toString(), 'limit': limit.toString()};
+      final queryParams = {
+        'page': page.toString(),
+        'limit': limit.toString(),
+        if (search != null && search.isNotEmpty) 'search': search,
+      };
 
       final uri = Uri.parse(
         ApiConstants.tradeChatOutbox,

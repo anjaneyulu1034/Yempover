@@ -33,6 +33,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
   Timer? _countdownTimer;
   String _searchQuery = '';
   String _statusFilter = 'All';
+  String _typeFilter = 'All';
 
   @override
   void initState() {
@@ -87,6 +88,10 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
           post.description.toLowerCase().contains(_searchQuery);
     }).toList();
   }
+
+  // Products/Services tabs hit the server (Point 3.2) rather than filtering
+  // client-side, so pagination stays correct for whichever type is active.
+  String? get _typeParam => _typeFilter == 'All' ? null : _typeFilter.toLowerCase();
 
   void _startCountdownTimer() {
     _countdownTimer?.cancel();
@@ -148,7 +153,11 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
         return;
       }
 
-      final response = await _postsService.getMyPosts(page: 1, limit: 20);
+      final response = await _postsService.getMyPosts(
+        page: 1,
+        limit: 20,
+        type: _typeParam,
+      );
 
       if (!mounted) return;
 
@@ -209,6 +218,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
       final response = await _postsService.getMyPosts(
         page: _currentPage + 1,
         limit: 20,
+        type: _typeParam,
       );
 
       if (!mounted) return;
@@ -237,7 +247,11 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
 
   Future<void> _refreshPosts() async {
     try {
-      final response = await _postsService.getMyPosts(page: 1, limit: 20);
+      final response = await _postsService.getMyPosts(
+        page: 1,
+        limit: 20,
+        type: _typeParam,
+      );
 
       if (!mounted) return;
 
@@ -304,22 +318,78 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     'Sold',
   ];
 
+  // Same blue gradient filter button as Home_screen's search bar.
   Widget _buildStatusFilterButton() {
-    final isActive = _statusFilter != 'All';
-
-    return Material(
-      color: isActive ? const Color(0xFF2E5BFF) : Colors.grey.shade100,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: _showStatusFilterSheet,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Icon(
-            Icons.filter_list,
-            color: isActive ? Colors.white : Colors.black87,
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2E5BFF), Color(0xFF4A7AFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: _showStatusFilterSheet,
+          borderRadius: BorderRadius.circular(18),
+          child: const Padding(
+            padding: EdgeInsets.all(16),
+            child: Icon(Icons.tune, color: Colors.white),
           ),
         ),
+      ),
+    );
+  }
+
+  static const List<String> _typeFilterOptions = ['All', 'Product', 'Service'];
+
+  Widget _buildTypeFilterTabs() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Row(
+        children: _typeFilterOptions.map((type) {
+          final selected = _typeFilter == type;
+          final isLast = type == _typeFilterOptions.last;
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(right: isLast ? 0 : 8),
+              child: Material(
+                color: selected ? const Color(0xFF2E5BFF) : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    if (_typeFilter == type) return;
+                    setState(() => _typeFilter = type);
+                    _fetchMyPosts();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text(
+                      type,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: selected ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -529,6 +599,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                 ],
               ),
             ),
+            _buildTypeFilterTabs(),
           ],
           Expanded(
             child: _isLoading
@@ -640,6 +711,24 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     );
   }
 
+  Widget _statusChip(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
   Widget _buildPostThumbnail(MyPost post, {required bool hasImage}) {
     const size = 108.0;
     final borderRadius = BorderRadius.circular(12);
@@ -690,24 +779,24 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     return Stack(
       children: [
         ClipRRect(borderRadius: borderRadius, child: imageContent),
+        // Sold takes priority over expired (mirrors _isPostExpired, which
+        // treats a sold post as never "expired") — one badge, top-left.
         if (post.isSold)
           Positioned(
             top: 6,
             left: 6,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.green,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text(
-                'SOLD',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            child: _statusChip(
+              'SOLD${post.soldAt != null ? ' · ${DateFormat('MMM d').format(post.soldAt!)}' : ''}',
+              Colors.green,
+            ),
+          )
+        else if (_isPostExpired(post))
+          Positioned(
+            top: 6,
+            left: 6,
+            child: _statusChip(
+              'EXPIRED${post.expiredAt != null ? ' · ${DateFormat('MMM d').format(post.expiredAt!)}' : ''}',
+              Colors.red.shade600,
             ),
           ),
         Positioned(

@@ -1,4 +1,5 @@
 import 'package:yempover_app/screens/EditProductScreen.dart';
+import 'package:yempover_app/screens/PostOfferersScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:yempover_app/services/my_posts2_service.dart';
@@ -300,9 +301,32 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
                                     color: Colors.green,
                                     borderRadius: BorderRadius.circular(20),
                                   ),
-                                  child: const Text(
-                                    'SOLD',
-                                    style: TextStyle(
+                                  child: Text(
+                                    _post.soldAt != null
+                                        ? 'SOLD · ${DateFormat('MMM d, yyyy').format(_post.soldAt!)}'
+                                        : 'SOLD',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                )
+                              else if (_post.hasExpired)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade600,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    _post.expiredAt != null
+                                        ? 'EXPIRED · ${DateFormat('MMM d, yyyy').format(_post.expiredAt!)}'
+                                        : 'EXPIRED',
+                                    style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 14,
                                       fontWeight: FontWeight.bold,
@@ -555,10 +579,23 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
                                   value: '${_post.viewCount}',
                                   label: 'Views',
                                 ),
-                                _buildStatItem(
-                                  icon: Icons.local_offer,
-                                  value: '${_post.openOffersCount}',
-                                  label: 'Offers',
+                                InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: _post.offerCount > 0
+                                      ? _openOfferers
+                                      : null,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 2,
+                                    ),
+                                    child: _buildStatItem(
+                                      icon: Icons.local_offer,
+                                      value: '${_post.offerCount}',
+                                      label: 'Offers',
+                                      highlighted: _post.offerCount > 0,
+                                    ),
+                                  ),
                                 ),
                                 _buildStatItem(
                                   icon: Icons.calendar_today,
@@ -685,17 +722,36 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
     required IconData icon,
     required String value,
     required String label,
+    bool highlighted = false,
   }) {
+    final color = highlighted ? const Color(0xFF2E5BFF) : Colors.grey[600];
     return Column(
       children: [
-        Icon(icon, size: 20, color: Colors.grey[600]),
+        Icon(icon, size: 20, color: color),
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: highlighted ? const Color(0xFF2E5BFF) : null,
+          ),
         ),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        Text(label, style: TextStyle(fontSize: 12, color: color)),
       ],
+    );
+  }
+
+  void _openOfferers() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PostOfferersScreen(
+          postId: _post.id,
+          postTitle: _post.title,
+          isProduct: _post.type != 'service',
+        ),
+      ),
     );
   }
 }

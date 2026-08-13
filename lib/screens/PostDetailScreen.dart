@@ -3,6 +3,7 @@ import 'package:yempover_app/models/ProductPostmain.dart';
 import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:yempover_app/screens/OfferDeckScreen.dart';
 import 'package:yempover_app/screens/OfferDescriptionScreen.dart';
+import 'package:yempover_app/screens/PostOfferersScreen.dart';
 import 'package:yempover_app/screens/service/ServiceDetailBookingScreen.dart';
 import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 import 'package:yempover_app/services/api_service.dart';
@@ -1186,6 +1187,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 Icons.visibility_outlined,
                 '${_post.viewCount} views',
               ),
+              if (_post.isOwner && (_post.offerCount ?? 0) > 0)
+                _buildInfoPill(
+                  Icons.local_offer_outlined,
+                  '${_post.offerCount} offers',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PostOfferersScreen(
+                        postId: _post.id,
+                        postTitle: _post.title,
+                        isProduct: _post.type != PostType.service,
+                      ),
+                    ),
+                  ),
+                ),
               _buildCoinPricePill(
                 _post.price > 0 ? _post.formattedPrice : 'Price on request',
               ),
@@ -1228,8 +1244,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
-  Widget _buildInfoPill(IconData icon, String text) {
-    return Container(
+  Widget _buildInfoPill(IconData icon, String text, {VoidCallback? onTap}) {
+    final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1249,9 +1265,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               color: Colors.blue.shade900,
             ),
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right, size: 14, color: Colors.blue.shade700),
+          ],
         ],
       ),
     );
+
+    if (onTap == null) return pill;
+    return InkWell(borderRadius: BorderRadius.circular(999), onTap: onTap, child: pill);
   }
 
   Widget _buildCoinPricePill(String text) {

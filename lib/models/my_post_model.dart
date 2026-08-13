@@ -67,6 +67,12 @@ class MyPost {
   final String type;
   final int openOffersCount;
   final bool isClubbable;
+  // Distinct-offerer count (Point 4) — how many different users have made an
+  // offer on this post. Distinct from openOffersCount, which counts
+  // transactions. Tap-through target for the offerers list.
+  final int offerCount;
+  final DateTime? soldAt;
+  final DateTime? expiredAt;
 
   MyPost({
     required this.id,
@@ -96,6 +102,9 @@ class MyPost {
     required this.type,
     required this.openOffersCount,
     this.isClubbable = false,
+    this.offerCount = 0,
+    this.soldAt,
+    this.expiredAt,
   });
 
   factory MyPost.fromJson(Map<String, dynamic> json) {
@@ -144,6 +153,11 @@ class MyPost {
         'canClubItems',
         'canBeClubbed',
       ], defaultValue: false),
+      offerCount: json['offerCount'] is int
+          ? json['offerCount'] as int
+          : int.tryParse('${json['offerCount'] ?? ''}') ?? 0,
+      soldAt: _parseOptionalDateTime(json['soldAt']),
+      expiredAt: _parseOptionalDateTime(json['expiredAt']),
     );
   }
 
@@ -247,6 +261,84 @@ class Pagination {
       page: json['page'] ?? 1,
       limit: json['limit'] ?? 20,
       pages: json['pages'] ?? 1,
+    );
+  }
+}
+
+// GET /me/posts/products/:id/offers | /me/posts/services/:id/offers (Point 4)
+// — owner-scoped list of who has made an offer on one of the owner's posts.
+class PostOfferersResult {
+  final int offerCount;
+  final List<PostOfferer> offerers;
+
+  PostOfferersResult({required this.offerCount, required this.offerers});
+
+  factory PostOfferersResult.fromJson(Map<String, dynamic> json) {
+    return PostOfferersResult(
+      offerCount: json['offerCount'] is int
+          ? json['offerCount'] as int
+          : int.tryParse('${json['offerCount'] ?? ''}') ?? 0,
+      offerers: (json['offerers'] as List? ?? [])
+          .whereType<Map>()
+          .map((o) => PostOfferer.fromJson(Map<String, dynamic>.from(o)))
+          .toList(),
+    );
+  }
+}
+
+class PostOfferer {
+  final String chatId;
+  final String? chatStatus;
+  final String? userId;
+  final String name;
+  final String? profileImage;
+  final String? offerId;
+  final String? offerType;
+  final String? offerStatus;
+  final double? amount;
+  final String? currency;
+  final String? barterItemTitle;
+  final bool isZeroCoin;
+  final String offerSummary;
+  final DateTime? offeredAt;
+
+  PostOfferer({
+    required this.chatId,
+    this.chatStatus,
+    this.userId,
+    required this.name,
+    this.profileImage,
+    this.offerId,
+    this.offerType,
+    this.offerStatus,
+    this.amount,
+    this.currency,
+    this.barterItemTitle,
+    required this.isZeroCoin,
+    required this.offerSummary,
+    this.offeredAt,
+  });
+
+  factory PostOfferer.fromJson(Map<String, dynamic> json) {
+    return PostOfferer(
+      chatId: json['chatId'] ?? '',
+      chatStatus: json['chatStatus'] as String?,
+      userId: json['userId'] as String?,
+      name: json['name'] ?? 'User',
+      profileImage: json['profileImage'] as String?,
+      offerId: json['offerId'] as String?,
+      offerType: json['offerType'] as String?,
+      offerStatus: json['offerStatus'] as String?,
+      amount: json['amount'] != null
+          ? double.tryParse(json['amount'].toString())
+          : null,
+      currency: json['currency'] as String?,
+      barterItemTitle: json['barterItemTitle'] as String?,
+      isZeroCoin: json['isZeroCoin'] == true,
+      offerSummary: json['offerSummary'] ?? '',
+      offeredAt: json['offeredAt'] != null
+          ? DateTime.tryParse(json['offeredAt'].toString())
+          : null,
     );
   }
 }

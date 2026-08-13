@@ -180,6 +180,8 @@ class Post {
   final bool isOwner;
   final bool canMakeOffer;
   final ExistingOffer? existingOffer;
+  // Distinct-offerer count (Point 4) — owner-only, null for everyone else.
+  final int? offerCount;
 
   Post({
     required this.id,
@@ -214,6 +216,7 @@ class Post {
     this.isOwner = false,
     this.canMakeOffer = true,
     this.existingOffer,
+    this.offerCount,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -287,6 +290,9 @@ class Post {
               Map<String, dynamic>.from(json['existingOffer']),
             )
           : null,
+      offerCount: json['offerCount'] is int
+          ? json['offerCount'] as int
+          : int.tryParse('${json['offerCount'] ?? ''}'),
     );
   }
 
@@ -499,13 +505,13 @@ class Post {
   bool get isForSale => status == PostStatus.FOR_SALE && price > 0;
 
   bool get isExpiredOrUnavailable => PostAvailabilityUtils.isUnavailable(
-        hasExpired: hasExpired,
-        validFrom: validFrom,
-        validUntil: validUntil,
-        remainingTime: remainingTime,
-        status: status.name,
-        isListed: isListed,
-      );
+    hasExpired: hasExpired,
+    validFrom: validFrom,
+    validUntil: validUntil,
+    remainingTime: remainingTime,
+    status: status.name,
+    isListed: isListed,
+  );
 }
 
 // The viewer's own prior offer/chat on a listing (post detail endpoint only).
@@ -546,7 +552,8 @@ class ExistingOffer {
           : null,
       currency: json['currency'] as String?,
       barterItemTitle: json['barterItemTitle'] as String?,
-      displayText: json['displayText'] ?? 'You have already made an offer on this item.',
+      displayText:
+          json['displayText'] ?? 'You have already made an offer on this item.',
     );
   }
 }

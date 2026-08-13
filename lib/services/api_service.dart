@@ -32,14 +32,14 @@ class ApiService {
     Future<http.Response> Function(String? token) request,
   ) async {
     var token = await _tokenService.getToken();
-    var response = await request(token);
+    var response = await _requestWithConnectionRetry(() => request(token));
 
     if (response.statusCode == 401) {
       debugPrint('🔄 ApiService: Received 401, attempting token refresh...');
       final newToken = await _tokenService.refreshToken();
 
       if (newToken != null && newToken.isNotEmpty) {
-        response = await request(newToken);
+        response = await _requestWithConnectionRetry(() => request(newToken));
       }
     }
 
@@ -49,6 +49,28 @@ class ApiService {
     SubscriptionGate.checkResponse(response);
 
     return response;
+  }
+
+  // The shared http.Client is kept alive for the app's whole lifetime and
+  // reuses pooled connections. If the server closes an idle keep-alive
+  // connection (e.g. Node's default ~5s keepAliveTimeout) between requests,
+  // the client doesn't find out until it tries to reuse it — the next
+  // request dies mid-handshake with "Connection closed before full header
+  // was received" even though the network itself is fine. Retrying
+  // transparently opens a fresh connection and almost always succeeds, so
+  // do that once before surfacing a network error to the user.
+  Future<http.Response> _requestWithConnectionRetry(
+    Future<http.Response> Function() request,
+  ) async {
+    try {
+      return await request();
+    } on http.ClientException catch (e) {
+      debugPrint(
+        '🔄 ApiService: Connection error, retrying once: ${e.message}',
+      );
+      await Future.delayed(const Duration(milliseconds: 300));
+      return await request();
+    }
   }
 
   // ============= PUBLIC HTTP METHODS =============

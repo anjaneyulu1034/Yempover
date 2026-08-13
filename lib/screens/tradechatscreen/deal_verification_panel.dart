@@ -129,7 +129,10 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
       if (!mounted) return;
       setState(() => _isBusy = false);
 
-      _socketService.emitDealUpdated(widget.chatId, _verification?.status.value);
+      _socketService.emitDealUpdated(
+        widget.chatId,
+        _verification?.status.value,
+      );
       // Also emit the dedicated deal:completed event — screens like the
       // chat list listen for that specifically, not deal:updated, to
       // refresh live instead of waiting for their next full reload.

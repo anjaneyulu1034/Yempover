@@ -350,6 +350,11 @@ class ChatMessage {
   final DateTime? readAt;
   final DateTime createdAt;
   final String? offerId;
+  // Structured discriminator for SYSTEM messages — lets the client render a
+  // distinct styled card per lifecycle event instead of plain text. Null for
+  // TEXT/IMAGE/OFFER messages, and for older SYSTEM messages predating this.
+  final String? eventType;
+  final Map<String, dynamic>? eventData;
 
   ChatMessage({
     required this.id,
@@ -363,6 +368,8 @@ class ChatMessage {
     this.readAt,
     required this.createdAt,
     this.offerId,
+    this.eventType,
+    this.eventData,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -382,6 +389,10 @@ class ChatMessage {
         json['createdAt'] ?? DateTime.now().toIso8601String(),
       ),
       offerId: json['offerId'],
+      eventType: json['eventType'] as String?,
+      eventData: json['eventData'] is Map
+          ? Map<String, dynamic>.from(json['eventData'] as Map)
+          : null,
     );
   }
 
@@ -398,6 +409,8 @@ class ChatMessage {
       'readAt': readAt?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'offerId': offerId,
+      'eventType': eventType,
+      'eventData': eventData,
     };
   }
 
@@ -912,6 +925,15 @@ class TradeChat {
   // pre-feature behavior until the first getChatDetail fetch lands.
   final bool canMakeOffer;
   final bool myPendingOffer;
+  // getChatDetail only: true once the listing itself is gone because a deal
+  // completed in a *different* chat on the same item — distinct from
+  // canMakeOffer being false for this chat's own reasons (pending/accepted).
+  final bool listingUnavailable;
+  // List endpoints only (getChatDetail doesn't send these): server-derived
+  // status chip for the chat row — PENDING | ACTIVE | COMPLETED |
+  // NOT_COMPLETED, with badgeLabel as ready-to-render display copy.
+  final String? badge;
+  final String? badgeLabel;
 
   TradeChat({
     required this.id,
@@ -935,6 +957,9 @@ class TradeChat {
     this.dealVerification,
     this.canMakeOffer = true,
     this.myPendingOffer = false,
+    this.listingUnavailable = false,
+    this.badge,
+    this.badgeLabel,
   });
 
   factory TradeChat.fromJson(Map<String, dynamic> json) {
@@ -984,6 +1009,9 @@ class TradeChat {
           ? json['canMakeOffer'] == true
           : true,
       myPendingOffer: json['myPendingOffer'] == true,
+      listingUnavailable: json['listingUnavailable'] == true,
+      badge: json['badge'] as String?,
+      badgeLabel: json['badgeLabel'] as String?,
     );
   }
 
