@@ -21,6 +21,9 @@ class OfferDescriptionScreen extends StatefulWidget {
   final bool isService;
   final OfferSubmissionMode offerMode;
   final String? initialQuotedPrice;
+  // Explicit "no coins involved" request — the barter item is optional and
+  // no price is ever sent, regardless of offerMode.
+  final bool isZeroCoin;
 
   const OfferDescriptionScreen({
     super.key,
@@ -31,6 +34,7 @@ class OfferDescriptionScreen extends StatefulWidget {
     this.isService = false,
     required this.offerMode,
     this.initialQuotedPrice,
+    this.isZeroCoin = false,
   });
 
   @override
@@ -200,7 +204,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
 
     final parsedPrice = double.tryParse(_priceController.text.trim());
 
-    if (_requiresBarterItems && widget.selectedItems.isEmpty) {
+    if (_requiresBarterItems &&
+        !widget.isZeroCoin &&
+        widget.selectedItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select at least one item for barter'),
@@ -286,7 +292,15 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
 
       late final TradeOffer createdOffer;
 
-      if (widget.offerMode == OfferSubmissionMode.price) {
+      if (widget.isZeroCoin) {
+        createdOffer = await _chatService.createZeroCoinOffer(
+          chatId: chat.id,
+          barterItemTitle: _buildOfferTitle(),
+          barterItemDescription: _buildOfferDescription(),
+          barterItemImages: _buildOfferImages(),
+          barterItemIds: widget.selectedItems.map((item) => item.id).toList(),
+        );
+      } else if (widget.offerMode == OfferSubmissionMode.price) {
         createdOffer = await _chatService.createPriceOffer(
           chatId: chat.id,
           price: parsedPrice!,
@@ -448,6 +462,31 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (widget.isZeroCoin) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.teal.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.teal.shade200),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.check_box_outlined, color: Colors.teal.shade700, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Zero-coin transaction — no coins involved. Item(s) below are optional.',
+                        style: TextStyle(fontSize: 12, color: Colors.teal.shade900),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             // Offer Summary Card
             Container(
               padding: const EdgeInsets.all(16),
@@ -526,6 +565,15 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                             ),
                             const SizedBox(height: 4),
                             if (_requiresBarterItems) ...[
+                              if (widget.isZeroCoin && widget.selectedItems.isEmpty)
+                                Text(
+                                  'No item — asking for zero coins',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
                               ...widget.selectedItems
                                   .take(2)
                                   .map(

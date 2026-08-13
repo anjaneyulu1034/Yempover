@@ -143,80 +143,32 @@ extension MessageTypeExtension on MessageType {
 }
 
 // Deal PIN verification enums — mirror DealVerificationMode /
-// DealVerificationStatus from the backend exactly (see
-// GET /trade-chat/{chatId}/deal/verification).
-enum DealMode { MUTUAL, SEQUENTIAL }
-
-extension DealModeExtension on DealMode {
-  String get value {
-    switch (this) {
-      case DealMode.MUTUAL:
-        return 'MUTUAL';
-      case DealMode.SEQUENTIAL:
-        return 'SEQUENTIAL';
-    }
-  }
-
-  static DealMode fromString(String mode) {
-    switch (mode) {
-      case 'MUTUAL':
-        return DealMode.MUTUAL;
-      case 'SEQUENTIAL':
-        return DealMode.SEQUENTIAL;
-      default:
-        return DealMode.MUTUAL;
-    }
-  }
-}
-
-enum DealStatus {
-  INSPECTION,
-  AWAITING_START,
-  IN_PROGRESS,
-  AWAITING_HANDOVER,
-  COMPLETED,
-  CANCELLED,
-}
+// Deal status from the backend exactly (see
+// GET /trade-chat/{chatId}/deal/verification). No PIN, no photos: a deal is
+// either awaiting mutual "Deal Completed" consent, or completed.
+enum DealStatus { AWAITING_HANDOVER, COMPLETED }
 
 extension DealStatusExtension on DealStatus {
   String get value {
     switch (this) {
-      case DealStatus.INSPECTION:
-        return 'INSPECTION';
-      case DealStatus.AWAITING_START:
-        return 'AWAITING_START';
-      case DealStatus.IN_PROGRESS:
-        return 'IN_PROGRESS';
       case DealStatus.AWAITING_HANDOVER:
         return 'AWAITING_HANDOVER';
       case DealStatus.COMPLETED:
         return 'COMPLETED';
-      case DealStatus.CANCELLED:
-        return 'CANCELLED';
     }
   }
 
   static DealStatus fromString(String status) {
     switch (status) {
-      case 'INSPECTION':
-        return DealStatus.INSPECTION;
-      case 'AWAITING_START':
-        return DealStatus.AWAITING_START;
-      case 'IN_PROGRESS':
-        return DealStatus.IN_PROGRESS;
-      case 'AWAITING_HANDOVER':
-        return DealStatus.AWAITING_HANDOVER;
       case 'COMPLETED':
         return DealStatus.COMPLETED;
-      case 'CANCELLED':
-        return DealStatus.CANCELLED;
       default:
         return DealStatus.AWAITING_HANDOVER;
     }
   }
 }
 
-enum DealRole { INITIATOR, RESPONDER, PROVIDER, CONSUMER }
+enum DealRole { INITIATOR, RESPONDER }
 
 extension DealRoleExtension on DealRole {
   String get value {
@@ -225,23 +177,13 @@ extension DealRoleExtension on DealRole {
         return 'INITIATOR';
       case DealRole.RESPONDER:
         return 'RESPONDER';
-      case DealRole.PROVIDER:
-        return 'PROVIDER';
-      case DealRole.CONSUMER:
-        return 'CONSUMER';
     }
   }
 
   static DealRole fromString(String role) {
     switch (role) {
-      case 'INITIATOR':
-        return DealRole.INITIATOR;
       case 'RESPONDER':
         return DealRole.RESPONDER;
-      case 'PROVIDER':
-        return DealRole.PROVIDER;
-      case 'CONSUMER':
-        return DealRole.CONSUMER;
       default:
         return DealRole.INITIATOR;
     }
@@ -666,36 +608,6 @@ num? _parseFlexibleNum(dynamic value) {
   return num.tryParse(value.toString());
 }
 
-// A single inspection proof photo.
-class InspectionImage {
-  final String url;
-  final String uploadedById;
-  final DateTime? uploadedAt;
-
-  InspectionImage({
-    required this.url,
-    required this.uploadedById,
-    this.uploadedAt,
-  });
-
-  factory InspectionImage.fromJson(Map<String, dynamic> json) {
-    return InspectionImage(
-      url: json['url'] ?? '',
-      uploadedById: json['uploadedById'] ?? '',
-      uploadedAt: json['uploadedAt'] != null
-          ? DateTime.tryParse(json['uploadedAt'].toString())
-          : null,
-    );
-  }
-
-  static List<InspectionImage> listFromJson(dynamic images) {
-    return (images as List? ?? [])
-        .whereType<Map>()
-        .map((img) => InspectionImage.fromJson(Map<String, dynamic>.from(img)))
-        .toList();
-  }
-}
-
 // Coin payment state for the deal's price leg, from the current user's view.
 // Coins are now secured automatically in the background (when the payer
 // confirms satisfied, or enters the Start PIN for a service) — there is no
@@ -733,86 +645,41 @@ class DealPayment {
   }
 }
 
-// Goods-inspection stage state, from the current user's view.
-class DealInspection {
-  final bool required;
-  final bool active;
-  // Only the inspector(s) for this scenario should see photo/satisfied UI —
-  // e.g. only the buyer on a pure-price deal, both sides on a barter deal.
-  final bool iAmInspector;
-  // True while I'm an inspector, inspection is active, and I haven't
-  // uploaded a photo yet — the "I'm satisfied" action must stay disabled.
-  final bool mustAddPhoto;
-  final int myPhotoCount;
-  final List<InspectionImage> images;
-  final bool iAmReady;
-  // Null when the other party isn't an inspector at all for this scenario
-  // (e.g. the seller on a pure-price deal) — not the same as "not ready".
-  final bool? otherReady;
-  final bool allReady;
-  final bool waitingForOther;
+// Mutual completion progress for the deal — drives the "Deal Completed"
+// button. Both users must tap it (canComplete flips false for a user once
+// they have); either user's "Deal Not Completed" cancels at any time.
+class DealCompletion {
+  final bool iCompleted;
+  final bool otherCompleted;
+  final bool bothCompleted;
+  final DateTime? completedAt;
+  final bool canComplete;
 
-  DealInspection({
-    required this.required,
-    required this.active,
-    required this.iAmInspector,
-    required this.mustAddPhoto,
-    required this.myPhotoCount,
-    required this.images,
-    required this.iAmReady,
-    this.otherReady,
-    required this.allReady,
-    required this.waitingForOther,
+  DealCompletion({
+    required this.iCompleted,
+    required this.otherCompleted,
+    required this.bothCompleted,
+    this.completedAt,
+    required this.canComplete,
   });
 
-  factory DealInspection.fromJson(Map<String, dynamic> json) {
-    return DealInspection(
-      required: json['required'] == true,
-      active: json['active'] == true,
-      iAmInspector: json['iAmInspector'] == true,
-      mustAddPhoto: json['mustAddPhoto'] == true,
-      myPhotoCount: json['myPhotoCount'] is int
-          ? json['myPhotoCount'] as int
-          : int.tryParse('${json['myPhotoCount'] ?? ''}') ?? 0,
-      images: InspectionImage.listFromJson(json['images']),
-      iAmReady: json['iAmReady'] == true,
-      otherReady: json['otherReady'] as bool?,
-      allReady: json['allReady'] == true,
-      waitingForOther: json['waitingForOther'] == true,
+  factory DealCompletion.fromJson(Map<String, dynamic> json) {
+    return DealCompletion(
+      iCompleted: json['iCompleted'] == true,
+      otherCompleted: json['otherCompleted'] == true,
+      bothCompleted: json['bothCompleted'] == true,
+      completedAt: json['completedAt'] != null
+          ? DateTime.tryParse(json['completedAt'].toString())
+          : null,
+      canComplete: json['canComplete'] == true,
     );
   }
 }
 
-// Which Deal PIN(s) have already been verified, from the current user's view.
-class DealFlags {
-  final bool initiatorPinVerified;
-  final bool responderPinVerified;
-  final bool startVerified;
-  final bool completionVerified;
-
-  DealFlags({
-    required this.initiatorPinVerified,
-    required this.responderPinVerified,
-    required this.startVerified,
-    required this.completionVerified,
-  });
-
-  factory DealFlags.fromJson(Map<String, dynamic> json) {
-    return DealFlags(
-      initiatorPinVerified: json['initiatorPinVerified'] == true,
-      responderPinVerified: json['responderPinVerified'] == true,
-      startVerified: json['startVerified'] == true,
-      completionVerified: json['completionVerified'] == true,
-    );
-  }
-}
-
-// The full, per-user Deal PIN verification view — GET
-// /trade-chat/{chatId}/deal/verification, and the same shape returned by
-// every deal/* POST action (fund, inspection images/ready). This is the
-// single source of truth for the Deal panel: drive all UI off
-// mode/status/role, never hardcode per-scenario branches — the backend
-// has already derived everything the client needs into this view.
+// The per-user deal summary — GET /trade-chat/{chatId}/deal/verification.
+// PIN-free, photo-free: single source of truth for the Deal panel, which is
+// just an exchange-mode header, a background payment info banner, and the
+// mutual "Deal Completed" / "Deal Not Completed" buttons.
 class DealVerification {
   final String chatId;
   final String scenario;
@@ -821,34 +688,22 @@ class DealVerification {
   // exchangeModeLabel as the deal header.
   final String? exchangeMode;
   final String? exchangeModeLabel;
-  final DealMode mode;
   final DealStatus status;
   final bool completed;
   final DealRole role;
-  final String? myPin;
-  final String? myPinLabel;
-  final bool awaitingMyEntry;
-  final String? entryLabel;
-  final DealFlags flags;
   final DealPayment payment;
-  final DealInspection inspection;
+  final DealCompletion completion;
 
   DealVerification({
     required this.chatId,
     required this.scenario,
     this.exchangeMode,
     this.exchangeModeLabel,
-    required this.mode,
     required this.status,
     required this.completed,
     required this.role,
-    this.myPin,
-    this.myPinLabel,
-    required this.awaitingMyEntry,
-    this.entryLabel,
-    required this.flags,
     required this.payment,
-    required this.inspection,
+    required this.completion,
   });
 
   factory DealVerification.fromJson(Map<String, dynamic> json) {
@@ -857,102 +712,57 @@ class DealVerification {
       scenario: json['scenario'] ?? '',
       exchangeMode: json['exchangeMode'] as String?,
       exchangeModeLabel: json['exchangeModeLabel'] as String?,
-      mode: DealModeExtension.fromString(json['mode'] ?? 'MUTUAL'),
       status: DealStatusExtension.fromString(
         json['status'] ?? 'AWAITING_HANDOVER',
       ),
       completed: json['completed'] == true,
       role: DealRoleExtension.fromString(json['role'] ?? 'INITIATOR'),
-      myPin: json['myPin'] as String?,
-      myPinLabel: json['myPinLabel'] as String?,
-      awaitingMyEntry: json['awaitingMyEntry'] == true,
-      entryLabel: json['entryLabel'] as String?,
-      flags: DealFlags.fromJson(
-        Map<String, dynamic>.from(json['flags'] ?? {}),
-      ),
       payment: DealPayment.fromJson(
         Map<String, dynamic>.from(json['payment'] ?? {}),
       ),
-      inspection: DealInspection.fromJson(
-        Map<String, dynamic>.from(json['inspection'] ?? {}),
+      completion: DealCompletion.fromJson(
+        Map<String, dynamic>.from(json['completion'] ?? {}),
       ),
     );
   }
-
-  bool get isGoodsMode => mode == DealMode.MUTUAL;
-  bool get isServiceSequential => mode == DealMode.SEQUENTIAL;
 }
 
-// Lightweight, PIN-free snapshot embedded on every TradeChat (from the
-// shared chat list/detail endpoints) — just enough to know a deal exists
-// and roughly what stage it's at. Never carries myPin/awaitingMyEntry/etc;
-// fetch DealVerification via TradeChatService.getDealVerification() for
-// the actual panel content.
+// Lightweight, no-PIN snapshot embedded on every TradeChat (from the shared
+// chat list/detail endpoints) — just enough to know a deal exists and its
+// coarse status. Fetch DealVerification via
+// TradeChatService.getDealVerification() for the actual panel content.
 class DealVerificationSummary {
-  final DealMode mode;
   final String scenario;
   final DealStatus status;
-  final String? providerId;
-  final String? consumerId;
   final String? payerId;
   final String? payeeId;
   final num? escrowAmount;
   final bool escrowFunded;
   final bool escrowReleased;
-  final bool requiresInspection;
-  final List<InspectionImage> inspectionImages;
-  final bool initiatorReady;
-  final bool responderReady;
-  final bool initiatorPinVerified;
-  final bool responderPinVerified;
-  final bool startVerified;
-  final bool completionVerified;
   final DateTime? completedAt;
 
   DealVerificationSummary({
-    required this.mode,
     required this.scenario,
     required this.status,
-    this.providerId,
-    this.consumerId,
     this.payerId,
     this.payeeId,
     this.escrowAmount,
     required this.escrowFunded,
     required this.escrowReleased,
-    required this.requiresInspection,
-    required this.inspectionImages,
-    required this.initiatorReady,
-    required this.responderReady,
-    required this.initiatorPinVerified,
-    required this.responderPinVerified,
-    required this.startVerified,
-    required this.completionVerified,
     this.completedAt,
   });
 
   factory DealVerificationSummary.fromJson(Map<String, dynamic> json) {
     return DealVerificationSummary(
-      mode: DealModeExtension.fromString(json['mode'] ?? 'MUTUAL'),
       scenario: json['scenario'] ?? '',
       status: DealStatusExtension.fromString(
         json['status'] ?? 'AWAITING_HANDOVER',
       ),
-      providerId: json['providerId'] as String?,
-      consumerId: json['consumerId'] as String?,
       payerId: json['payerId'] as String?,
       payeeId: json['payeeId'] as String?,
       escrowAmount: _parseFlexibleNum(json['escrowAmount']),
       escrowFunded: json['escrowFunded'] == true,
       escrowReleased: json['escrowReleased'] == true,
-      requiresInspection: json['requiresInspection'] == true,
-      inspectionImages: InspectionImage.listFromJson(json['inspectionImages']),
-      initiatorReady: json['initiatorReady'] == true,
-      responderReady: json['responderReady'] == true,
-      initiatorPinVerified: json['initiatorPinVerified'] == true,
-      responderPinVerified: json['responderPinVerified'] == true,
-      startVerified: json['startVerified'] == true,
-      completionVerified: json['completionVerified'] == true,
       completedAt: json['completedAt'] != null
           ? DateTime.tryParse(json['completedAt'].toString())
           : null,
@@ -960,27 +770,6 @@ class DealVerificationSummary {
   }
 
   bool get isCompleted => status == DealStatus.COMPLETED;
-}
-
-// Result of POST /trade-chat/{chatId}/deal/verify-pin.
-class DealPinVerifyResult {
-  final bool success;
-  final bool completed;
-  final String message;
-
-  DealPinVerifyResult({
-    required this.success,
-    required this.completed,
-    required this.message,
-  });
-
-  factory DealPinVerifyResult.fromJson(Map<String, dynamic> json) {
-    return DealPinVerifyResult(
-      success: json['success'] == true,
-      completed: json['completed'] == true,
-      message: json['message'] ?? '',
-    );
-  }
 }
 
 // Result of POST /trade-chat/{chatId}/deal/close.

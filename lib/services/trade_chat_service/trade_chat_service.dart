@@ -365,6 +365,50 @@ class TradeChatService {
     }
   }
 
+  // 7c. Create a zero-coin offer — an explicit "no coins involved" exchange.
+  // The barter item is optional: pass none of the item fields to offer "this
+  // item for zero coins" with nothing in return. offerType/price are never
+  // sent — the backend ignores them when zeroCoin is true.
+  Future<TradeOffer> createZeroCoinOffer({
+    required String chatId,
+    String? barterItemTitle,
+    String? barterItemDescription,
+    List<String>? barterItemImages,
+    List<String>? barterItemIds,
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatOffer(chatId));
+
+      final body = json.encode({
+        'zeroCoin': true,
+        'barterItemTitle': barterItemTitle,
+        'barterItemDescription': barterItemDescription,
+        'barterItemImages': barterItemImages ?? [],
+        'barterItemIds': barterItemIds ?? [],
+      });
+
+      print('📤 Creating zero-coin offer - URL: $url');
+      print('📤 Body: $body');
+
+      final response = await _client.post(url, headers: headers, body: body);
+
+      print('📥 Response status: ${response.statusCode}');
+      print('📥 Response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonResponse = json.decode(response.body);
+        final offerResponse = OfferResponse.fromJson(jsonResponse);
+        return offerResponse.data;
+      } else {
+        throw await ErrorHandler.handleHttpError(response);
+      }
+    } catch (e) {
+      print('❌ Error creating zero-coin offer: $e');
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
   // 8. Mark messages as read
   Future<bool> markMessagesAsRead(String chatId) async {
     try {
@@ -999,14 +1043,13 @@ class TradeChatService {
     }
   }
 
-  // ==================== DEAL PIN VERIFICATION ====================
-  // Replaces the legacy deal-completed/cancel flow above for any chat that
-  // has a DealVerification (i.e. hasDealVerification on TradeChat). All 6
-  // endpoints return the backend's real `message` verbatim on error (e.g.
-  // "Incorrect Deal PIN", "Too many incorrect PIN attempts. Please contact
-  // support.") — unlike ErrorHandler.handleHttpError's generic "Bad
-  // request: ..." prefixing used elsewhere in this file — since these
-  // messages are meant to be shown to the user as-is.
+  // ==================== DEAL COMPLETION (no PIN, no photos) ====================
+  // Dead-simple flow: offer -> (counter) -> accept -> both users tap "Deal
+  // Completed" (or either taps "Deal Not Completed" to cancel). Errors
+  // return the backend's real `message` verbatim (e.g. the "add N more
+  // coins" wallet-shortfall message) — unlike ErrorHandler.handleHttpError's
+  // generic "Bad request: ..." prefixing used elsewhere in this file — since
+  // these messages are meant to be shown to the user as-is.
   Never _throwDealError(http.Response response) {
     String message = 'Something went wrong. Please try again.';
     try {
@@ -1022,8 +1065,9 @@ class TradeChatService {
     throw Exception(message);
   }
 
-  // Get this user's Deal PIN view for a chat — the source of truth for the
-  // Deal panel (myPin, awaitingMyEntry, escrow, inspection state).
+  // The deal summary for a chat with an accepted offer — exchange mode,
+  // background coin state (reassurance copy only, no action), and mutual
+  // completion progress that drives the "Deal Completed" button.
   Future<DealVerification> getDealVerification(String chatId) async {
     try {
       final headers = await _getHeaders();
@@ -1034,88 +1078,6 @@ class TradeChatService {
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
         return DealVerification.fromJson(jsonResponse['data']);
-      } else {
-        _throwDealError(response);
-      }
-    } catch (e) {
-      throw ErrorHandler.handleError(e);
-    }
-  }
-
-  // Add product proof photos during the inspection stage. Each entry can be
-  // a pre-uploaded https URL or a base64 data URI — the backend uploads
-  // base64 to S3 itself.
-  Future<DealVerification> addInspectionImages(
-    String chatId,
-    List<String> images,
-  ) async {
-    try {
-      final headers = await _getHeaders();
-      final url = Uri.parse(ApiConstants.tradeChatDealInspectionImages(chatId));
-
-      final response = await _client.post(
-        url,
-        headers: headers,
-        body: json.encode({'images': images}),
-      );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final jsonResponse = json.decode(response.body);
-        return DealVerification.fromJson(jsonResponse['data']);
-      } else {
-        _throwDealError(response);
-      }
-    } catch (e) {
-      throw ErrorHandler.handleError(e);
-    }
-  }
-
-  // Confirm (or withdraw) that this user has inspected and is satisfied.
-  // When both parties are ready the backend advances the deal to the PIN
-  // handover stage automatically.
-  Future<DealVerification> setDealReady(String chatId, bool ready) async {
-    try {
-      final headers = await _getHeaders();
-      final url = Uri.parse(ApiConstants.tradeChatDealInspectionReady(chatId));
-
-      final response = await _client.post(
-        url,
-        headers: headers,
-        body: json.encode({'ready': ready}),
-      );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final jsonResponse = json.decode(response.body);
-        return DealVerification.fromJson(jsonResponse['data']);
-      } else {
-        _throwDealError(response);
-      }
-    } catch (e) {
-      throw ErrorHandler.handleError(e);
-    }
-  }
-
-  // Note: coins are now secured automatically in the background (when the
-  // payer confirms satisfied, or enters the Start PIN for a service) — the
-  // old separate "fund escrow" step is gone from the UI. The endpoint still
-  // exists server-side for compatibility, so no Dart method wraps it here.
-
-  // Submit a 4-digit Deal PIN. The backend decides which PIN is expected
-  // from the caller's role + the deal's current status.
-  Future<DealPinVerifyResult> verifyDealPin(String chatId, String pin) async {
-    try {
-      final headers = await _getHeaders();
-      final url = Uri.parse(ApiConstants.tradeChatDealVerifyPin(chatId));
-
-      final response = await _client.post(
-        url,
-        headers: headers,
-        body: json.encode({'pin': pin}),
-      );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final jsonResponse = json.decode(response.body);
-        return DealPinVerifyResult.fromJson(jsonResponse['data']);
       } else {
         _throwDealError(response);
       }

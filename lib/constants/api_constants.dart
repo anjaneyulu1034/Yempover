@@ -66,16 +66,10 @@ class ApiConstants {
   static String tradeChatDealCompleted(String id) =>
       '$baseUrl/trade-chat/$id/deal-completed';
 
-  // Deal PIN verification (replaces deal-completed/cancel for chats that
-  // have a DealVerification — see TradeChatService's deal/* methods).
+  // Deal summary (no PIN, no photos) — drives the "Deal Completed" /
+  // "Deal Not Completed" panel after an offer is accepted.
   static String tradeChatDealVerification(String id) =>
       '$baseUrl/trade-chat/$id/deal/verification';
-  static String tradeChatDealInspectionImages(String id) =>
-      '$baseUrl/trade-chat/$id/deal/inspection/images';
-  static String tradeChatDealInspectionReady(String id) =>
-      '$baseUrl/trade-chat/$id/deal/inspection/ready';
-  static String tradeChatDealVerifyPin(String id) =>
-      '$baseUrl/trade-chat/$id/deal/verify-pin';
   static String tradeChatDealClose(String id) =>
       '$baseUrl/trade-chat/$id/deal/close';
 

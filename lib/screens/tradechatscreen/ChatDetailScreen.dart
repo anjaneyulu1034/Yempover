@@ -1086,25 +1086,39 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final selectedOption = await showExchangeModeSheet(context, options);
     if (!mounted || selectedOption == null) return;
 
+    if (selectedOption is ZeroCoinSelected) {
+      await _navigateToOfferScreen(
+        offerMode: OfferSubmissionMode.barter,
+        isZeroCoin: true,
+      );
+      return;
+    }
+
+    if (selectedOption is! ExchangeModeOption) return;
+
     if (selectedOption.isCrossMode) {
       final confirmed = await confirmCrossModeOption(context, selectedOption);
       if (!mounted || confirmed != true) return;
     }
 
     final offerMode = mapOfferTypeToSubmissionMode(selectedOption.offerType);
-    await _navigateToOfferScreen(selectedOption, offerMode);
+    await _navigateToOfferScreen(
+      selectedOption: selectedOption,
+      offerMode: offerMode,
+    );
   }
 
   // Every mode — including a plain coins offer — goes through the exact
   // same offer-composition screens a first-time offer uses (Offer Summary
   // card, quoted price, description, real barterItemIds picker for
-  // barter/both), never a stripped-down local dialog. Barter/Both need a
-  // real item picked from the user's own posts first (OfferDeckScreen);
+  // barter/both), never a stripped-down local dialog. Barter/Both (and
+  // zero-coin, whose item is optional) need OfferDeckScreen's picker first;
   // a pure coins offer goes straight to OfferDescriptionScreen.
-  Future<void> _navigateToOfferScreen(
-    ExchangeModeOption selectedOption,
-    OfferSubmissionMode offerMode,
-  ) async {
+  Future<void> _navigateToOfferScreen({
+    ExchangeModeOption? selectedOption,
+    required OfferSubmissionMode offerMode,
+    bool isZeroCoin = false,
+  }) async {
     final postId = _currentChat.productId ?? _currentChat.serviceId;
     if (postId == null) return;
     final isService = _currentChat.serviceId != null;
@@ -1128,7 +1142,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (!mounted) return;
     setState(() => _isPreparingOffer = false);
 
-    if (!selectedOption.requiresProductSelection) {
+    final requiresProductSelection =
+        isZeroCoin || (selectedOption?.requiresProductSelection ?? true);
+
+    if (!requiresProductSelection) {
       final hasEnoughBalance = await _ensureSufficientWalletBalance(post);
       if (!mounted || !hasEnoughBalance) return;
 
@@ -1154,6 +1171,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           post: post,
           currentUserId: widget.currentUserId,
           offerMode: offerMode,
+          isZeroCoin: isZeroCoin,
         ),
       ),
     );
@@ -2429,10 +2447,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final otherUser = _getOtherUser();
 
     // Feature 2: the backend writes each deal-lifecycle event (offer made,
-    // accepted, exchange mode chosen, escrow funded, PIN verified, deal
-    // completed/closed, ...) as its own SYSTEM message — this is the
-    // authoritative, complete history. Render it as a centered timeline
-    // entry, distinct from left/right chat bubbles, not another bubble.
+    // accepted, exchange mode chosen, deal completed/not completed, ...) as
+    // its own SYSTEM message — this is the authoritative, complete history.
+    // Render it as a centered timeline entry, distinct from left/right chat
+    // bubbles, not another bubble.
     if (isSystemMessage) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 24),
@@ -3887,7 +3905,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                                 key: ValueKey(_currentChat.id),
                                 chatId: _currentChat.id,
                                 currentUserId: widget.currentUserId,
-                                summary: _currentChat.dealVerification!,
                                 itemName: _currentChat.postTitle,
                                 onChatShouldRefresh: _refreshChat,
                               )

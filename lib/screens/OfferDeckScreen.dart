@@ -17,12 +17,17 @@ class OfferDeckScreen extends StatefulWidget {
   final Post post;
   final String currentUserId;
   final OfferSubmissionMode offerMode;
+  // Explicit "no coins involved" request: the barter item becomes optional
+  // (the user may submit with none selected) and no price/value-matching
+  // rules apply.
+  final bool isZeroCoin;
 
   const OfferDeckScreen({
     super.key,
     required this.post,
     required this.currentUserId,
     required this.offerMode,
+    this.isZeroCoin = false,
   });
 
   @override
@@ -55,6 +60,10 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   }
 
   String get _emptyItemsMessage {
+    if (widget.isZeroCoin) {
+      return 'Item is optional for a zero-coin request — post items open for '
+          'barter if you\'d like to offer one, or continue without one.';
+    }
     if (_filtersToBarterPostsOnly) {
       return 'Post items open for barter to make this offer';
     }
@@ -203,8 +212,11 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
   /// Condition 1 (pure barter): the swapped items must be worth the same.
   /// A mismatch here belongs in Condition 2 ("Barter + Price") instead, so a
-  /// pure barter offer is only allowed to proceed once values line up.
+  /// pure barter offer is only allowed to proceed once values line up. A
+  /// zero-coin exchange is exempt — the parties have agreed to trade
+  /// without coins, at whatever values they agree.
   double? get _pureBarterValueGap {
+    if (widget.isZeroCoin) return null;
     if (widget.offerMode != OfferSubmissionMode.barter) return null;
     final targetPrice = widget.post.price;
     if (targetPrice <= 0) return null;
@@ -533,7 +545,8 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       _quotedPriceError = quotedPriceError;
     });
 
-    if ((widget.offerMode == OfferSubmissionMode.barter ||
+    if (!widget.isZeroCoin &&
+        (widget.offerMode == OfferSubmissionMode.barter ||
             widget.offerMode == OfferSubmissionMode.both) &&
         _selectedItems.isEmpty) {
       SnackbarUtils.showInfo(
@@ -596,6 +609,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
           isService: isService, // Pass the correct type
           offerMode: widget.offerMode,
           initialQuotedPrice: _quotedPriceController.text.trim(),
+          isZeroCoin: widget.isZeroCoin,
         ),
       ),
     );
@@ -655,9 +669,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         //   icon: const Icon(Icons.arrow_back, color: Colors.black),
         //  // onPressed: () => Navigator.pop(context),
         // ),
-        title: const Text(
-          "Offer Deck",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
+        title: Text(
+          widget.isZeroCoin ? "Zero-Coin Offer" : "Offer Deck",
+          style: const TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         centerTitle: true,
       ),
@@ -667,6 +684,40 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         child: SingleChildScrollView(
           child: Column(
             children: [
+              if (widget.isZeroCoin)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.teal.shade200),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.check_box_outlined,
+                          color: Colors.teal.shade700,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Zero-coin transaction — no coins involved. '
+                            'Picking an item below is optional.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.teal.shade900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               // -------- USER NAME ----------
               Padding(
                 padding: const EdgeInsets.symmetric(

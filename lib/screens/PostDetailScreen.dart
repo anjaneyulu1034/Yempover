@@ -272,6 +272,23 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final selectedOption = await showExchangeModeSheet(context, options);
     if (!mounted || selectedOption == null) return;
 
+    if (selectedOption is ZeroCoinSelected) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OfferDeckScreen(
+            post: _post,
+            currentUserId: _currentUserId!,
+            offerMode: OfferSubmissionMode.barter,
+            isZeroCoin: true,
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (selectedOption is! ExchangeModeOption) return;
+
     if (selectedOption.isCrossMode) {
       final confirmed = await confirmCrossModeOption(context, selectedOption);
       if (!mounted || confirmed != true) return;

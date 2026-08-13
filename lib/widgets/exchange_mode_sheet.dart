@@ -46,11 +46,21 @@ Future<bool?> confirmCrossModeOption(
   );
 }
 
-Future<ExchangeModeOption?> showExchangeModeSheet(
+// Returned by showExchangeModeSheet when the user picks the separate
+// "zero-coin transaction" row instead of one of the backend's exchange-mode
+// cards — a client-side-only addition (product offers only), not itself an
+// ExchangeModeOption.
+class ZeroCoinSelected {
+  const ZeroCoinSelected();
+}
+
+// Returns either an ExchangeModeOption, a ZeroCoinSelected, or null
+// (dismissed) — callers should check `is` before using the result.
+Future<Object?> showExchangeModeSheet(
   BuildContext context,
   ExchangeModeOptions options,
 ) async {
-  return showModalBottomSheet<ExchangeModeOption>(
+  return showModalBottomSheet<Object>(
     context: context,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -77,10 +87,34 @@ Future<ExchangeModeOption?> showExchangeModeSheet(
             ...options.options.map(
               (option) => _buildExchangeModeCard(context, option),
             ),
+            if (options.target == 'product') ...[
+              const Divider(height: 24),
+              _buildZeroCoinOption(context),
+            ],
           ],
         ),
       ),
     ),
+  );
+}
+
+Widget _buildZeroCoinOption(BuildContext context) {
+  return ListTile(
+    contentPadding: EdgeInsets.zero,
+    leading: const Icon(
+      Icons.check_box_outlined,
+      color: Colors.teal,
+      size: 32,
+    ),
+    title: const Text(
+      'Request zero-coin transaction',
+      style: TextStyle(fontWeight: FontWeight.w600),
+    ),
+    subtitle: const Text(
+      'No coins involved — offer an item in return, or ask for it free.',
+      style: TextStyle(fontSize: 12),
+    ),
+    onTap: () => Navigator.pop(context, const ZeroCoinSelected()),
   );
 }
 
