@@ -377,6 +377,17 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           return;
         }
 
+        if (_requiresPrice &&
+            lowerError.contains('price') &&
+            (lowerError.contains('required') ||
+                lowerError.contains('invalid') ||
+                lowerError.contains('greater'))) {
+          setState(() {
+            _priceError = 'Price must be greater than 0';
+          });
+          return;
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to send offer: $readableError'),
@@ -396,11 +407,14 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
     }
 
     final parsed = double.tryParse(trimmed);
-    // A "Both" offer may legitimately quote 0 when the barter items already
-    // cover the listing price; a pure "Price" offer must still be > 0.
-    final minAllowed = widget.offerMode == OfferSubmissionMode.both ? 0 : 0.01;
-    if (parsed == null || parsed < minAllowed) {
+    if (parsed == null) {
       return 'Enter a valid price';
+    }
+
+    // The backend requires a price greater than 0 for both PRICE and BOTH
+    // offer types — 0 is rejected server-side even for combined offers.
+    if (parsed <= 0) {
+      return 'Price must be greater than 0';
     }
 
     if (trimmed.length > 9) {

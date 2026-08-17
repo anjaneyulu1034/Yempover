@@ -2384,6 +2384,39 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return _currentChat.getOtherUserInfo(widget.currentUserId);
   }
 
+  // Who actually handed over what once a deal is complete — the offerer is
+  // whoever made the accepted offer; the receiver is the other party (the
+  // post owner), who hands back the post's product/service in exchange.
+  // Real first names on both sides (not "You"/"Them") so the completed-deal
+  // summary reads the same for both participants.
+  String? get _dealOffererName {
+    final offer = _currentChat.latestAcceptedOffer;
+    if (offer == null) return null;
+    return offer.madeById == _currentChat.initiatorId
+        ? _currentChat.initiator.firstName
+        : _currentChat.responder.firstName;
+  }
+
+  String? get _dealReceiverName {
+    final offer = _currentChat.latestAcceptedOffer;
+    if (offer == null) return null;
+    return offer.madeById == _currentChat.initiatorId
+        ? _currentChat.responder.firstName
+        : _currentChat.initiator.firstName;
+  }
+
+  String? get _dealOfferedItemLabel {
+    final offer = _currentChat.latestAcceptedOffer;
+    if (offer == null) return null;
+    if (offer.isBarterOffer || offer.isBothOffer) {
+      return offer.barterItemTitle;
+    }
+    if (offer.isPriceOffer && offer.price != null) {
+      return '${CoinFormat.amount(offer.price)} coins';
+    }
+    return null;
+  }
+
   bool _isMessageFromCurrentUser(ChatMessage message) {
     return message.sentById == widget.currentUserId;
   }
@@ -3400,8 +3433,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Widget _buildBarterExchangePreview({
     required String myImage,
     required String myLabel,
+    String? myName,
     required String theirImage,
     required String theirLabel,
+    String? theirName,
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3416,6 +3451,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               ),
               const SizedBox(height: 4),
               _buildOfferItemThumb(myImage),
+              if (myName != null && myName.trim().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  myName,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ],
           ),
         ),
@@ -3433,6 +3480,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               ),
               const SizedBox(height: 4),
               _buildOfferItemThumb(theirImage),
+              if (theirName != null && theirName.trim().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  theirName,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ],
           ),
         ),
@@ -3643,6 +3702,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     if (!isIncoming) return const SizedBox();
 
+    final senderName = _getOtherUser().firstName;
     final statusText = latestOffer.offerStatus.value;
     final statusColor = latestOffer.isPending
         ? Colors.blue.shade700
@@ -3669,7 +3729,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Offer ($statusText)',
+                  "$senderName's Offer to You ($statusText)",
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: statusColor,
@@ -3709,22 +3769,24 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           ] else if (latestOffer.isBarterOffer || latestOffer.isBothOffer) ...[
             Text(
               isServiceChat
-                  ? 'This user is interested in your service. Here are their thoughts:'
-                  : 'This user is interested in your product. Here are their thoughts:',
+                  ? '$senderName is interested in your service. Here are their thoughts:'
+                  : '$senderName is interested in your product. Here are their thoughts:',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 10),
             _buildBarterExchangePreview(
               myImage: _currentChat.postImage,
               myLabel: isServiceChat ? 'Your service' : 'Your product',
+              myName: _currentChat.postTitle,
               theirImage: latestOffer.barterItemImages.isNotEmpty
                   ? latestOffer.barterItemImages.first
                   : '',
-              theirLabel: 'Offered item',
+              theirLabel: '$senderName offers',
+              theirName: latestOffer.barterItemTitle,
             ),
             const SizedBox(height: 10),
             Text(
-              'Item: ${latestOffer.barterItemTitle ?? 'Unknown'}',
+              '$senderName is offering: ${latestOffer.barterItemTitle ?? 'Unknown'}',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             if (latestOffer.barterItemDescription != null &&
@@ -3869,6 +3931,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         (_currentChat.serviceId != null &&
             _currentChat.serviceId!.isNotEmpty) ||
         _currentChat.service != null;
+    final recipientName = _getOtherUser().firstName;
 
     final statusText = latestOffer.offerStatus.value;
     final statusColor = latestOffer.isPending
@@ -3900,7 +3963,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Your Offer ($statusText)',
+                        'Your Offer to $recipientName ($statusText)',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: statusColor,
@@ -3954,13 +4017,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               myImage: latestOffer.barterItemImages.isNotEmpty
                   ? latestOffer.barterItemImages.first
                   : '',
-              myLabel: 'Your offered item',
+              myLabel: 'You offer',
+              myName: latestOffer.barterItemTitle,
               theirImage: _currentChat.postImage,
-              theirLabel: isServiceChat ? 'Their service' : 'Their product',
+              theirLabel: isServiceChat
+                  ? '$recipientName\'s service'
+                  : '$recipientName\'s product',
+              theirName: _currentChat.postTitle,
             ),
             const SizedBox(height: 10),
             Text(
-              'Item: ${latestOffer.barterItemTitle ?? 'Unknown'}',
+              'You are offering: ${latestOffer.barterItemTitle ?? 'Unknown'}',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             if (latestOffer.barterItemDescription != null)
@@ -4214,6 +4281,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                                 chatId: _currentChat.id,
                                 currentUserId: widget.currentUserId,
                                 itemName: _currentChat.postTitle,
+                                offererName: _dealOffererName,
+                                receiverName: _dealReceiverName,
+                                offeredItemLabel: _dealOfferedItemLabel,
                                 onChatShouldRefresh: _refreshChat,
                               )
                             else

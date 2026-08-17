@@ -16,6 +16,12 @@ class DealVerificationPanel extends StatefulWidget {
   final String currentUserId;
   final String? itemName;
   final VoidCallback onChatShouldRefresh;
+  // Who gave what to whom, so the completed-deal card can spell out the
+  // exchange instead of just a bare checkmark — the offerer handed over
+  // offeredItemLabel and received itemName (the post) from the receiver.
+  final String? offererName;
+  final String? receiverName;
+  final String? offeredItemLabel;
 
   const DealVerificationPanel({
     super.key,
@@ -23,6 +29,9 @@ class DealVerificationPanel extends StatefulWidget {
     required this.currentUserId,
     required this.onChatShouldRefresh,
     this.itemName,
+    this.offererName,
+    this.receiverName,
+    this.offeredItemLabel,
   });
 
   @override
@@ -444,14 +453,38 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
   }
 
   Widget _buildCompletedRow() {
-    return const Row(
+    final offererName = widget.offererName;
+    final receiverName = widget.receiverName;
+    final offeredItemLabel = widget.offeredItemLabel;
+    final itemName = widget.itemName;
+    final hasExchangeSummary = offererName != null &&
+        receiverName != null &&
+        offeredItemLabel != null &&
+        offeredItemLabel.trim().isNotEmpty;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.check_circle, color: Colors.green, size: 28),
-        SizedBox(width: 10),
+        const Icon(Icons.check_circle, color: Colors.green, size: 28),
+        const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            'Deal completed ✓',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Deal completed ✓',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              if (hasExchangeSummary) ...[
+                const SizedBox(height: 4),
+                Text(
+                  itemName != null && itemName.trim().isNotEmpty
+                      ? '$offererName gave "$offeredItemLabel" to $receiverName for "$itemName".'
+                      : '$offererName gave "$offeredItemLabel" to $receiverName.',
+                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF374151)),
+                ),
+              ],
+            ],
           ),
         ),
       ],

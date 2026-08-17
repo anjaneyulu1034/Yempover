@@ -972,25 +972,28 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(
-                        Icons.timer_outlined,
-                        size: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          _getExpiryCountdownLabel(post),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: _getExpiryCountdownColor(post),
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      if (post.validUntil != null) ...[
+                        Icon(
+                          Icons.timer_outlined,
+                          size: 14,
+                          color: Colors.grey.shade600,
                         ),
-                      ),
-                      const SizedBox(width: 8),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            _getExpiryCountdownLabel(post),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _getExpiryCountdownColor(post),
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ] else
+                        const Spacer(),
                       Text(
                         DateFormat('MMM dd, yyyy').format(post.postedDate),
                         style: TextStyle(
