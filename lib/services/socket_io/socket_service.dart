@@ -126,7 +126,10 @@ class SocketService {
       _notifyListeners('offer_withdrawn', data);
     });
 
-    // Chat status events
+    // Chat room join/leave presence — kept feeding 'user_presence' alongside
+    // the global user_online/user_offline events below, per spec (Points 5 &
+    // 6): the header's initial state now comes from getChatDetail's
+    // otherUserOnline, so these just keep it live from there.
     _socket!.on('chat:user_online', (data) {
       print('🟢 Chat user online: $data');
       _notifyListeners('user_presence', {...?data, 'isOnline': true});
@@ -172,6 +175,45 @@ class SocketService {
 
     _socket!.on('messages_read', (data) {
       _notifyListeners('messages_read', data);
+    });
+
+    // Canonical "something changed in this chat, refetch it" signal — the
+    // server now emits this alongside every granular event (message/offer/
+    // deal) straight from the REST handlers, so a chat screen that's missing
+    // a specific listener (or received a server-generated SYSTEM card it
+    // doesn't have a dedicated event for) still catches up live.
+    _socket!.on('chat:updated', (data) {
+      print('🔄 Chat updated: $data');
+      _notifyListeners('chat_updated', data);
+    });
+
+    // Block/unblock — the acting side already updates optimistically; these
+    // are for the OTHER participant so their open chat reacts immediately
+    // instead of only after their next manual refresh.
+    _socket!.on('chat:blocked', (data) {
+      print('🚫 Chat blocked: $data');
+      _notifyListeners('chat_blocked', data);
+    });
+
+    _socket!.on('chat:unblocked', (data) {
+      print('✅ Chat unblocked: $data');
+      _notifyListeners('chat_unblocked', data);
+    });
+
+    // Wallet balance changed — fires on every coin change (top-up, redeem,
+    // escrow hold/release/refund). Sent to the user's own room, so any
+    // screen bound to WalletBalanceProvider updates instantly.
+    _socket!.on('wallet:updated', (data) {
+      print('💰 Wallet updated: $data');
+      _notifyListeners('wallet:updated', data);
+    });
+
+    // The listing owner's offer count changed on a product/service they
+    // posted — sent to their personal room so an open detail screen can
+    // refetch the count live instead of only on next open.
+    _socket!.on('post:offers_updated', (data) {
+      print('📊 Post offers updated: $data');
+      _notifyListeners('post:offers_updated', data);
     });
 
     // User presence
@@ -397,6 +439,16 @@ class SocketService {
       'offer': offerData,
       'timestamp': DateTime.now().toIso8601String(),
     });
+  }
+
+  // Relay a message already created over REST (e.g. an image upload, which
+  // needs the presigned-URL round trip first) — the server re-fetches it by
+  // id and broadcasts it to the room, same "created via REST, please
+  // broadcast" pattern as emitOfferCreated above.
+  void emitMessageCreated(String chatId, String messageId) {
+    if (!_isConnected) return;
+
+    _socket?.emit('message:created', {'chatId': chatId, 'messageId': messageId});
   }
 
   // Accept an offer (emit event)

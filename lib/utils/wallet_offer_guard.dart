@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:yempover_app/screens/AddCoinsScreen.dart';
-import 'package:yempover_app/services/coin_service.dart';
+import 'package:yempover_app/utils/wallet_balance_provider.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
 
 /// Ensures the user has enough wallet coins before a priced offer.
@@ -23,18 +24,27 @@ class WalletOfferGuard {
     final required = _requiredCoinsFromAmount(requiredCoins);
     if (required <= 0) return true;
 
-    final coinService = CoinService();
-    int balance = 0;
+    // Read through the shared live balance instead of an independent fetch
+    // — reuses whatever the rest of the app already knows (kept current by
+    // wallet:updated) rather than assuming a fresh screen-open is the only
+    // time the balance changes.
+    final walletProvider = Provider.of<WalletBalanceProvider>(
+      context,
+      listen: false,
+    );
+    int balance;
 
     try {
-      final wallet = await coinService.getWallet();
-      balance = CoinService.parseCoinAmount(wallet?['balance']);
+      if (walletProvider.balance == null) {
+        await walletProvider.refresh();
+      }
+      balance = walletProvider.balance ?? 0;
     } catch (_) {
       if (!context.mounted) return false;
       await _showInsufficientDialog(
         context,
         required: required,
-        balance: balance,
+        balance: 0,
         itemName: itemName,
       );
       return false;
@@ -59,8 +69,8 @@ class WalletOfferGuard {
     if (!context.mounted) return false;
 
     try {
-      final wallet = await coinService.getWallet();
-      balance = CoinService.parseCoinAmount(wallet?['balance']);
+      await walletProvider.refresh();
+      balance = walletProvider.balance ?? 0;
       return balance >= required;
     } catch (_) {
       return false;

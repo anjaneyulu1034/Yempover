@@ -29,6 +29,7 @@ import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import '../services/post_action_service.dart';
 import 'package:yempover_app/utils/blocked_users_cache.dart';
+import 'package:yempover_app/utils/wallet_balance_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Extended Post class with the required properties
@@ -181,6 +182,15 @@ class _HomeScreenState extends State<HomeScreen> {
     _startExpiryTicker();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeData();
+      // App-level: connect the socket and start tracking the live wallet
+      // balance once, here, rather than each coin-showing screen doing its
+      // own fetch — Home is reached after every login/cold-start resume.
+      if (mounted) {
+        Provider.of<WalletBalanceProvider>(
+          context,
+          listen: false,
+        ).ensureLive();
+      }
     });
   }
 
@@ -355,6 +365,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (mounted) {
           Provider.of<NotificationProvider>(context, listen: false).reset();
           Provider.of<ChatProvider>(context, listen: false).reset();
+          Provider.of<WalletBalanceProvider>(context, listen: false).reset();
         }
         ProfileSessionManager.instance.clearSession();
       }

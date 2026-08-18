@@ -241,6 +241,7 @@ class TradeChatService {
     required String chatId,
     required double price,
     String? currency,
+    String? description,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -251,6 +252,7 @@ class TradeChatService {
         'price': price,
         'currency': currency ?? 'USD',
         'barterItemTitle': null,
+        'barterItemDescription': description,
       });
 
       print('📤 Creating price offer - URL: $url');
@@ -736,7 +738,7 @@ class TradeChatService {
           'price': price ?? 0,
           'currency': currency ?? 'USD',
           'barterItemTitle': '',
-          'barterItemDescription': '',
+          'barterItemDescription': barterItemDescription ?? '',
           'barterItemImages': [],
           'barterWishCategories': [],
         };
