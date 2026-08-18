@@ -101,11 +101,7 @@ Future<Object?> showExchangeModeSheet(
 Widget _buildZeroCoinOption(BuildContext context) {
   return ListTile(
     contentPadding: EdgeInsets.zero,
-    leading: const Icon(
-      Icons.check_box_outlined,
-      color: Colors.teal,
-      size: 32,
-    ),
+    leading: const Icon(Icons.money_off, color: Colors.teal, size: 32),
     title: const Text(
       'Request zero-coin transaction',
       style: TextStyle(fontWeight: FontWeight.w600),
@@ -114,7 +110,62 @@ Widget _buildZeroCoinOption(BuildContext context) {
       'No coins involved — offer an item in return, or ask for it free.',
       style: TextStyle(fontSize: 12),
     ),
-    onTap: () => Navigator.pop(context, const ZeroCoinSelected()),
+    onTap: () async {
+      final confirmed = await _confirmZeroCoinSelection(context);
+      if (confirmed == true && context.mounted) {
+        Navigator.pop(context, const ZeroCoinSelected());
+      }
+    },
+  );
+}
+
+// Zero-coin is easy to tap by mistake right next to the priced options
+// above it, and its effect (no coins, ever) isn't obvious from the row
+// alone — confirm before committing to it.
+Future<bool?> _confirmZeroCoinSelection(BuildContext context) {
+  return showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: const Row(
+        children: [
+          Icon(Icons.money_off, color: Colors.teal),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text('Zero-Coin Exchange', style: TextStyle(fontSize: 18)),
+          ),
+        ],
+      ),
+      content: const Text(
+        'No coins will be exchanged in this deal — only the item(s) '
+        'themselves, or you can ask for this item for free.',
+        style: TextStyle(fontSize: 14, height: 1.4),
+      ),
+      actions: [
+        OutlinedButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF334155),
+            side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.teal,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          child: const Text('Continue'),
+        ),
+      ],
+    ),
   );
 }
 

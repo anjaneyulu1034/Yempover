@@ -18,6 +18,7 @@ import 'package:yempover_app/utils/loading_widget.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
 import 'package:yempover_app/widgets/exchange_mode_sheet.dart';
 import 'package:yempover_app/utils/blocked_users_cache.dart';
+import 'package:yempover_app/services/blocked_user_service.dart';
 import 'package:yempover_app/services/coin_service.dart';
 import 'package:yempover_app/screens/CoinsWalletScreen.dart';
 import 'package:yempover_app/utils/error_message_utils.dart';
@@ -51,6 +52,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   final ServiceBookingService _serviceBookingService = ServiceBookingService();
   final SocketService _socketService = SocketService();
   final TokenService _tokenService = TokenService();
+  final BlockedUserService _blockedUserService = BlockedUserService();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
@@ -103,13 +105,44 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return true;
   }
 
+  // The listing owner (responder) only ever accepts/rejects/counters what's
+  // proposed to them — they never start a fresh offer on their own listing.
+  bool get _isListingOwner => widget.currentUserId == _currentChat.responderId;
+
   // Whether THIS user can start a brand-new offer right now — distinct from
   // _canShowOfferActions (which is about responding to an existing
   // incoming offer). Server-authoritative: correctly re-opens after a
   // reject/counter/cancel and correctly blocks while my own offer is still
   // PENDING, without the client having to reconstruct that logic itself.
+  // !_isListingOwner is a client-side belt-and-suspenders check mirroring
+  // the same rule the server now applies to canMakeOffer.
   bool get _canMakeNewOffer =>
-      _currentChat.canMakeOffer && !_isReferenceUnavailable;
+      _currentChat.canMakeOffer &&
+      !_isReferenceUnavailable &&
+      !_isListingOwner;
+
+  // Whether THIS user is the one who would pay coins if a PRICE/BOTH offer
+  // in this chat is accepted — mirrors the backend's deriveTerms rule
+  // (DealVerificationService): for goods, the coin leg always flows from the
+  // initiator (buyer) to the responder (listing owner), regardless of who
+  // authored the offer/counter. For a service listing, direction flips when
+  // the post itself is a "looking for service" request (the poster is the
+  // one paying for a service, not providing one). A pure PRICE/BOTH wallet
+  // check should only ever run for this user, never for whoever is about to
+  // *receive* the coins.
+  bool get _currentUserIsPayer {
+    if (_currentChat.serviceId == null) {
+      return widget.currentUserId == _currentChat.initiatorId;
+    }
+    final ownerIsProvider = _currentChat.service?.status != 'LOOKING_FOR_SERVICE';
+    final providerId = ownerIsProvider
+        ? _currentChat.responderId
+        : _currentChat.initiatorId;
+    final consumerId = providerId == _currentChat.initiatorId
+        ? _currentChat.responderId
+        : _currentChat.initiatorId;
+    return widget.currentUserId == consumerId;
+  }
 
   void _showErrorToast(Object error) {
     final raw = error.toString().replaceFirst('Exception: ', '').trim();
@@ -169,6 +202,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     _scrollToBottom();
     _initializeSocketListeners();
     Future.microtask(_initializeSocketAndJoin);
+    // So the More Options menu can correctly offer Block vs Unblock.
+    unawaited(BlockedUsersCache.instance.ensureLoaded());
     WidgetsBinding.instance.addObserver(this);
     ResumeStateService.saveChat(widget.chat.id);
   }
@@ -195,6 +230,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     _socketService.off('user_presence', _handleUserPresence);
     WidgetsBinding.instance.removeObserver(this);
     _chatService.dispose();
+    _blockedUserService.dispose();
     super.dispose();
   }
 
@@ -933,6 +969,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         imageFile: imageFile,
       );
 
+      // Created over REST (image upload needs the presigned-URL round
+      // trip first) — ask the socket layer to relay it to the room so the
+      // other participant sees it live instead of on their next refresh.
+      _socketService.emitMessageCreated(_currentChat.id, sentMessage.id);
+
       setState(() {
         final index = _messages.indexWhere((m) => m.id == tempMessage.id);
         if (index != -1) {
@@ -1082,7 +1123,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (!_canMakeNewOffer) {
       _showErrorToast(
         _currentChat.myPendingOffer
-            ? 'Waiting for the other user to respond to your offer.'
+            ? 'Waiting for ${_getOtherUser().firstName} to respond to your offer.'
             : 'Offers are no longer available for this chat.',
       );
       return;
@@ -1282,10 +1323,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final listing = _listingPrice;
     if (listing == null) {
       // No listing price to bound against (e.g. barter-only listing) — fall
-      // back to the app-wide max so the field still can't take an
-      // arbitrarily large number.
-      if (price.toStringAsFixed(0).length > Validators.maxAmountLength) {
-        return 'Price is too large';
+      // back to the same 6-digit cap as the price field itself so it still
+      // can't take an arbitrarily large number.
+      if (price.toStringAsFixed(0).length > 6) {
+        return 'Price cannot exceed 6 digits';
       }
       return null;
     }
@@ -1356,6 +1397,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   keyboardType: TextInputType.number,
                   inputFormatters: Validators.amountInputFormatters(
                     allowDecimal: false,
+                    maxLength: 6,
                   ),
                   onChanged: (_) {
                     if (dialogError != null) {
@@ -1417,12 +1459,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (parsedPrice == null) return;
 
     if (!mounted) return;
-    final canAfford = await WalletOfferGuard.ensureCanAfford(
-      context,
-      requiredCoins: parsedPrice,
-      itemName: _currentChat.postTitle,
-    );
-    if (!canAfford || !mounted) return;
+    // Only the payer's wallet needs checking — a listing owner countering
+    // with a higher price is naming what they want to *receive*, not
+    // spending their own coins.
+    if (_currentUserIsPayer) {
+      final canAfford = await WalletOfferGuard.ensureCanAfford(
+        context,
+        requiredCoins: parsedPrice,
+        itemName: _currentChat.postTitle,
+      );
+      if (!canAfford || !mounted) return;
+    }
 
     await _createCounterOffer(
       originalOffer: originalOffer,
@@ -1629,6 +1676,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     keyboardType: TextInputType.number,
                     inputFormatters: Validators.amountInputFormatters(
                       allowDecimal: false,
+                      maxLength: 6,
                     ),
                     onChanged: (_) {
                       if (dialogError != null) {
@@ -1712,12 +1760,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (parsedPrice == null) return;
 
     if (!mounted) return;
-    final canAfford = await WalletOfferGuard.ensureCanAfford(
-      context,
-      requiredCoins: parsedPrice,
-      itemName: _currentChat.postTitle,
-    );
-    if (!canAfford || !mounted) return;
+    // Only the payer's wallet needs checking — see the PRICE counter above.
+    if (_currentUserIsPayer) {
+      final canAfford = await WalletOfferGuard.ensureCanAfford(
+        context,
+        requiredCoins: parsedPrice,
+        itemName: _currentChat.postTitle,
+      );
+      if (!canAfford || !mounted) return;
+    }
 
     await _createCounterOffer(
       originalOffer: originalOffer,
@@ -2329,6 +2380,60 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
   }
 
+  // Blocking is only reachable from this chat's menu, but unblocking used to
+  // only exist in a separate Settings > Blocked Users screen — easy to miss,
+  // which read as "unblock doesn't work". Offer it right back here too.
+  Future<void> _unblockUser() async {
+    final otherUser = _getOtherUser();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unblock User'),
+        content: Text('Do you want to unblock ${otherUser.firstName}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.green),
+            child: const Text('Unblock'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await _blockedUserService.unblockUser(otherUser.id);
+      BlockedUsersCache.instance.remove(otherUser.id);
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${otherUser.firstName} has been unblocked.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to unblock user: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   void _reportUser() {
     final otherUser = _getOtherUser();
 
@@ -2589,6 +2694,55 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return (icon: Icons.info_outline, color: Colors.grey.shade500);
   }
 
+  // The persisted "Offer sent: $X" system-message text is written once,
+  // server-side, from the offer-maker's point of view — but it's shown to
+  // BOTH participants verbatim, so the recipient wrongly sees "sent"
+  // instead of "received". Rebuild the label client-side from the
+  // structured eventData (which carries madeById) so each viewer sees the
+  // direction that's actually true for them.
+  String _systemMessageDisplayText(ChatMessage message) {
+    final data = message.eventData;
+    if (message.eventType != 'OFFER_PENDING' || data == null) {
+      return message.messageText;
+    }
+    if (data['isZeroCoin'] == true) return message.messageText;
+
+    final madeById = data['madeById'] as String?;
+    final isMine = madeById == widget.currentUserId;
+    final isCounter = data['isCounter'] == true;
+    final label = isCounter
+        ? (isMine ? 'Counter offer sent' : 'Counter offer received')
+        : (isMine ? 'Offer sent' : 'Offer received');
+
+    final offerType = (data['offerType'] as String? ?? '').toUpperCase();
+    final barterTitle = (data['barterItemTitle'] as String? ?? '').trim();
+    final rawPrice = data['price'];
+    final currency = (data['currency'] as String? ?? 'USD').toUpperCase();
+    String? amount;
+    if (rawPrice != null) {
+      final parsedPrice = rawPrice is num
+          ? rawPrice.toDouble()
+          : double.tryParse(rawPrice.toString());
+      if (parsedPrice != null) {
+        amount = currency == 'USD'
+            ? '\$${parsedPrice.toStringAsFixed(2)}'
+            : '$currency ${parsedPrice.toStringAsFixed(2)}';
+      }
+    }
+
+    if (offerType == 'BOTH' && amount != null && barterTitle.isNotEmpty) {
+      return '$label: $barterTitle + $amount.';
+    }
+    if (offerType == 'PRICE' && amount != null) {
+      return '$label: $amount.';
+    }
+    if ((offerType == 'BARTER' || offerType == 'BOTH') &&
+        barterTitle.isNotEmpty) {
+      return '$label: $barterTitle.';
+    }
+    return '$label.';
+  }
+
   Widget _buildMessageBubble(ChatMessage message) {
     final isCurrentUser = _isMessageFromCurrentUser(message);
     final isSystemMessage = message.messageType == MessageType.SYSTEM;
@@ -2635,7 +2789,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             const SizedBox(width: 6),
             Flexible(
               child: Text(
-                message.messageText,
+                _systemMessageDisplayText(message),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: isTerminalEvent ? 12.5 : 12,
@@ -3355,9 +3509,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                                     return;
                                   }
 
-                                  await _chatService.sendMessage(
+                                  final proposalMessage =
+                                      await _chatService.sendMessage(
                                     chatId: _currentChat.id,
                                     messageText: lines.join('\n'),
+                                  );
+                                  _socketService.emitMessageCreated(
+                                    _currentChat.id,
+                                    proposalMessage.id,
                                   );
 
                                   if (!sheetContext.mounted) return;
@@ -4120,6 +4279,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   void _showMoreOptions() {
     final otherUser = _getOtherUser();
+    final isBlocked = BlockedUsersCache.instance.isBlocked(otherUser.id);
 
     showModalBottomSheet(
       context: context,
@@ -4137,15 +4297,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ),
             const SizedBox(height: 20),
 
-            ListTile(
-              leading: const Icon(Icons.block, color: Colors.red),
-              title: const Text('Block User'),
-              subtitle: Text('Block ${otherUser.firstName}'),
-              onTap: () {
-                Navigator.pop(context);
-                _blockUser();
-              },
-            ),
+            isBlocked
+                ? ListTile(
+                    leading: const Icon(Icons.check_circle_outline, color: Colors.green),
+                    title: const Text('Unblock User'),
+                    subtitle: Text('Unblock ${otherUser.firstName}'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _unblockUser();
+                    },
+                  )
+                : ListTile(
+                    leading: const Icon(Icons.block, color: Colors.red),
+                    title: const Text('Block User'),
+                    subtitle: Text('Block ${otherUser.firstName}'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _blockUser();
+                    },
+                  ),
             const Divider(),
 
             ListTile(
@@ -4368,7 +4538,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   Icon(Icons.hourglass_top, size: 14, color: Colors.orange.shade800),
                   const SizedBox(width: 6),
                   Text(
-                    'Waiting for the other user to respond to your offer.',
+                    'Waiting for ${_getOtherUser().firstName} to respond to your offer.',
                     style: TextStyle(fontSize: 11.5, color: Colors.orange.shade900),
                   ),
                 ],
@@ -4386,18 +4556,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   icon: const Icon(Icons.image, color: Colors.blue),
                   onPressed: _isSendingImage ? null : _pickAndSendImage,
                 ),
-                IconButton(
-                  icon: _isPreparingOffer
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.request_page, color: Colors.orange),
-                  onPressed: (_canMakeNewOffer && !_isPreparingOffer)
-                      ? _showMakeOfferDialog
-                      : null,
-                ),
+                if (_canMakeNewOffer)
+                  IconButton(
+                    icon: _isPreparingOffer
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.request_page, color: Colors.orange),
+                    onPressed: !_isPreparingOffer
+                        ? _showMakeOfferDialog
+                        : null,
+                  ),
                 Expanded(
                   child: TextField(
                     controller: _messageController,

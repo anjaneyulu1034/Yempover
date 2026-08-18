@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +12,9 @@ import 'package:yempover_app/widgets/coin_icon.dart';
 import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/wallet_offer_guard.dart';
 import 'package:yempover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/services/socket_io/socket_service.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/widgets/safe_network_image.dart';
 
 enum OfferSubmissionMode { price, barter, both }
 
@@ -43,6 +48,8 @@ class OfferDescriptionScreen extends StatefulWidget {
 
 class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   final TradeChatService _chatService = TradeChatService();
+  final SocketService _socketService = SocketService();
+  final TokenService _tokenService = TokenService();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   bool _isSubmitting = false;
@@ -175,6 +182,29 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
       MaterialPageRoute(builder: (context) => const TradeChatScreen()),
       (route) => false,
     );
+  }
+
+  // This screen is reachable straight from a post listing, so the chat
+  // socket may never have connected yet (unlike ChatDetailScreen, which
+  // always connects on open). Best-effort: connect if needed, then relay —
+  // never throws, never blocks the caller's success flow.
+  Future<void> _relayOfferCreated(String chatId, TradeOffer offer) async {
+    try {
+      if (!_socketService.isConnected) {
+        final token = await _tokenService.getToken();
+        if (token == null || token.isEmpty) return;
+        _socketService.init(token: token);
+
+        final start = DateTime.now();
+        while (DateTime.now().difference(start) < const Duration(seconds: 5)) {
+          if (_socketService.isConnected) break;
+          await Future.delayed(const Duration(milliseconds: 120));
+        }
+      }
+      _socketService.emitOfferCreated(chatId, offer.toJson());
+    } catch (e) {
+      print('⚠️ Could not relay offer over socket: $e');
+    }
   }
 
   Future<void> _submitOffer() async {
@@ -328,6 +358,15 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
       print('✅ Offer created successfully!');
       print('   Offer ID: ${createdOffer.id}');
 
+      // Created over REST — ask the socket layer to relay it to the room so
+      // the other participant sees the new offer live instead of only on
+      // their next manual chat refresh (matches how counter offers already
+      // notify via emitOfferCreated in ChatDetailScreen). This screen can be
+      // reached directly from a post listing without the chat socket ever
+      // having connected yet, so best-effort connect first — fire-and-forget,
+      // must not delay the success flow below.
+      unawaited(_relayOfferCreated(chat.id, createdOffer));
+
       if (!mounted) return;
 
       final messenger = ScaffoldMessenger.of(context);
@@ -417,8 +456,8 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
       return 'Price must be greater than 0';
     }
 
-    if (trimmed.length > 9) {
-      return 'Price is too large';
+    if (trimmed.length > 6) {
+      return 'Price cannot exceed 6 digits';
     }
 
     return null;
@@ -522,31 +561,50 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                     children: [
                       // You want (Target post)
                       Expanded(
-                        child: Column(
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'You want:',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 12,
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: SafeNetworkImage(
+                                url: widget.post.processedImages.isNotEmpty
+                                    ? widget.post.processedImages.first
+                                    : widget.post.getDefaultImageUrl(),
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.post.title,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              'by ${widget.post.postedBy.firstName}',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 11,
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'You want:',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    widget.post.title,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    'by ${widget.post.postedBy.firstName}',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -600,31 +658,11 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                               6,
                                             ),
                                             child: item.imageUrl.isNotEmpty
-                                                ? Image.network(
-                                                    item.imageUrl,
+                                                ? SafeNetworkImage(
+                                                    url: item.imageUrl,
                                                     width: 28,
                                                     height: 28,
                                                     fit: BoxFit.cover,
-                                                    errorBuilder:
-                                                        (
-                                                          context,
-                                                          error,
-                                                          stackTrace,
-                                                        ) {
-                                                          return Container(
-                                                            width: 28,
-                                                            height: 28,
-                                                            color: Colors
-                                                                .grey
-                                                                .shade200,
-                                                            child: const Icon(
-                                                              Icons.image,
-                                                              size: 16,
-                                                              color:
-                                                                  Colors.grey,
-                                                            ),
-                                                          );
-                                                        },
                                                   )
                                                 : Container(
                                                     width: 28,
@@ -732,7 +770,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                 ),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                  LengthLimitingTextInputFormatter(9),
+                  LengthLimitingTextInputFormatter(6),
                 ],
                 onChanged: (_) {
                   setState(() {

@@ -1,5 +1,15 @@
 import 'package:intl/intl.dart';
 
+// Server timestamps arrive as UTC ISO-8601 strings. DateTime.parse keeps
+// them tagged as UTC, and every display call site in this app formats the
+// DateTime's own field values directly (no .toLocal()) — so without
+// converting here, every chat/offer timestamp renders in UTC clock time
+// instead of the device's local time, off by the local UTC offset.
+// Converting once at parse time fixes every display site app-wide.
+DateTime _parseLocal(String value) => DateTime.parse(value).toLocal();
+DateTime? _tryParseLocal(String? value) =>
+    value == null ? null : DateTime.tryParse(value)?.toLocal();
+
 // ==================== ENUMS ====================
 
 enum ChatStatus { ACTIVE, COMPLETED, CANCELLED, ARCHIVED, INACTIVE, ACCEPTED }
@@ -384,8 +394,8 @@ class ChatMessage {
         json['messageType'] ?? 'TEXT',
       ),
       isRead: json['isRead'] ?? false,
-      readAt: json['readAt'] != null ? DateTime.parse(json['readAt']) : null,
-      createdAt: DateTime.parse(
+      readAt: _tryParseLocal(json['readAt']),
+      createdAt: _parseLocal(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
       ),
       offerId: json['offerId'],
@@ -494,15 +504,11 @@ class TradeOffer {
           .map((e) => e.toString())
           .toList(),
       counterOfferCount: json['counterOfferCount'] ?? 0,
-      createdAt: DateTime.parse(
+      createdAt: _parseLocal(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
       ),
-      acceptedAt: json['acceptedAt'] != null
-          ? DateTime.parse(json['acceptedAt'])
-          : null,
-      rejectedAt: json['rejectedAt'] != null
-          ? DateTime.parse(json['rejectedAt'])
-          : null,
+      acceptedAt: _tryParseLocal(json['acceptedAt']),
+      rejectedAt: _tryParseLocal(json['rejectedAt']),
     );
   }
 
@@ -579,16 +585,12 @@ class DealCompletionInfo {
   factory DealCompletionInfo.fromJson(Map<String, dynamic> json) {
     return DealCompletionInfo(
       initiatorCompleted: json['initiatorCompleted'] == true,
-      initiatorCompletedAt: json['initiatorCompletedAt'] != null
-          ? DateTime.tryParse(json['initiatorCompletedAt'].toString())
-          : null,
+      initiatorCompletedAt:
+          _tryParseLocal(json['initiatorCompletedAt']?.toString()),
       responderCompleted: json['responderCompleted'] == true,
-      responderCompletedAt: json['responderCompletedAt'] != null
-          ? DateTime.tryParse(json['responderCompletedAt'].toString())
-          : null,
-      dealCompletedAt: json['dealCompletedAt'] != null
-          ? DateTime.tryParse(json['dealCompletedAt'].toString())
-          : null,
+      responderCompletedAt:
+          _tryParseLocal(json['responderCompletedAt']?.toString()),
+      dealCompletedAt: _tryParseLocal(json['dealCompletedAt']?.toString()),
     );
   }
 
@@ -681,9 +683,7 @@ class DealCompletion {
       iCompleted: json['iCompleted'] == true,
       otherCompleted: json['otherCompleted'] == true,
       bothCompleted: json['bothCompleted'] == true,
-      completedAt: json['completedAt'] != null
-          ? DateTime.tryParse(json['completedAt'].toString())
-          : null,
+      completedAt: _tryParseLocal(json['completedAt']?.toString()),
       canComplete: json['canComplete'] == true,
     );
   }
@@ -776,9 +776,7 @@ class DealVerificationSummary {
       escrowAmount: _parseFlexibleNum(json['escrowAmount']),
       escrowFunded: json['escrowFunded'] == true,
       escrowReleased: json['escrowReleased'] == true,
-      completedAt: json['completedAt'] != null
-          ? DateTime.tryParse(json['completedAt'].toString())
-          : null,
+      completedAt: _tryParseLocal(json['completedAt']?.toString()),
     );
   }
 
@@ -970,13 +968,11 @@ class TradeChat {
       productId: json['productId'],
       serviceId: json['serviceId'],
       status: ChatStatusExtension.fromString(json['status'] ?? 'ACTIVE'),
-      lastMessageAt: json['lastMessageAt'] != null
-          ? DateTime.parse(json['lastMessageAt'])
-          : null,
-      createdAt: DateTime.parse(
+      lastMessageAt: _tryParseLocal(json['lastMessageAt']),
+      createdAt: _parseLocal(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
       ),
-      updatedAt: DateTime.parse(
+      updatedAt: _parseLocal(
         json['updatedAt'] ?? DateTime.now().toIso8601String(),
       ),
       initiator: UserInfo.fromJson(json['initiator'] ?? {}),

@@ -13,10 +13,11 @@ class Validators {
   /// a field can never fill up with "000000".
   static List<TextInputFormatter> amountInputFormatters({
     bool allowDecimal = true,
+    int? maxLength,
   }) {
     return [
       _BoundedNumberFormatter(decimalPlaces: allowDecimal ? 2 : 0),
-      LengthLimitingTextInputFormatter(maxAmountLength),
+      LengthLimitingTextInputFormatter(maxLength ?? maxAmountLength),
     ];
   }
 

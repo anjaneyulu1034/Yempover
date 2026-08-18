@@ -126,15 +126,22 @@ class SocketService {
       _notifyListeners('offer_withdrawn', data);
     });
 
-    // Chat status events
+    // Chat room join/leave events (fired whenever a chat screen opens/closes
+    // — including app background/foreground, not just true connect/
+    // disconnect). Deliberately NOT forwarded as 'user_presence': mixing
+    // "has this chat screen open right now" into the same online/offline
+    // signal as true socket connectivity caused the header's Active/
+    // Inactive dot to flicker to Inactive whenever either side merely
+    // navigated away from (or backgrounded) the chat, even though they were
+    // still online in the app. The true 'user_online'/'user_offline' events
+    // below (driven by actual socket connect/disconnect) are the single
+    // source of truth for that indicator.
     _socket!.on('chat:user_online', (data) {
-      print('🟢 Chat user online: $data');
-      _notifyListeners('user_presence', {...?data, 'isOnline': true});
+      print('🟢 Chat room joined: $data');
     });
 
     _socket!.on('chat:user_offline', (data) {
-      print('⚪ Chat user offline: $data');
-      _notifyListeners('user_presence', {...?data, 'isOnline': false});
+      print('⚪ Chat room left: $data');
     });
 
     // Typing events
@@ -397,6 +404,16 @@ class SocketService {
       'offer': offerData,
       'timestamp': DateTime.now().toIso8601String(),
     });
+  }
+
+  // Relay a message already created over REST (e.g. an image upload, which
+  // needs the presigned-URL round trip first) — the server re-fetches it by
+  // id and broadcasts it to the room, same "created via REST, please
+  // broadcast" pattern as emitOfferCreated above.
+  void emitMessageCreated(String chatId, String messageId) {
+    if (!_isConnected) return;
+
+    _socket?.emit('message:created', {'chatId': chatId, 'messageId': messageId});
   }
 
   // Accept an offer (emit event)
