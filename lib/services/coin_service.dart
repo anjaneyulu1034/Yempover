@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/services/api_service.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/services/api_service.dart';
 import 'package:http/http.dart' as http;
 
 class WalletTransactionsPage {

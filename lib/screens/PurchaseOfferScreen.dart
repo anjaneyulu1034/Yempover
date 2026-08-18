@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/utils/wallet_offer_guard.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/utils/wallet_offer_guard.dart';
+import 'package:yempover_app/utils/validators.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 
 class PurchaseOfferScreen extends StatefulWidget {
   final Post post;
@@ -52,6 +52,12 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
     if (price == null || price <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid price')),
+      );
+      return;
+    }
+    if (_priceController.text.trim().length > Validators.maxAmountLength) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Price is too large')),
       );
       return;
     }
@@ -330,9 +336,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
             TextField(
               controller: _priceController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-              ],
+              inputFormatters: Validators.amountInputFormatters(),
               decoration: AppInputDecoration.build(
                 label: 'Offer Price',
                 hint: 'Enter your offer in coins',

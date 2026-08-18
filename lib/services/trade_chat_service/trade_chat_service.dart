@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/models/chats/trade_chat.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:http/http.dart' as http;
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/utils/error_handler.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/error_handler.dart';
 
 enum ChatReferenceType { product, service }
 
@@ -86,6 +86,7 @@ class TradeChatService {
     int page = 1,
     int limit = 20,
     String? status,
+    String? search,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -94,6 +95,7 @@ class TradeChatService {
         'page': page.toString(),
         'limit': limit.toString(),
         if (status != null) 'status': status,
+        if (search != null && search.isNotEmpty) 'search': search,
       };
 
       final uri = Uri.parse(
@@ -279,6 +281,7 @@ class TradeChatService {
     String? barterItemDescription,
     List<String>? barterItemImages,
     List<String>? barterWishCategories,
+    List<String>? barterItemIds,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -291,6 +294,10 @@ class TradeChatService {
         'barterItemDescription': barterItemDescription,
         'barterItemImages': barterItemImages ?? [],
         'barterWishCategories': barterWishCategories ?? [],
+        // Real product ids of the offered items — lets the backend look up
+        // their actual listed price and enforce equal-value matching for a
+        // pure barter offer, instead of only trusting client-side math.
+        'barterItemIds': barterItemIds ?? [],
       });
 
       print('📤 Creating barter offer - URL: $url');
@@ -322,6 +329,7 @@ class TradeChatService {
     String? barterItemDescription,
     List<String>? barterItemImages,
     List<String>? barterWishCategories,
+    List<String>? barterItemIds,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -335,6 +343,7 @@ class TradeChatService {
         'barterItemDescription': barterItemDescription,
         'barterItemImages': barterItemImages ?? [],
         'barterWishCategories': barterWishCategories ?? [],
+        'barterItemIds': barterItemIds ?? [],
       });
 
       print('📤 Creating BOTH offer - URL: $url');
@@ -354,6 +363,50 @@ class TradeChatService {
       }
     } catch (e) {
       print('❌ Error creating BOTH offer: $e');
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
+  // 7c. Create a zero-coin offer — an explicit "no coins involved" exchange.
+  // The barter item is optional: pass none of the item fields to offer "this
+  // item for zero coins" with nothing in return. offerType/price are never
+  // sent — the backend ignores them when zeroCoin is true.
+  Future<TradeOffer> createZeroCoinOffer({
+    required String chatId,
+    String? barterItemTitle,
+    String? barterItemDescription,
+    List<String>? barterItemImages,
+    List<String>? barterItemIds,
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatOffer(chatId));
+
+      final body = json.encode({
+        'zeroCoin': true,
+        'barterItemTitle': barterItemTitle,
+        'barterItemDescription': barterItemDescription,
+        'barterItemImages': barterItemImages ?? [],
+        'barterItemIds': barterItemIds ?? [],
+      });
+
+      print('📤 Creating zero-coin offer - URL: $url');
+      print('📤 Body: $body');
+
+      final response = await _client.post(url, headers: headers, body: body);
+
+      print('📥 Response status: ${response.statusCode}');
+      print('📥 Response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonResponse = json.decode(response.body);
+        final offerResponse = OfferResponse.fromJson(jsonResponse);
+        return offerResponse.data;
+      } else {
+        throw await ErrorHandler.handleHttpError(response);
+      }
+    } catch (e) {
+      print('❌ Error creating zero-coin offer: $e');
       throw ErrorHandler.handleError(e);
     }
   }
@@ -528,22 +581,26 @@ class TradeChatService {
   }
 
   // 14. Cancel a trade
-  Future<TradeChat> cancelTrade(String chatId) async {
+  Future<TradeChat> cancelTrade(String chatId, {String? reason}) async {
     try {
       final headers = await _getHeaders();
       final url = Uri.parse(ApiConstants.tradeChatCancel(chatId));
+      final body = json.encode({'reason': reason ?? ''});
 
       print('📤 Cancelling trade - URL: $url');
+      print('📤 Body: $body');
 
-      final response = await _client.patch(url, headers: headers);
+      final response = await _client.patch(
+        url,
+        headers: headers,
+        body: body,
+      );
 
       print('📥 Response status: ${response.statusCode}');
       print('📥 Response body: ${response.body}');
 
-      if (response.statusCode == 200) {
-        final jsonResponse = json.decode(response.body);
-        final chatResponse = TradeChatResponse.fromJson(jsonResponse);
-        return chatResponse.data;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return await getChatById(chatId);
       } else {
         throw await ErrorHandler.handleHttpError(response);
       }
@@ -584,6 +641,7 @@ class TradeChatService {
     int page = 1,
     int limit = 20,
     String? productId,
+    String? search,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -592,6 +650,7 @@ class TradeChatService {
         'page': page.toString(),
         'limit': limit.toString(),
         if (productId != null && productId.isNotEmpty) 'productId': productId,
+        if (search != null && search.isNotEmpty) 'search': search,
       };
 
       final uri = Uri.parse(
@@ -620,11 +679,16 @@ class TradeChatService {
   Future<InboxOutboxResponse> getOutboxChats({
     int page = 1,
     int limit = 20,
+    String? search,
   }) async {
     try {
       final headers = await _getHeaders();
 
-      final queryParams = {'page': page.toString(), 'limit': limit.toString()};
+      final queryParams = {
+        'page': page.toString(),
+        'limit': limit.toString(),
+        if (search != null && search.isNotEmpty) 'search': search,
+      };
 
       final uri = Uri.parse(
         ApiConstants.tradeChatOutbox,
@@ -675,6 +739,16 @@ class TradeChatService {
           'barterItemDescription': '',
           'barterItemImages': [],
           'barterWishCategories': [],
+        };
+      } else if (offerType == 'BOTH') {
+        body = {
+          'offerType': 'BOTH',
+          'price': price ?? 0,
+          'currency': currency ?? 'USD',
+          'barterItemTitle': barterItemTitle ?? '',
+          'barterItemDescription': barterItemDescription ?? '',
+          'barterItemImages': barterItemImages,
+          'barterWishCategories': barterWishCategories,
         };
       } else {
         body = {
@@ -740,6 +814,16 @@ class TradeChatService {
           'barterItemImages': [],
           'barterWishCategories': [],
         };
+      } else if (offerType == 'BOTH') {
+        body = {
+          'offerType': 'BOTH',
+          'price': price ?? 0,
+          'currency': currency ?? 'USD',
+          'barterItemTitle': barterItemTitle ?? '',
+          'barterItemDescription': barterItemDescription ?? '',
+          'barterItemImages': barterItemImages,
+          'barterWishCategories': barterWishCategories,
+        };
       } else {
         body = {
           'offerType': 'BARTER',
@@ -803,6 +887,16 @@ class TradeChatService {
           'barterItemDescription': '',
           'barterItemImages': [],
           'barterWishCategories': [],
+        };
+      } else if (offerType == 'BOTH') {
+        body = {
+          'offerType': 'BOTH',
+          'price': price ?? 0,
+          'currency': currency ?? 'USD',
+          'barterItemTitle': barterItemTitle ?? '',
+          'barterItemDescription': barterItemDescription ?? '',
+          'barterItemImages': barterItemImages,
+          'barterWishCategories': barterWishCategories,
         };
       } else {
         body = {
@@ -899,6 +993,128 @@ class TradeChatService {
       }
     } catch (e) {
       print('❌ Error blocking user: $e');
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
+  // Total unread trade-chat messages across all of the user's chats — for a
+  // persistent badge (nav bar, profile icon), not tied to any one loaded page.
+  Future<int> getUnreadMessageCount() async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatUnreadCount);
+
+      final response = await _client.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        return (jsonResponse['data']?['unreadCount'] as num?)?.toInt() ?? 0;
+      } else {
+        throw await ErrorHandler.handleHttpError(response);
+      }
+    } catch (e) {
+      print('❌ Error getting trade-chat unread count: $e');
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
+  // Exchange-mode options for the "How do you want to exchange?" offer
+  // sheet, including cross-mode requests (e.g. requesting a barter on a
+  // pure-price listing). Works pre-chat, by productId or serviceId.
+  Future<ExchangeModeOptions> getExchangeModeOptions({
+    String? productId,
+    String? serviceId,
+  }) async {
+    assert(
+      (productId != null) != (serviceId != null),
+      'Provide exactly one of productId or serviceId',
+    );
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatExchangeModes).replace(
+        queryParameters: {
+          if (productId != null) 'productId': productId,
+          if (serviceId != null) 'serviceId': serviceId,
+        },
+      );
+
+      final response = await _client.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        return ExchangeModeOptions.fromJson(jsonResponse['data']);
+      } else {
+        throw await ErrorHandler.handleHttpError(response);
+      }
+    } catch (e) {
+      print('❌ Error getting exchange mode options: $e');
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
+  // ==================== DEAL COMPLETION (no PIN, no photos) ====================
+  // Dead-simple flow: offer -> (counter) -> accept -> both users tap "Deal
+  // Completed" (or either taps "Deal Not Completed" to cancel). Errors
+  // return the backend's real `message` verbatim (e.g. the "add N more
+  // coins" wallet-shortfall message) — unlike ErrorHandler.handleHttpError's
+  // generic "Bad request: ..." prefixing used elsewhere in this file — since
+  // these messages are meant to be shown to the user as-is.
+  Never _throwDealError(http.Response response) {
+    String message = 'Something went wrong. Please try again.';
+    try {
+      final body = json.decode(response.body);
+      if (body is Map &&
+          body['message'] is String &&
+          (body['message'] as String).trim().isNotEmpty) {
+        message = body['message'] as String;
+      }
+    } catch (_) {
+      // Keep the generic fallback if the body isn't parseable JSON.
+    }
+    throw Exception(message);
+  }
+
+  // The deal summary for a chat with an accepted offer — exchange mode,
+  // background coin state (reassurance copy only, no action), and mutual
+  // completion progress that drives the "Deal Completed" button.
+  Future<DealVerification> getDealVerification(String chatId) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatDealVerification(chatId));
+
+      final response = await _client.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        return DealVerification.fromJson(jsonResponse['data']);
+      } else {
+        _throwDealError(response);
+      }
+    } catch (e) {
+      throw ErrorHandler.handleError(e);
+    }
+  }
+
+  // "Deal Not Completed" — available at every stage until COMPLETED.
+  // Refunds escrow, returns the item to the marketplace, and closes the chat.
+  Future<DealCloseResult> closeDeal(String chatId, {String? reason}) async {
+    try {
+      final headers = await _getHeaders();
+      final url = Uri.parse(ApiConstants.tradeChatDealClose(chatId));
+
+      final response = await _client.post(
+        url,
+        headers: headers,
+        body: json.encode({if (reason != null) 'reason': reason}),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonResponse = json.decode(response.body);
+        return DealCloseResult.fromJson(jsonResponse['data']);
+      } else {
+        _throwDealError(response);
+      }
+    } catch (e) {
       throw ErrorHandler.handleError(e);
     }
   }

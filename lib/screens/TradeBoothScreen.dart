@@ -1,14 +1,15 @@
 // screens/TradeBoothScreen.dart
 import 'dart:async';
 
-import 'package:YemPover_app/screens/ProductDetailScreen.dart';
+import 'package:yempover_app/screens/ProductDetailScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
 import '../models/my_post_model.dart';
 import '../services/my_posts_service.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
 import '../screens/AddPostScreen.dart';
 
 class TradeBoothScreen extends StatefulWidget {
@@ -28,7 +29,11 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
   int _totalPages = 1;
   bool _isLoadingMore = false;
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
   Timer? _countdownTimer;
+  String _searchQuery = '';
+  String _statusFilter = 'All';
+  String _typeFilter = 'All';
 
   @override
   void initState() {
@@ -36,15 +41,57 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     _fetchMyPosts();
     _startCountdownTimer();
     _scrollController.addListener(_onScroll);
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.trim().toLowerCase();
+      });
+    });
   }
 
   @override
   void dispose() {
     _countdownTimer?.cancel();
     _scrollController.dispose();
+    _searchController.dispose();
     // _postsService.dispose();
     super.dispose();
   }
+
+  bool _isPostSold(MyPost post) {
+    final status = post.status.trim().toUpperCase();
+    return status == 'SOLD' || status == 'BARTERED' || status == 'COMPLETED';
+  }
+
+  bool _isPostExpired(MyPost post) {
+    if (_isPostSold(post)) return false;
+    if (post.hasExpired) return true;
+    final validUntil = post.validUntil;
+    return validUntil != null && !validUntil.isAfter(DateTime.now());
+  }
+
+  List<MyPost> get _visiblePosts {
+    return _posts.where((post) {
+      switch (_statusFilter) {
+        case 'Active':
+          if (_isPostSold(post) || _isPostExpired(post)) return false;
+          break;
+        case 'Expired':
+          if (!_isPostExpired(post)) return false;
+          break;
+        case 'Sold':
+          if (!_isPostSold(post)) return false;
+          break;
+      }
+
+      if (_searchQuery.isEmpty) return true;
+      return post.title.toLowerCase().contains(_searchQuery) ||
+          post.description.toLowerCase().contains(_searchQuery);
+    }).toList();
+  }
+
+  // Products/Services tabs hit the server (Point 3.2) rather than filtering
+  // client-side, so pagination stays correct for whichever type is active.
+  String? get _typeParam => _typeFilter == 'All' ? null : _typeFilter.toLowerCase();
 
   void _startCountdownTimer() {
     _countdownTimer?.cancel();
@@ -106,7 +153,11 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
         return;
       }
 
-      final response = await _postsService.getMyPosts(page: 1, limit: 20);
+      final response = await _postsService.getMyPosts(
+        page: 1,
+        limit: 20,
+        type: _typeParam,
+      );
 
       if (!mounted) return;
 
@@ -119,7 +170,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      final errorMessage = e.toString().replaceAll('Exception: ', '');
+      final errorMessage = ErrorMessageUtils.sanitize(e);
 
       setState(() {
         _isLoading = false;
@@ -167,6 +218,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
       final response = await _postsService.getMyPosts(
         page: _currentPage + 1,
         limit: 20,
+        type: _typeParam,
       );
 
       if (!mounted) return;
@@ -184,7 +236,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
         _isLoadingMore = false;
       });
 
-      final errorMessage = e.toString().replaceAll('Exception: ', '');
+      final errorMessage = ErrorMessageUtils.sanitize(e);
       if (errorMessage.contains('Session expired')) {
         _handleSessionExpired();
       } else {
@@ -195,7 +247,11 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
 
   Future<void> _refreshPosts() async {
     try {
-      final response = await _postsService.getMyPosts(page: 1, limit: 20);
+      final response = await _postsService.getMyPosts(
+        page: 1,
+        limit: 20,
+        type: _typeParam,
+      );
 
       if (!mounted) return;
 
@@ -205,7 +261,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
         _totalPages = response.data.pagination.pages;
       });
     } catch (e) {
-      final errorMessage = e.toString().replaceAll('Exception: ', '');
+      final errorMessage = ErrorMessageUtils.sanitize(e);
       if (errorMessage.contains('Session expired')) {
         _handleSessionExpired();
       } else {
@@ -253,6 +309,137 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
     SnackbarUtils.showError(context, message);
+  }
+
+  static const List<String> _statusFilterOptions = [
+    'All',
+    'Active',
+    'Expired',
+    'Sold',
+  ];
+
+  // Same blue gradient filter button as Home_screen's search bar.
+  Widget _buildStatusFilterButton() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2E5BFF), Color(0xFF4A7AFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: _showStatusFilterSheet,
+          borderRadius: BorderRadius.circular(18),
+          child: const Padding(
+            padding: EdgeInsets.all(16),
+            child: Icon(Icons.tune, color: Colors.white),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static const List<String> _typeFilterOptions = ['All', 'Product', 'Service'];
+
+  Widget _buildTypeFilterTabs() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Row(
+        children: _typeFilterOptions.map((type) {
+          final selected = _typeFilter == type;
+          final isLast = type == _typeFilterOptions.last;
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(right: isLast ? 0 : 8),
+              child: Material(
+                color: selected ? const Color(0xFF2E5BFF) : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    if (_typeFilter == type) return;
+                    setState(() => _typeFilter = type);
+                    _fetchMyPosts();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text(
+                      type,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: selected ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  void _showStatusFilterSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
+                child: Text(
+                  'Filter by status',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+              ..._statusFilterOptions.map((filter) {
+                final selected = _statusFilter == filter;
+                return ListTile(
+                  title: Text(
+                    filter,
+                    style: TextStyle(
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected ? const Color(0xFF2E5BFF) : Colors.black87,
+                    ),
+                  ),
+                  trailing: selected
+                      ? const Icon(Icons.check, color: Color(0xFF2E5BFF))
+                      : null,
+                  onTap: () {
+                    setState(() {
+                      _statusFilter = filter;
+                    });
+                    Navigator.pop(sheetContext);
+                  },
+                );
+              }),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   String _formatPrice(MyPost post) {
@@ -378,6 +565,42 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
               ),
             ),
           ),
+          if (!_isLoading && _errorMessage == null && _posts.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search your posts',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchQuery.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () => _searchController.clear(),
+                              ),
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 0,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  _buildStatusFilterButton(),
+                ],
+              ),
+            ),
+            _buildTypeFilterTabs(),
+          ],
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -432,6 +655,33 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                       ],
                     ),
                   )
+                : _visiblePosts.isEmpty
+                ? _buildPullToRefreshState(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search_off,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No posts match',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Try a different search or filter',
+                          style: TextStyle(color: Colors.grey[500]),
+                        ),
+                      ],
+                    ),
+                  )
                 : RefreshIndicator(
                     onRefresh: _refreshPosts,
                     color: const Color(0xFF2E5BFF),
@@ -442,20 +692,39 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                       controller: _scrollController,
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _posts.length + (_isLoadingMore ? 1 : 0),
+                      itemCount:
+                          _visiblePosts.length + (_isLoadingMore ? 1 : 0),
                       itemBuilder: (context, index) {
-                        if (index == _posts.length) {
+                        if (index == _visiblePosts.length) {
                           return const Padding(
                             padding: EdgeInsets.all(16.0),
                             child: Center(child: CircularProgressIndicator()),
                           );
                         }
-                        return _buildPostCard(_posts[index]);
+                        return _buildPostCard(_visiblePosts[index]);
                       },
                     ),
                   ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _statusChip(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
@@ -510,24 +779,24 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     return Stack(
       children: [
         ClipRRect(borderRadius: borderRadius, child: imageContent),
+        // Sold takes priority over expired (mirrors _isPostExpired, which
+        // treats a sold post as never "expired") — one badge, top-left.
         if (post.isSold)
           Positioned(
             top: 6,
             left: 6,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.green,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text(
-                'SOLD',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            child: _statusChip(
+              'SOLD${post.soldAt != null ? ' · ${DateFormat('MMM d').format(post.soldAt!)}' : ''}',
+              Colors.green,
+            ),
+          )
+        else if (_isPostExpired(post))
+          Positioned(
+            top: 6,
+            left: 6,
+            child: _statusChip(
+              'EXPIRED${post.expiredAt != null ? ' · ${DateFormat('MMM d').format(post.expiredAt!)}' : ''}',
+              Colors.red.shade600,
             ),
           ),
         Positioned(
@@ -703,25 +972,28 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(
-                        Icons.timer_outlined,
-                        size: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          _getExpiryCountdownLabel(post),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: _getExpiryCountdownColor(post),
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      if (post.validUntil != null) ...[
+                        Icon(
+                          Icons.timer_outlined,
+                          size: 14,
+                          color: Colors.grey.shade600,
                         ),
-                      ),
-                      const SizedBox(width: 8),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            _getExpiryCountdownLabel(post),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _getExpiryCountdownColor(post),
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ] else
+                        const Spacer(),
                       Text(
                         DateFormat('MMM dd, yyyy').format(post.postedDate),
                         style: TextStyle(

@@ -2,20 +2,20 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/screens/PostDetailScreen.dart';
-import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
-import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:YemPover_app/services/api_service.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/screens/PostDetailScreen.dart';
+import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:yempover_app/services/api_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
 import 'package:http/http.dart' as http;
-import 'package:YemPover_app/main.dart' as app;
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/main.dart' as app;
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
 
 class NotificationService1 {
   static final fln.FlutterLocalNotificationsPlugin
@@ -475,7 +475,7 @@ class NotificationService1 {
   Future<void> showLoginSuccessNotification() async {
     await _showLocalNotification(
       '🔐 Login Successful!',
-      'Welcome back to YemPover! You have successfully logged in.',
+      'Welcome back to BarterX! You have successfully logged in.',
     );
   }
 

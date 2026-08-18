@@ -64,6 +64,7 @@ class User {
   final String email;
   final String mobileNumber;
   final String? profileImage;
+  final bool verificationPending;
 
   User({
     required this.id,
@@ -72,6 +73,7 @@ class User {
     required this.email,
     required this.mobileNumber,
     this.profileImage,
+    this.verificationPending = false,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -82,6 +84,7 @@ class User {
       email: json['email'] ?? '',
       mobileNumber: json['mobileNumber'] ?? '',
       profileImage: json['profileImage'],
+      verificationPending: json['verificationPending'] == true,
     );
   }
 
@@ -159,11 +162,13 @@ class VerifyOtpResponseData {
   final User user;
   final String token;
   final String refreshToken;
+  final Subscription? subscription;
 
   VerifyOtpResponseData({
     required this.user,
     required this.token,
     required this.refreshToken,
+    this.subscription,
   });
 
   factory VerifyOtpResponseData.fromJson(Map<String, dynamic> json) {
@@ -171,6 +176,38 @@ class VerifyOtpResponseData {
       user: User.fromJson(json['user']),
       token: json['token'] ?? '',
       refreshToken: json['refreshToken'] ?? '',
+      subscription: json['subscription'] is Map<String, dynamic>
+          ? Subscription.fromJson(json['subscription'])
+          : null,
+    );
+  }
+}
+
+/// Mirrors the backend's `subscription` block on the verify-otp response
+/// (`status`: ACTIVE | EXPIRED | NONE). A free trial that has run out looks
+/// the same as a lapsed paid plan here — both are just `isValid: false`.
+class Subscription {
+  final String? plan;
+  final String? startDate;
+  final String? endDate;
+  final String? status;
+  final bool isValid;
+
+  Subscription({
+    this.plan,
+    this.startDate,
+    this.endDate,
+    this.status,
+    required this.isValid,
+  });
+
+  factory Subscription.fromJson(Map<String, dynamic> json) {
+    return Subscription(
+      plan: json['plan'],
+      startDate: json['startDate'],
+      endDate: json['endDate'],
+      status: json['status'],
+      isValid: json['isValid'] == true,
     );
   }
 }

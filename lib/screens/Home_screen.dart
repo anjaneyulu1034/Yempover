@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
-import 'package:YemPover_app/utils/notification_provider.dart';
+import 'package:yempover_app/utils/notification_provider.dart';
+import 'package:yempover_app/utils/chat_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
@@ -8,26 +9,26 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
 import 'package:provider/provider.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/models/get_my_profile_response.dart';
-import 'package:YemPover_app/services/api_service.dart';
-import 'package:YemPover_app/screens/PostDetailScreen.dart';
-import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:YemPover_app/screens/TradeBoothScreen.dart';
-import 'package:YemPover_app/screens/HamburgerMenuScreen.dart';
-import 'package:YemPover_app/screens/MyProfileScreen.dart';
-import 'package:YemPover_app/screens/NotificationsScreen.dart';
-import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/widgets/safe_network_image.dart';
-import 'package:YemPover_app/services/my_profile_service.dart';
-import 'package:YemPover_app/services/profile_session_manager.dart';
-import 'package:YemPover_app/services/category_service.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/models/get_my_profile_response.dart';
+import 'package:yempover_app/services/api_service.dart';
+import 'package:yempover_app/screens/PostDetailScreen.dart';
+import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:yempover_app/screens/TradeBoothScreen.dart';
+import 'package:yempover_app/screens/HamburgerMenuScreen.dart';
+import 'package:yempover_app/screens/MyProfileScreen.dart';
+import 'package:yempover_app/screens/NotificationsScreen.dart';
+import 'package:yempover_app/screens/CoinsWalletScreen.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/safe_network_image.dart';
+import 'package:yempover_app/services/my_profile_service.dart';
+import 'package:yempover_app/services/profile_session_manager.dart';
+import 'package:yempover_app/services/category_service.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
 import '../services/post_action_service.dart';
-import 'package:YemPover_app/utils/blocked_users_cache.dart';
+import 'package:yempover_app/utils/blocked_users_cache.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Extended Post class with the required properties
@@ -165,6 +166,12 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingFilterCategories = false;
   List<Map<String, String>> _filterMainCategories = [];
   Map<String, List<Map<String, String>>> _filterSubCategories = {};
+
+  // Favorite state for the marketplace cards — fetched once as a set of
+  // post ids so each card can look itself up in O(1) instead of one API
+  // call per card.
+  Set<String> _favoritePostIds = {};
+  final Set<String> _favoriteTogglingIds = {};
 
   @override
   void initState() {
@@ -345,6 +352,10 @@ class _HomeScreenState extends State<HomeScreen> {
           );
           _isLoadingProfile = false;
         });
+        if (mounted) {
+          Provider.of<NotificationProvider>(context, listen: false).reset();
+          Provider.of<ChatProvider>(context, listen: false).reset();
+        }
         ProfileSessionManager.instance.clearSession();
       }
 
@@ -374,6 +385,14 @@ class _HomeScreenState extends State<HomeScreen> {
           _loadUnreadNotificationCount().catchError((e) {
             debugPrint('🔴 Notification error: $e');
           }),
+        if (!_isGuestUser)
+          _loadChatUnreadCount().catchError((e) {
+            debugPrint('🔴 Chat unread count error: $e');
+          }),
+        if (!_isGuestUser)
+          _loadFavoritePostIds().catchError((e) {
+            debugPrint('🔴 Favorites fetch error: $e');
+          }),
         _loadFilterCategories().catchError((e) {
           debugPrint('🔴 Filter category error: $e');
         }),
@@ -384,6 +403,92 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoadingPosts = false;
         _isLoadingProfile = false;
       });
+    }
+  }
+
+  Future<void> _loadFavoritePostIds() async {
+    try {
+      final response = await _postActionService.getFavorites(
+        page: 1,
+        limit: 200,
+      );
+      final ids = response.data.favorites
+          .map((favorite) => favorite.actualPostId)
+          .whereType<String>()
+          .toSet();
+      if (!mounted) return;
+      setState(() {
+        _favoritePostIds = ids;
+        for (final post in _posts) {
+          post.isFavorite = ids.contains(post.id);
+        }
+      });
+    } catch (e) {
+      debugPrint('🔴 Error loading favorite post ids: $e');
+    }
+  }
+
+  Future<void> _toggleFavorite(ExtendedPost extendedPost) async {
+    if (_favoriteTogglingIds.contains(extendedPost.id)) return;
+
+    final isLoggedIn = await _tokenService.isLoggedIn();
+    if (!isLoggedIn) {
+      if (mounted) SnackbarUtils.showLoginDialog(context);
+      return;
+    }
+
+    final previousState = extendedPost.isFavorite;
+    final isService = extendedPost.post.type == PostType.service;
+
+    setState(() {
+      _favoriteTogglingIds.add(extendedPost.id);
+      extendedPost.isFavorite = !previousState;
+      if (extendedPost.isFavorite) {
+        _favoritePostIds.add(extendedPost.id);
+      } else {
+        _favoritePostIds.remove(extendedPost.id);
+      }
+    });
+
+    try {
+      if (extendedPost.isFavorite) {
+        await _postActionService.addToFavorites(
+          postId: extendedPost.id,
+          isService: isService,
+        );
+      } else {
+        await _postActionService.removeFromFavorites(
+          postId: extendedPost.id,
+          isService: isService,
+        );
+      }
+      if (mounted) {
+        setState(() => _favoriteTogglingIds.remove(extendedPost.id));
+      }
+    } catch (e) {
+      final errorText = e.toString().toLowerCase();
+      if (!mounted) return;
+
+      // Keep the optimistic state if the backend says it's already in the
+      // state we just set — this is a benign race, not a real failure.
+      if (errorText.contains('already favorited') ||
+          errorText.contains('already in favorites') ||
+          errorText.contains('not in favorites') ||
+          errorText.contains('favorite not found')) {
+        setState(() => _favoriteTogglingIds.remove(extendedPost.id));
+        return;
+      }
+
+      setState(() {
+        _favoriteTogglingIds.remove(extendedPost.id);
+        extendedPost.isFavorite = previousState;
+        if (previousState) {
+          _favoritePostIds.add(extendedPost.id);
+        } else {
+          _favoritePostIds.remove(extendedPost.id);
+        }
+      });
+      SnackbarUtils.showError(context, e);
     }
   }
 
@@ -529,6 +634,15 @@ class _HomeScreenState extends State<HomeScreen> {
       await provider.loadUnreadCount();
     } catch (e) {
       debugPrint('🔴 Error loading unread count: $e');
+    }
+  }
+
+  Future<void> _loadChatUnreadCount() async {
+    try {
+      final provider = Provider.of<ChatProvider>(context, listen: false);
+      await provider.loadUnreadCount();
+    } catch (e) {
+      debugPrint('🔴 Error loading chat unread count: $e');
     }
   }
 
@@ -722,7 +836,9 @@ class _HomeScreenState extends State<HomeScreen> {
         radius: _selectedRadius,
       );
 
-      final List<ExtendedPost> extendedPosts = response.posts.map((post) {
+      final List<ExtendedPost> extendedPosts = response.posts
+          .where((post) => !post.isExpiredOrUnavailable)
+          .map((post) {
         double? distance;
         if (_activeLatitude != null &&
             _activeLongitude != null &&
@@ -738,7 +854,11 @@ class _HomeScreenState extends State<HomeScreen> {
           distance = post.distance;
         }
 
-        return ExtendedPost(post: post, isFavorite: false, distance: distance);
+        return ExtendedPost(
+          post: post,
+          isFavorite: _favoritePostIds.contains(post.id),
+          distance: distance,
+        );
       }).toList();
 
       extendedPosts.sort((a, b) {
@@ -877,6 +997,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void _applyFilters() {
     setState(() {
       _filteredPosts = _posts.where((post) {
+        if (post.post.isExpiredOrUnavailable) {
+          return false;
+        }
+
         if (!_isGuestUser) {
           final ownerId = post.post.postedBy.id.isNotEmpty
               ? post.post.postedBy.id
@@ -1542,10 +1666,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showPleaseLoginMessage() {
     if (!mounted) return;
-    SnackbarUtils.showInfo(context, 'Please login to continue');
+    SnackbarUtils.showGuestLoginRequired(context);
   }
 
   void _navigateToHamburgerMenu() {
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const HamburgerMenuScreen()),
@@ -1581,7 +1708,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const TradeChatScreen()),
-    );
+    ).then((_) => _loadChatUnreadCount());
   }
 
   void _navigateToTradeBooth() async {
@@ -1685,7 +1812,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        'Are you sure you want to close YemPover now?',
+                        'Are you sure you want to close BarterX now?',
                         style: TextStyle(
                           fontSize: 15,
                           height: 1.35,
@@ -1993,7 +2120,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const Text(
-                    'Welcome to YemPover',
+                    'Welcome to BarterX',
                     style: TextStyle(
                       color: Color(0xFFE1EEFF),
                       fontSize: 13,
@@ -2006,6 +2133,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(width: 6),
             Consumer<NotificationProvider>(
               builder: (context, provider, child) {
+                final badgeCount = _isGuestUser ? 0 : provider.unreadCount;
                 return Stack(
                   children: [
                     Container(
@@ -2027,7 +2155,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: _showNotificationScreen,
                       ),
                     ),
-                    if (provider.unreadCount > 0)
+                    if (badgeCount > 0)
                       Positioned(
                         right: -2,
                         top: -2,
@@ -2050,9 +2178,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           child: Center(
                             child: Text(
-                              provider.unreadCount > 9
-                                  ? '9+'
-                                  : '${provider.unreadCount}',
+                              badgeCount > 9 ? '9+' : '$badgeCount',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 9,
@@ -2076,17 +2202,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 border: Border.all(color: Colors.white.withOpacity(0.26)),
               ),
               child: IconButton(
-                icon: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFC62B),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.monetization_on,
-                    color: Colors.white,
-                    size: 18,
+                icon: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    'assets/image.png',
+                    width: 34,
+                    height: 34,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
                   ),
                 ),
                 onPressed: _showCoinsWalletScreen,
@@ -2401,29 +2524,91 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                // Hide button
+                // Favorite + Hide buttons
                 Positioned(
                   top: 16,
                   right: 16,
+                  child: Row(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          icon: Icon(
+                            post.isFavorite
+                                ? Icons.favorite
+                                : Icons.favorite_border,
+                            color: post.isFavorite ? Colors.red : Colors.grey,
+                            size: 22,
+                          ),
+                          onPressed: () => _toggleFavorite(post),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.visibility_off_outlined,
+                            color: Colors.grey,
+                            size: 22,
+                          ),
+                          onPressed: () => _confirmHidePost(post),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Distinct-viewer count (Point 5) — visible to all users.
+                Positioned(
+                  bottom: 12,
+                  right: 12,
                   child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+                      color: Colors.black.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.remove_red_eye,
+                          size: 13,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${post.viewCount}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
-                    ),
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.visibility_off_outlined,
-                        color: Colors.grey,
-                        size: 22,
-                      ),
-                      onPressed: () => _confirmHidePost(post),
                     ),
                   ),
                 ),
@@ -2728,13 +2913,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   _navItem(Icons.home_filled, 'Marketplace', true),
                   const SizedBox(width: 40),
-                  Consumer<NotificationProvider>(
+                  Consumer<ChatProvider>(
                     builder: (context, provider, child) {
+                      final badgeCount = _isGuestUser ? 0 : provider.unreadCount;
                       return _navItem(
                         Icons.chat_bubble_outline,
                         'Chat',
                         false,
-                        badge: provider.unreadCount,
+                        badge: badgeCount,
                         iconAssetPath: 'assets/chat_icons.png',
                       );
                     },

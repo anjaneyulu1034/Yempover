@@ -1,5 +1,6 @@
-﻿import 'package:flutter/material.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
@@ -175,6 +176,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 16),
             TextField(
               keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(6),
+              ],
               decoration: AppInputDecoration.build(label: 'OTP'),
             ),
           ],
@@ -311,6 +316,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     hint: 'Enter your phone number',
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(15),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 8),

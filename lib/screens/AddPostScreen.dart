@@ -1,22 +1,23 @@
 // ignore: file_names
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:YemPover_app/models/my_post_model.dart';
+import 'package:yempover_app/models/my_post_model.dart';
 import 'dart:io';
-import 'package:YemPover_app/services/category_service.dart';
-import 'package:YemPover_app/services/add_post_service.dart';
-import 'package:YemPover_app/models/add_post_model.dart';
-import 'package:YemPover_app/screens/service/ServiceAvailabilityScreen.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/services/location_service.dart';
-import 'package:YemPover_app/services/service_booking_service.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/services/category_service.dart';
+import 'package:yempover_app/services/add_post_service.dart';
+import 'package:yempover_app/models/add_post_model.dart';
+import 'package:yempover_app/screens/service/ServiceAvailabilityScreen.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/services/location_service.dart';
+import 'package:yempover_app/services/service_booking_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/utils/validators.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 
 class AddPostScreen extends StatefulWidget {
   final Function()? onPostAdded;
@@ -36,6 +37,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
     'Hours',
     'Days',
     'Months',
+    'Years',
     'No expiry',
   ];
 
@@ -379,7 +381,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
     } catch (e) {
       setState(() {
         _isLoadingCategories = false;
-        _categoryError = e.toString().replaceAll('Exception: ', '');
+        _categoryError = ErrorMessageUtils.sanitize(e);
       });
       _showErrorSnackBar('Failed to load categories: ${e.toString()}');
     }
@@ -1268,6 +1270,30 @@ class _AddPostScreenState extends State<AddPostScreen> {
     });
   }
 
+  int _maxExpiryValueFor(String unit) {
+    switch (unit) {
+      case 'Minutes':
+        return 60;
+      case 'Hours':
+        return 24;
+      case 'Days':
+        return 99;
+      case 'Months':
+        return 999;
+      case 'Years':
+        return 9999;
+      default:
+        return 9999;
+    }
+  }
+
+  /// Minutes/Hours/Days are whole-number units (no decimal precision).
+  /// Months/Years allow a single decimal digit (e.g. "6.5" months).
+  bool get _isIntegerOnlyExpiryUnit =>
+      _selectedExpiryUnit == 'Minutes' ||
+      _selectedExpiryUnit == 'Hours' ||
+      _selectedExpiryUnit == 'Days';
+
   DateTime? _computeExpiryDate() {
     if (_selectedExpiryUnit == 'No expiry') {
       return null;
@@ -1279,27 +1305,58 @@ class _AddPostScreenState extends State<AddPostScreen> {
     }
 
     final now = DateTime.now();
-    final value = int.tryParse(rawValue);
+    final value = double.tryParse(rawValue);
     if (value == null || value <= 0) {
       return null;
     }
 
     switch (_selectedExpiryUnit) {
       case 'Minutes':
-        return now.add(Duration(minutes: value));
+        return now.add(Duration(minutes: value.round()));
       case 'Hours':
-        return now.add(Duration(hours: value));
+        return now.add(Duration(hours: value.round()));
       case 'Days':
-        return now.add(Duration(days: value));
-      case 'Months':
-        return DateTime(
-          now.year,
-          now.month + value,
-          now.day,
-          now.hour,
-          now.minute,
-          now.second,
+        return now.add(
+          Duration(seconds: (value * Duration.secondsPerDay).round()),
         );
+      case 'Months':
+        {
+          final wholeMonths = value.truncate();
+          final fraction = value - wholeMonths;
+          var date = DateTime(
+            now.year,
+            now.month + wholeMonths,
+            now.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          if (fraction > 0) {
+            date = date.add(
+              Duration(seconds: (fraction * 30 * Duration.secondsPerDay).round()),
+            );
+          }
+          return date;
+        }
+      case 'Years':
+        {
+          final wholeYears = value.truncate();
+          final fraction = value - wholeYears;
+          var date = DateTime(
+            now.year + wholeYears,
+            now.month,
+            now.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          if (fraction > 0) {
+            date = date.add(
+              Duration(seconds: (fraction * 365 * Duration.secondsPerDay).round()),
+            );
+          }
+          return date;
+        }
       default:
         return null;
     }
@@ -1334,8 +1391,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
           const SizedBox(height: 10),
           TextField(
             controller: _expiryValueController,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            keyboardType: _isIntegerOnlyExpiryUnit
+                ? TextInputType.number
+                : const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: Validators.boundedCounterFormatters(
+              max: _maxExpiryValueFor(_selectedExpiryUnit),
+              allowDecimal: !_isIntegerOnlyExpiryUnit,
+            ),
             onChanged: (_) {
               if (_expiryValidationError != null) {
                 setState(() {
@@ -1350,7 +1412,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
                   ? 'Enter hours'
                   : _selectedExpiryUnit == 'Days'
                   ? 'Enter days'
-                  : 'Enter months',
+                  : _selectedExpiryUnit == 'Months'
+                  ? 'Enter months'
+                  : 'Enter years',
               errorText: _expiryValidationError,
             ),
           ),
@@ -1374,9 +1438,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
           controller: _selectedOption == 1
               ? _priceController
               : _willPayAmountController,
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-          ],
+          inputFormatters: Validators.amountInputFormatters(),
           onChanged: (_) {
             if (_priceValidationError != null) {
               setState(() {
@@ -1911,7 +1973,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
     if (_selectedExpiryUnit != 'No expiry') {
       final rawExpiry = _expiryValueController.text.trim();
-      final expiryValue = int.tryParse(rawExpiry);
+      final expiryValue = double.tryParse(rawExpiry);
+      final maxExpiryValue = _maxExpiryValueFor(_selectedExpiryUnit);
       if (expiryValue == null || expiryValue <= 0) {
         setState(() {
           _expiryValidationError =
@@ -1919,6 +1982,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
         });
         _showError(
           'Please enter a valid ${_selectedExpiryUnit.toLowerCase()} value',
+        );
+        return;
+      }
+      if (expiryValue > maxExpiryValue) {
+        setState(() {
+          _expiryValidationError =
+              '$_selectedExpiryUnit must be between 1 and $maxExpiryValue';
+        });
+        _showError(
+          '$_selectedExpiryUnit must be between 1 and $maxExpiryValue',
         );
         return;
       }
@@ -1941,6 +2014,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
         _showError('Please enter a valid price');
         return;
       }
+      if (amountText.length > Validators.maxAmountLength) {
+        setState(() {
+          _priceValidationError = 'Price is too large';
+        });
+        _showError('Price is too large');
+        return;
+      }
     } else {
       if (amountText.isEmpty) {
         setState(() {
@@ -1957,6 +2037,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
         _showError('Please enter a valid amount');
         return;
       }
+      if (amountText.length > Validators.maxAmountLength) {
+        setState(() {
+          _priceValidationError = 'Amount is too large';
+        });
+        _showError('Amount is too large');
+        return;
+      }
     }
 
     // Submit directly without step 2 dialog
@@ -1964,7 +2051,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
   }
 
   void _showError(String message) {
-    SnackbarUtils.showError(context, message);
+    if (!mounted) return;
+    SnackbarUtils.showValidation(context, message);
   }
 
   void _showSuccessSnackBar(String message) {
@@ -1973,22 +2061,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
-    final normalized = message.toLowerCase();
-    if (normalized.contains('maximum') && normalized.contains('photos')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.red.shade700,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-      return;
-    }
-
-    SnackbarUtils.showError(context, message);
+    SnackbarUtils.showValidation(context, message);
   }
 
   Future<void> _submitPost() async {

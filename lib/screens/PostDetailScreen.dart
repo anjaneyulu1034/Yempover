@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/screens/OfferDeckScreen.dart';
-import 'package:YemPover_app/screens/OfferDescriptionScreen.dart';
-import 'package:YemPover_app/screens/service/ServiceDetailBookingScreen.dart';
-import 'package:YemPover_app/services/api_service.dart';
-import 'package:YemPover_app/services/post_action_service.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/utils/loading_widget.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
-import 'package:YemPover_app/utils/wallet_offer_guard.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/widgets/safe_network_image.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/models/chats/trade_chat.dart';
+import 'package:yempover_app/screens/OfferDeckScreen.dart';
+import 'package:yempover_app/screens/OfferDescriptionScreen.dart';
+import 'package:yempover_app/screens/PostOfferersScreen.dart';
+import 'package:yempover_app/screens/service/ServiceDetailBookingScreen.dart';
+import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:yempover_app/services/api_service.dart';
+import 'package:yempover_app/services/post_action_service.dart';
+import 'package:yempover_app/services/resume_state_service.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/utils/loading_widget.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/utils/wallet_offer_guard.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/exchange_mode_sheet.dart';
+import 'package:yempover_app/widgets/safe_network_image.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -31,15 +37,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   final ApiService _apiService = ApiService();
   final TokenService _tokenService = TokenService();
   final PostActionService _postActionService = PostActionService();
+  final TradeChatService _tradeChatService = TradeChatService();
+  bool _isOpeningExistingChat = false;
+  bool _isFetchingExchangeModes = false;
 
   late Post _post;
   bool _isLoading = false;
+  bool _isNoLongerAvailable = false;
+  String? _noLongerAvailableMessage;
   bool _isFavorite = false;
   bool _isFavoriteUpdating = false;
   String? _currentUserId;
   Map<String, dynamic>? _otherUserProfile;
   int _currentImageIndex = 0;
   final PageController _imagePageController = PageController();
+  bool _isGuestUser = false;
 
   bool get _isOwnPost {
     final current = (_currentUserId ?? '').trim();
@@ -57,6 +69,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     _loadCurrentUser();
     _loadPostDetails();
     _checkIfFavorite(); // Check if post is already favorited
+    _loadGuestFlag();
+    ResumeStateService.savePost(
+      widget.post.id,
+      isService: widget.post.type == PostType.service,
+    );
+  }
+
+  Future<void> _loadGuestFlag() async {
+    try {
+      final isGuest = await _tokenService.isGuestUser();
+      if (!mounted) return;
+      setState(() => _isGuestUser = isGuest);
+    } catch (_) {}
   }
 
   Future<void> _loadCurrentUser() async {
@@ -80,7 +105,27 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         _post = response.post;
         _currentImageIndex = 0;
         _isLoading = false;
+        _isNoLongerAvailable = false;
+        _noLongerAvailableMessage = null;
       });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.statusCode == 410) {
+        setState(() {
+          _isLoading = false;
+          _isNoLongerAvailable = true;
+          _noLongerAvailableMessage = e.message;
+        });
+        return;
+      }
+
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load post details: ${e.message}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -95,6 +140,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   @override
   void dispose() {
+    ResumeStateService.clearIfCurrent('post', widget.post.id);
     _imagePageController.dispose();
     super.dispose();
   }
@@ -129,16 +175,46 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
+  // Feature 1: route into the viewer's existing chat/offer on this listing
+  // instead of letting them create a second one.
+  Future<void> _navigateToExistingChat() async {
+    final chatId = _post.existingOffer?.chatId;
+    if (chatId == null || chatId.isEmpty || _isOpeningExistingChat) return;
+
+    setState(() => _isOpeningExistingChat = true);
+    try {
+      final chat = await _tradeChatService.getChatById(chatId);
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatDetailScreen(
+            chat: chat,
+            currentUserId: _currentUserId!,
+            onChatUpdated: (_) {},
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      SnackbarUtils.showError(context, 'Could not open the chat: $e');
+    } finally {
+      if (mounted) setState(() => _isOpeningExistingChat = false);
+    }
+  }
+
   // Navigate to Offer Deck
   Future<void> _navigateToOfferDeck() async {
+    if (_isNoLongerAvailable) return;
+
+    final isGuest = await _tokenService.isGuestUser();
     final isLoggedIn = await _tokenService.isLoggedIn();
     if (!mounted) return;
-    if (!isLoggedIn || _currentUserId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please login to make an offer'),
-          backgroundColor: Colors.orange,
-        ),
+    if (isGuest || !isLoggedIn || _currentUserId == null) {
+      SnackbarUtils.showGuestLoginToast(
+        context,
+        message:
+            'Please login or create an account to make an offer.',
       );
       return;
     }
@@ -164,34 +240,64 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       return;
     }
 
-    final allowsBarter =
-        _post.barterStatus == BarterStatus.OPEN_FOR_BARTER ||
-        _post.status == PostStatus.FOR_BARTER;
+    // Feature 3: always offer the full exchange-mode picker (backend-driven,
+    // includes cross-mode requests like barter on a pure-price listing)
+    // instead of a static local list gated on the listing's native mode.
+    if (_isFetchingExchangeModes) return;
+    setState(() => _isFetchingExchangeModes = true);
 
-    if (!allowsBarter) {
-      if (_postRequiresCoinsToOffer) {
-        final hasEnoughBalance = await _ensureSufficientWalletBalance();
-        if (!mounted || !hasEnoughBalance) return;
-      }
+    ExchangeModeOptions options;
+    try {
+      options = await _tradeChatService.getExchangeModeOptions(
+        productId: _post.id,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isFetchingExchangeModes = false);
+      SnackbarUtils.showError(context, 'Could not load offer options: $e');
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _isFetchingExchangeModes = false);
 
+    if (!options.canRequest) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You cannot make an offer on this item right now'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final selectedOption = await showExchangeModeSheet(context, options);
+    if (!mounted || selectedOption == null) return;
+
+    if (selectedOption is ZeroCoinSelected) {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => OfferDescriptionScreen(
+          builder: (context) => OfferDeckScreen(
             post: _post,
-            selectedItems: const [],
             currentUserId: _currentUserId!,
-            offerMode: OfferSubmissionMode.price,
+            offerMode: OfferSubmissionMode.barter,
+            isZeroCoin: true,
           ),
         ),
       );
       return;
     }
 
-    final selectedMode = await _showOfferTypeSelector();
-    if (!mounted || selectedMode == null) return;
+    if (selectedOption is! ExchangeModeOption) return;
 
-    if (selectedMode == OfferSubmissionMode.price) {
+    if (selectedOption.isCrossMode) {
+      final confirmed = await confirmCrossModeOption(context, selectedOption);
+      if (!mounted || confirmed != true) return;
+    }
+
+    final offerMode = mapOfferTypeToSubmissionMode(selectedOption.offerType);
+
+    if (!selectedOption.requiresProductSelection) {
       final hasEnoughBalance = await _ensureSufficientWalletBalance();
       if (!mounted || !hasEnoughBalance) return;
 
@@ -202,7 +308,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             post: _post,
             selectedItems: const [],
             currentUserId: _currentUserId!,
-            offerMode: OfferSubmissionMode.price,
+            offerMode: offerMode,
           ),
         ),
       );
@@ -215,7 +321,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         builder: (context) => OfferDeckScreen(
           post: _post,
           currentUserId: _currentUserId!,
-          offerMode: selectedMode,
+          offerMode: offerMode,
         ),
       ),
     );
@@ -229,61 +335,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       context,
       requiredCoins: required,
       itemName: _post.title,
-    );
-  }
-
-  bool get _postRequiresCoinsToOffer {
-    if (_post.type == PostType.service) return _post.price > 0;
-    return _post.price > 0 &&
-        (_post.status == PostStatus.FOR_SALE ||
-            _post.barterStatus != BarterStatus.OPEN_FOR_BARTER);
-  }
-
-  Future<OfferSubmissionMode?> _showOfferTypeSelector() async {
-    return showModalBottomSheet<OfferSubmissionMode>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Choose Offer Type',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'How do you want to make this offer?',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-              ),
-              const SizedBox(height: 14),
-              ListTile(
-                leading: const CoinIcon(size: 36, iconSize: 22),
-                title: const Text('Pure Price'),
-                subtitle: const Text('Quote a cash price only'),
-                onTap: () => Navigator.pop(context, OfferSubmissionMode.price),
-              ),
-              ListTile(
-                leading: const Icon(Icons.swap_horiz, color: Colors.orange),
-                title: const Text('Pure Barter'),
-                subtitle: const Text('Offer items only'),
-                onTap: () => Navigator.pop(context, OfferSubmissionMode.barter),
-              ),
-              ListTile(
-                leading: const Icon(Icons.tune, color: Colors.blue),
-                title: const Text('Both'),
-                subtitle: const Text('Offer items and quote a price'),
-                onTap: () => Navigator.pop(context, OfferSubmissionMode.both),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -371,10 +422,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         _isFavorite = previousFavoriteState;
       });
 
-      SnackbarUtils.showError(
-        context,
-        e.toString().replaceAll('Exception: ', ''),
-      );
+      SnackbarUtils.showError(context, e);
     }
   }
 
@@ -390,18 +438,129 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       if (mounted) {
         showDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Report Submitted'),
-            content: Text(
-              'You have reported "${_post.title}" for: $reason\n\nOur team will review this post within 24 hours.\n\nReport ID: ${response.data.report.id}',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
+          builder: (context) {
+            final reportId = response.data.report.id.toString();
+            return AlertDialog(
+              scrollable: true,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
               ),
-            ],
-          ),
+              titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+              contentPadding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+              title: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF1FF),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.check_circle_outline,
+                      color: Color(0xFF2E5BFF),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Report Submitted',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RichText(
+                    text: TextSpan(
+                      style: TextStyle(
+                        color: Colors.grey.shade800,
+                        fontSize: 13.5,
+                        height: 1.35,
+                      ),
+                      children: [
+                        const TextSpan(text: 'You reported '),
+                        TextSpan(
+                          text: '"${_post.title}"',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const TextSpan(text: ' for '),
+                        TextSpan(
+                          text: reason,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const TextSpan(text: '.'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Our team will review this post within 24 hours.',
+                    style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Report ID',
+                    style: TextStyle(
+                      color: Colors.grey.shade700,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: SelectableText(
+                      reportId,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E5BFF),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'OK',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         );
       }
     } catch (e) {
@@ -431,12 +590,24 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         String? validationError;
 
         return StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
+          builder: (context, setDialogState) {
+            final mediaQuery = MediaQuery.of(context);
+            final maxContentHeight = (mediaQuery.size.height * 0.5) -
+                mediaQuery.viewInsets.bottom -
+                120;
+
+            return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
             title: const Text('Report Post'),
-            content: Column(
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: maxContentHeight.clamp(160.0, 360.0),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -501,6 +672,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   maxLines: 3,
                 ),
               ],
+                ),
+              ),
             ),
             actions: [
               OutlinedButton(
@@ -520,7 +693,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   if (description.isEmpty) {
                     setDialogState(() {
                       validationError =
-                          'Additional details are required to submit report.';
+                          'Additional details are required.';
                     });
                     return;
                   }
@@ -531,7 +704,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 child: const Text('Submit Report'),
               ),
             ],
-          ),
+          );
+          },
         );
       },
     );
@@ -1013,6 +1187,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 Icons.visibility_outlined,
                 '${_post.viewCount} views',
               ),
+              if (_post.isOwner && (_post.offerCount ?? 0) > 0)
+                _buildInfoPill(
+                  Icons.local_offer_outlined,
+                  '${_post.offerCount} offers',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PostOfferersScreen(
+                        postId: _post.id,
+                        postTitle: _post.title,
+                        isProduct: _post.type != PostType.service,
+                      ),
+                    ),
+                  ),
+                ),
               _buildCoinPricePill(
                 _post.price > 0 ? _post.formattedPrice : 'Price on request',
               ),
@@ -1055,8 +1244,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
-  Widget _buildInfoPill(IconData icon, String text) {
-    return Container(
+  Widget _buildInfoPill(IconData icon, String text, {VoidCallback? onTap}) {
+    final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1076,9 +1265,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               color: Colors.blue.shade900,
             ),
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right, size: 14, color: Colors.blue.shade700),
+          ],
         ],
       ),
     );
+
+    if (onTap == null) return pill;
+    return InkWell(borderRadius: BorderRadius.circular(999), onTap: onTap, child: pill);
   }
 
   Widget _buildCoinPricePill(String text) {
@@ -1227,23 +1423,71 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          IconButton(
-            icon: Icon(
-              _isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: _isFavorite ? Colors.red : Colors.black,
+          if (!_isGuestUser) ...[
+            IconButton(
+              icon: Icon(
+                _isFavorite ? Icons.favorite : Icons.favorite_border,
+                color: _isFavorite ? Colors.red : Colors.black,
+              ),
+              onPressed: _isFavoriteUpdating ? null : _toggleFavorite,
             ),
-            onPressed: _isFavoriteUpdating ? null : _toggleFavorite,
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.black),
-            onPressed: _showPostOptions,
-          ),
+            IconButton(
+              icon: const Icon(Icons.more_vert, color: Colors.black),
+              onPressed: _showPostOptions,
+            ),
+          ],
         ],
       ),
 
       body: _isLoading
           ? const Center(child: LoadingWidget())
-          : SingleChildScrollView(
+          : _isNoLongerAvailable
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.orange.shade200),
+                          ),
+                          child: const Icon(
+                            Icons.inventory_2_outlined,
+                            color: Colors.orange,
+                            size: 36,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'No longer available',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          (_noLongerAvailableMessage ?? '').trim().isNotEmpty
+                              ? _noLongerAvailableMessage!
+                                  .replaceFirst('Exception: ', '')
+                              : 'This item is no longer available.',
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            height: 1.3,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : SingleChildScrollView(
               padding: const EdgeInsets.only(bottom: 120),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1403,7 +1647,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ),
             ),
 
-      bottomNavigationBar: SafeArea(
+      bottomNavigationBar: _buildBottomActionBar(),
+    );
+  }
+
+  // Feature 1: owners never see "Make an Offer"; a viewer with a prior
+  // offer/chat on this listing sees a banner routing into it instead of a
+  // fresh offer button, so this stays correct across re-searches/re-logins.
+  Widget? _buildBottomActionBar() {
+    if (_isNoLongerAvailable || _post.isOwner) return null;
+
+    final existingOffer = _post.existingOffer;
+    if (existingOffer != null) {
+      return SafeArea(
         top: false,
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -1416,28 +1672,105 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ),
             ],
           ),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                _navigateToOfferDeck();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E5BFF),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF4FF),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFC9DBFF)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.info_outline,
+                      color: Color(0xFF2E5BFF),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        existingOffer.displayText,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Text(
-                _post.type == PostType.service
-                    ? 'Open Service Booking'
-                    : 'Make an Offer',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isOpeningExistingChat
+                      ? null
+                      : _navigateToExistingChat,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E5BFF),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _isOpeningExistingChat
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Go to Chat',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => _navigateToOfferDeck(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2E5BFF),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              _post.type == PostType.service
+                  ? 'Open Service Booking'
+                  : 'Make an Offer',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
             ),
           ),

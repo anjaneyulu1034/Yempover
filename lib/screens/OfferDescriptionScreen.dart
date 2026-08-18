@@ -1,15 +1,20 @@
-import 'package:YemPover_app/models/chats/trade_chat.dart';
+import 'dart:async';
+
+import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/payment/SubscriptionScreen.dart';
-import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
-import 'package:YemPover_app/utils/wallet_offer_guard.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/payment/SubscriptionScreen.dart';
+import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/wallet_offer_guard.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/services/socket_io/socket_service.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/widgets/safe_network_image.dart';
 
 enum OfferSubmissionMode { price, barter, both }
 
@@ -21,6 +26,9 @@ class OfferDescriptionScreen extends StatefulWidget {
   final bool isService;
   final OfferSubmissionMode offerMode;
   final String? initialQuotedPrice;
+  // Explicit "no coins involved" request — the barter item is optional and
+  // no price is ever sent, regardless of offerMode.
+  final bool isZeroCoin;
 
   const OfferDescriptionScreen({
     super.key,
@@ -31,6 +39,7 @@ class OfferDescriptionScreen extends StatefulWidget {
     this.isService = false,
     required this.offerMode,
     this.initialQuotedPrice,
+    this.isZeroCoin = false,
   });
 
   @override
@@ -39,6 +48,8 @@ class OfferDescriptionScreen extends StatefulWidget {
 
 class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   final TradeChatService _chatService = TradeChatService();
+  final SocketService _socketService = SocketService();
+  final TokenService _tokenService = TokenService();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   bool _isSubmitting = false;
@@ -57,11 +68,14 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   void initState() {
     super.initState();
 
+    // Only pre-fill from a quote already entered on the previous screen
+    // (the "Both" barter + price flow). Don't default to the listing's
+    // price here — that's not an offer, it's just paying full price, and
+    // it's too easy to submit without noticing. The user should always
+    // type the amount they actually want to offer.
     final initialQuotedPrice = widget.initialQuotedPrice?.trim() ?? '';
     if (initialQuotedPrice.isNotEmpty) {
       _priceController.text = initialQuotedPrice;
-    } else if (widget.post.price > 0) {
-      _priceController.text = widget.post.price.toStringAsFixed(2);
     }
   }
 
@@ -80,6 +94,13 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
         .join(', ');
     final remaining = widget.selectedItems.length - 2;
     return remaining > 0 ? '$firstTwo +$remaining more' : firstTwo;
+  }
+
+  List<String> _buildOfferImages() {
+    return widget.selectedItems
+        .map((item) => item.imageUrl)
+        .where((url) => url.trim().isNotEmpty)
+        .toList();
   }
 
   String _buildOfferDescription() {
@@ -163,6 +184,29 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
     );
   }
 
+  // This screen is reachable straight from a post listing, so the chat
+  // socket may never have connected yet (unlike ChatDetailScreen, which
+  // always connects on open). Best-effort: connect if needed, then relay —
+  // never throws, never blocks the caller's success flow.
+  Future<void> _relayOfferCreated(String chatId, TradeOffer offer) async {
+    try {
+      if (!_socketService.isConnected) {
+        final token = await _tokenService.getToken();
+        if (token == null || token.isEmpty) return;
+        _socketService.init(token: token);
+
+        final start = DateTime.now();
+        while (DateTime.now().difference(start) < const Duration(seconds: 5)) {
+          if (_socketService.isConnected) break;
+          await Future.delayed(const Duration(milliseconds: 120));
+        }
+      }
+      _socketService.emitOfferCreated(chatId, offer.toJson());
+    } catch (e) {
+      print('⚠️ Could not relay offer over socket: $e');
+    }
+  }
+
   Future<void> _submitOffer() async {
     final priceValidationError = _validatePrice(_priceController.text);
     final descriptionValidationError = _validateDescription(
@@ -190,7 +234,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
 
     final parsedPrice = double.tryParse(_priceController.text.trim());
 
-    if (_requiresBarterItems && widget.selectedItems.isEmpty) {
+    if (_requiresBarterItems &&
+        !widget.isZeroCoin &&
+        widget.selectedItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select at least one item for barter'),
@@ -276,7 +322,15 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
 
       late final TradeOffer createdOffer;
 
-      if (widget.offerMode == OfferSubmissionMode.price) {
+      if (widget.isZeroCoin) {
+        createdOffer = await _chatService.createZeroCoinOffer(
+          chatId: chat.id,
+          barterItemTitle: _buildOfferTitle(),
+          barterItemDescription: _buildOfferDescription(),
+          barterItemImages: _buildOfferImages(),
+          barterItemIds: widget.selectedItems.map((item) => item.id).toList(),
+        );
+      } else if (widget.offerMode == OfferSubmissionMode.price) {
         createdOffer = await _chatService.createPriceOffer(
           chatId: chat.id,
           price: parsedPrice!,
@@ -287,6 +341,8 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           chatId: chat.id,
           barterItemTitle: _buildOfferTitle(),
           barterItemDescription: _buildOfferDescription(),
+          barterItemImages: _buildOfferImages(),
+          barterItemIds: widget.selectedItems.map((item) => item.id).toList(),
         );
       } else {
         createdOffer = await _chatService.createBothOffer(
@@ -294,11 +350,22 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           price: parsedPrice!,
           barterItemTitle: _buildOfferTitle(),
           barterItemDescription: _buildOfferDescription(),
+          barterItemImages: _buildOfferImages(),
+          barterItemIds: widget.selectedItems.map((item) => item.id).toList(),
         );
       }
 
       print('✅ Offer created successfully!');
       print('   Offer ID: ${createdOffer.id}');
+
+      // Created over REST — ask the socket layer to relay it to the room so
+      // the other participant sees the new offer live instead of only on
+      // their next manual chat refresh (matches how counter offers already
+      // notify via emitOfferCreated in ChatDetailScreen). This screen can be
+      // reached directly from a post listing without the chat socket ever
+      // having connected yet, so best-effort connect first — fire-and-forget,
+      // must not delay the success flow below.
+      unawaited(_relayOfferCreated(chat.id, createdOffer));
 
       if (!mounted) return;
 
@@ -349,6 +416,17 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           return;
         }
 
+        if (_requiresPrice &&
+            lowerError.contains('price') &&
+            (lowerError.contains('required') ||
+                lowerError.contains('invalid') ||
+                lowerError.contains('greater'))) {
+          setState(() {
+            _priceError = 'Price must be greater than 0';
+          });
+          return;
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to send offer: $readableError'),
@@ -368,12 +446,18 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
     }
 
     final parsed = double.tryParse(trimmed);
-    if (parsed == null || parsed <= 0) {
+    if (parsed == null) {
       return 'Enter a valid price';
     }
 
-    if (trimmed.length > 9) {
-      return 'Price is too large';
+    // The backend requires a price greater than 0 for both PRICE and BOTH
+    // offer types — 0 is rejected server-side even for combined offers.
+    if (parsed <= 0) {
+      return 'Price must be greater than 0';
+    }
+
+    if (trimmed.length > 6) {
+      return 'Price cannot exceed 6 digits';
     }
 
     return null;
@@ -389,12 +473,8 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
       return 'Description must contain text';
     }
 
-    if (RegExp(r'\d').hasMatch(trimmed)) {
-      return 'Description cannot contain numbers';
-    }
-
-    if (!RegExp(r"^[A-Za-z\s.,!?()'\-]+$").hasMatch(trimmed)) {
-      return 'Use only letters';
+    if (!RegExp(r"^[A-Za-z0-9\s.,!?()'\-]+$").hasMatch(trimmed)) {
+      return 'Use only letters, numbers, and basic punctuation';
     }
 
     if (trimmed.length < 3) {
@@ -435,6 +515,31 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (widget.isZeroCoin) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.teal.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.teal.shade200),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.check_box_outlined, color: Colors.teal.shade700, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Zero-coin transaction — no coins involved. Item(s) below are optional.',
+                        style: TextStyle(fontSize: 12, color: Colors.teal.shade900),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             // Offer Summary Card
             Container(
               padding: const EdgeInsets.all(16),
@@ -456,31 +561,50 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                     children: [
                       // You want (Target post)
                       Expanded(
-                        child: Column(
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'You want:',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 12,
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: SafeNetworkImage(
+                                url: widget.post.processedImages.isNotEmpty
+                                    ? widget.post.processedImages.first
+                                    : widget.post.getDefaultImageUrl(),
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.post.title,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              'by ${widget.post.postedBy.firstName}',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 11,
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'You want:',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    widget.post.title,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    'by ${widget.post.postedBy.firstName}',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -513,6 +637,15 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                             ),
                             const SizedBox(height: 4),
                             if (_requiresBarterItems) ...[
+                              if (widget.isZeroCoin && widget.selectedItems.isEmpty)
+                                Text(
+                                  'No item — asking for zero coins',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
                               ...widget.selectedItems
                                   .take(2)
                                   .map(
@@ -525,31 +658,11 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                               6,
                                             ),
                                             child: item.imageUrl.isNotEmpty
-                                                ? Image.network(
-                                                    item.imageUrl,
+                                                ? SafeNetworkImage(
+                                                    url: item.imageUrl,
                                                     width: 28,
                                                     height: 28,
                                                     fit: BoxFit.cover,
-                                                    errorBuilder:
-                                                        (
-                                                          context,
-                                                          error,
-                                                          stackTrace,
-                                                        ) {
-                                                          return Container(
-                                                            width: 28,
-                                                            height: 28,
-                                                            color: Colors
-                                                                .grey
-                                                                .shade200,
-                                                            child: const Icon(
-                                                              Icons.image,
-                                                              size: 16,
-                                                              color:
-                                                                  Colors.grey,
-                                                            ),
-                                                          );
-                                                        },
                                                   )
                                                 : Container(
                                                     width: 28,
@@ -602,6 +715,18 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
+                              if (widget.offerMode == OfferSubmissionMode.both)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    '+ ${_priceController.text.trim().isEmpty ? '0' : _priceController.text.trim()} coins',
+                                    style: TextStyle(
+                                      color: Colors.green.shade700,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
                             ] else
                               Text(
                                 _priceController.text.trim().isEmpty
@@ -640,10 +765,12 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                 ),
               TextField(
                 controller: _priceController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                  LengthLimitingTextInputFormatter(9),
+                  LengthLimitingTextInputFormatter(6),
                 ],
                 onChanged: (_) {
                   setState(() {

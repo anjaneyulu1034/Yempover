@@ -1,13 +1,16 @@
-import 'package:YemPover_app/models/favorites_response.dart';
+import 'package:yempover_app/models/favorites_response.dart';
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/services/post_action_service.dart';
-import 'package:YemPover_app/screens/PostDetailScreen.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/screens/Home_screen.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
-import 'package:YemPover_app/utils/blocked_users_cache.dart';
-import 'package:YemPover_app/services/token_service.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/services/api_service.dart';
+import 'package:yempover_app/services/post_action_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/post_availability_utils.dart';
+import 'package:yempover_app/screens/PostDetailScreen.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/screens/Home_screen.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/utils/blocked_users_cache.dart';
+import 'package:yempover_app/services/token_service.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -18,6 +21,7 @@ class FavoritesScreen extends StatefulWidget {
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
   final PostActionService _postActionService = PostActionService();
+  final ApiService _apiService = ApiService();
   final TokenService _tokenService = TokenService();
 
   List<FavoriteItem> _favorites = [];
@@ -52,14 +56,44 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     });
   }
 
-  Future<List<FavoriteItem>> _filterBlockedFavorites(
-    List<FavoriteItem> items,
-  ) async {
+  Future<List<FavoriteItem>> _filterFavorites(List<FavoriteItem> items) async {
+    final withoutExpired =
+        items.where((item) => !item.isExpiredOrUnavailable).toList();
+    final available = await _filterByLivePostAvailability(withoutExpired);
+
     final isLoggedIn = await _tokenService.isLoggedIn();
-    if (!isLoggedIn) return items;
+    if (!isLoggedIn) return available;
 
     await BlockedUsersCache.instance.ensureLoaded();
-    return BlockedUsersCache.instance.filterFavorites(items);
+    return BlockedUsersCache.instance.filterFavorites(available);
+  }
+
+  /// Drop favorites whose post detail API returns 410/404 (expired / unavailable).
+  Future<List<FavoriteItem>> _filterByLivePostAvailability(
+    List<FavoriteItem> items,
+  ) async {
+    final available = <FavoriteItem>[];
+
+    for (final item in items) {
+      final postId = item.actualPostId;
+      if (postId == null || postId.isEmpty) continue;
+
+      try {
+        await _apiService.getPostDetail(
+          postId: postId,
+          type: item.type == 'service' ? PostType.service : PostType.product,
+        );
+        available.add(item);
+      } on ApiException catch (e) {
+        if (!PostAvailabilityUtils.isApiUnavailableStatus(e.statusCode)) {
+          available.add(item);
+        }
+      } catch (_) {
+        available.add(item);
+      }
+    }
+
+    return available;
   }
 
   void _onScroll() {
@@ -84,7 +118,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         limit: _limit,
       );
 
-      final filtered = await _filterBlockedFavorites(response.data.favorites);
+      final filtered = await _filterFavorites(response.data.favorites);
 
       setState(() {
         _favorites = filtered;
@@ -95,7 +129,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = ErrorMessageUtils.sanitize(e);
       });
 
       if (mounted) {
@@ -118,7 +152,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         limit: _limit,
       );
 
-      final filtered = await _filterBlockedFavorites(response.data.favorites);
+      final filtered = await _filterFavorites(response.data.favorites);
 
       setState(() {
         _favorites.addAll(filtered);
@@ -166,10 +200,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       });
 
       if (mounted) {
-        SnackbarUtils.showError(
-          context,
-          e.toString().replaceAll('Exception: ', ''),
-        );
+        SnackbarUtils.showError(context, e);
       }
     }
   }
@@ -220,6 +251,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       case 'FOR_SALE':
         return 'For Sale';
       case 'SOLD':
+        return 'Sold';
+      case 'BARTERED':
         return 'Sold';
       case 'LOOKING_FOR_SERVICE':
         return 'Looking for Service';
@@ -737,6 +770,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         return PostStatus.FOR_SALE;
       case 'SOLD':
         return PostStatus.SOLD;
+      case 'BARTERED':
+        return PostStatus.BARTERED;
       case 'LOOKING_FOR_SERVICE':
         return PostStatus.LOOKING_FOR_SERVICE;
       case 'PROVIDE_SERVICE':

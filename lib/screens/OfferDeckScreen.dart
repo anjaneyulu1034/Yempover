@@ -1,27 +1,33 @@
-import 'package:YemPover_app/screens/LoginScreen.dart';
+import 'package:yempover_app/screens/LoginScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/models/my_post_model.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/services/my_posts_service.dart';
-import 'package:YemPover_app/screens/OfferDescriptionScreen.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/screens/AddPostScreen.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
-import 'package:YemPover_app/utils/wallet_offer_guard.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/models/my_post_model.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/services/my_posts_service.dart';
+import 'package:yempover_app/screens/OfferDescriptionScreen.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/screens/AddPostScreen.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/utils/wallet_offer_guard.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 
 class OfferDeckScreen extends StatefulWidget {
   final Post post;
   final String currentUserId;
   final OfferSubmissionMode offerMode;
+  // Explicit "no coins involved" request: the barter item becomes optional
+  // (the user may submit with none selected) and no price/value-matching
+  // rules apply.
+  final bool isZeroCoin;
 
   const OfferDeckScreen({
     super.key,
     required this.post,
     required this.currentUserId,
     required this.offerMode,
+    this.isZeroCoin = false,
   });
 
   @override
@@ -42,22 +48,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   bool _isLoadingMore = false;
   final ScrollController _scrollController = ScrollController();
 
-  bool _isPostExpired(MyPost myPost) {
-    if (myPost.hasExpired) return true;
-
-    final status = myPost.status.trim().toUpperCase();
-    if (status == 'EXPIRED') return true;
-
-    final validUntil = myPost.validUntil;
-    if (validUntil != null && !validUntil.isAfter(DateTime.now())) {
-      return true;
-    }
-
-    final remainingTime = (myPost.remainingTime ?? '').trim().toLowerCase();
-    if (remainingTime.contains('expired')) return true;
-
-    return false;
-  }
+  bool _isPostExpired(MyPost myPost) => myPost.isExpiredOrUnavailable;
 
   bool get _filtersToBarterPostsOnly =>
       widget.offerMode == OfferSubmissionMode.barter ||
@@ -69,6 +60,10 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   }
 
   String get _emptyItemsMessage {
+    if (widget.isZeroCoin) {
+      return 'Item is optional for a zero-coin request — post items open for '
+          'barter if you\'d like to offer one, or continue without one.';
+    }
     if (_filtersToBarterPostsOnly) {
       return 'Post items open for barter to make this offer';
     }
@@ -189,17 +184,16 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       ),
     );
 
-    // Temporarily hidden: coins/price chip is not needed right now.
-    // if (widget.post.price > 0) {
-    //   chips.add(
-    //     _buildMetaChip(
-    //       icon: Icons.attach_money,
-    //       label: widget.post.formattedPrice,
-    //       fg: const Color(0xFF1565C0),
-    //       bg: const Color(0xFFE3F2FD),
-    //     ),
-    //   );
-    // }
+    if (widget.post.price > 0) {
+      chips.add(
+        _buildMetaChip(
+          icon: Icons.attach_money,
+          label: '${CoinFormat.amount(widget.post.price)} coins',
+          fg: const Color(0xFF1565C0),
+          bg: const Color(0xFFE3F2FD),
+        ),
+      );
+    }
 
     return Wrap(spacing: 8, runSpacing: 8, children: chips);
   }
@@ -216,15 +210,18 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   double get _selectedBarterItemsCoinTotal =>
       _selectedItems.fold<double>(0, (sum, item) => sum + item.value);
 
-  /// Minimum coins to quote when offering barter items toward a priced listing.
-  int get _minimumQuotedCoinsForBoth {
+  /// Condition 1 (pure barter): the swapped items must be worth the same.
+  /// A mismatch here belongs in Condition 2 ("Barter + Price") instead, so a
+  /// pure barter offer is only allowed to proceed once values line up. A
+  /// zero-coin exchange is exempt — the parties have agreed to trade
+  /// without coins, at whatever values they agree.
+  double? get _pureBarterValueGap {
+    if (widget.isZeroCoin) return null;
+    if (widget.offerMode != OfferSubmissionMode.barter) return null;
     final targetPrice = widget.post.price;
-    if (targetPrice <= 0) return 1;
-
-    final gap = targetPrice - _selectedBarterItemsCoinTotal;
-    if (gap <= 0) return 1;
-
-    return gap.ceil();
+    if (targetPrice <= 0) return null;
+    final gap = _selectedBarterItemsCoinTotal - targetPrice;
+    return gap.abs() < 0.01 ? null : gap;
   }
 
   String? _validateQuotedPrice(String value) {
@@ -236,25 +233,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     }
 
     final parsed = double.tryParse(trimmed);
-    if (parsed == null || parsed <= 0) {
+    if (parsed == null || parsed < 0) {
       return 'Enter a valid price';
     }
 
     if (trimmed.length > 9) {
       return 'Price is too large';
-    }
-
-    if (_selectedItems.isNotEmpty) {
-      final quotedCoins = parsed.round();
-      final minimum = _minimumQuotedCoinsForBoth;
-      if (quotedCoins < minimum) {
-        if (widget.post.price > 0) {
-          return 'Quoted price must be at least $minimum coins '
-              '(listing ${CoinFormat.amount(widget.post.price)} − '
-              'your items ${CoinFormat.amount(_selectedBarterItemsCoinTotal)})';
-        }
-        return 'Quoted price must be at least $minimum coins';
-      }
     }
 
     return null;
@@ -303,7 +287,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
       setState(() {
         _isLoading = false;
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = ErrorMessageUtils.sanitize(e);
       });
 
       if (_errorMessage!.contains('Session expired') ||
@@ -401,6 +385,18 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     _quotedPriceError = _validateQuotedPrice(_quotedPriceController.text);
   }
 
+  /// Keeps the price field non-empty as the item selection changes, so
+  /// picking items doesn't leave the field blank. There's no required
+  /// minimum to quote — barter items alone are a valid "Both" offer, so this
+  /// only fills in "0" and never overwrites a value the user already typed.
+  void _syncQuotedPriceWithMinimum() {
+    if (!_requiresQuotedPrice) return;
+
+    if (_quotedPriceController.text.trim().isEmpty) {
+      _quotedPriceController.text = '0';
+    }
+  }
+
   void _toggleItemSelection(UserItem item) {
     setState(() {
       final existingIndex = _selectedItems.indexWhere((i) => i.id == item.id);
@@ -409,6 +405,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       } else {
         _selectedItems.add(item);
       }
+      _syncQuotedPriceWithMinimum();
       _revalidateQuotedPrice();
     });
   }
@@ -416,6 +413,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   void _removeSelectedItem(UserItem item) {
     setState(() {
       _selectedItems.removeWhere((i) => i.id == item.id);
+      _syncQuotedPriceWithMinimum();
       _revalidateQuotedPrice();
     });
   }
@@ -547,13 +545,27 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       _quotedPriceError = quotedPriceError;
     });
 
-    if ((widget.offerMode == OfferSubmissionMode.barter ||
+    if (!widget.isZeroCoin &&
+        (widget.offerMode == OfferSubmissionMode.barter ||
             widget.offerMode == OfferSubmissionMode.both) &&
         _selectedItems.isEmpty) {
       SnackbarUtils.showInfo(
         context,
         'Please select at least one item to continue.',
       );
+      return;
+    }
+
+    final barterValueGap = _pureBarterValueGap;
+    if (barterValueGap != null) {
+      final message = barterValueGap > 0
+          ? 'Your items are worth ${CoinFormat.amount(barterValueGap)} coins '
+                'more than this listing. Use "Barter + Price" to offer the '
+                'difference, or adjust your selected items.'
+          : 'Your items are worth ${CoinFormat.amount(barterValueGap.abs())} '
+                'coins less than this listing. Use "Barter + Price" to add '
+                'the difference, or adjust your selected items.';
+      SnackbarUtils.showInfo(context, message);
       return;
     }
 
@@ -571,6 +583,9 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
           itemName: widget.post.title,
         );
         if (!canAfford || !mounted) return;
+
+        await _showCoinDeductionNotice(quoted.round());
+        if (!mounted) return;
       }
     }
 
@@ -594,7 +609,51 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
           isService: isService, // Pass the correct type
           offerMode: widget.offerMode,
           initialQuotedPrice: _quotedPriceController.text.trim(),
+          isZeroCoin: widget.isZeroCoin,
         ),
+      ),
+    );
+  }
+
+  /// Purely informational notice so the user knows upfront how many coins
+  /// this "Barter + Price" offer will cost them if the other party accepts it.
+  Future<void> _showCoinDeductionNotice(int coins) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('Coins to be Deducted'),
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const CoinIcon(size: 22, iconSize: 14),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'If this offer is accepted, ${CoinFormat.amount(coins)} '
+                'coins will be deducted from your wallet.',
+                style: const TextStyle(fontSize: 14.5, height: 1.35),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Okay'),
+          ),
+        ],
       ),
     );
   }
@@ -610,9 +669,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         //   icon: const Icon(Icons.arrow_back, color: Colors.black),
         //  // onPressed: () => Navigator.pop(context),
         // ),
-        title: const Text(
-          "Offer Deck",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
+        title: Text(
+          widget.isZeroCoin ? "Zero-Coin Offer" : "Offer Deck",
+          style: const TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         centerTitle: true,
       ),
@@ -622,6 +684,40 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         child: SingleChildScrollView(
           child: Column(
             children: [
+              if (widget.isZeroCoin)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.teal.shade200),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.check_box_outlined,
+                          color: Colors.teal.shade700,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Zero-coin transaction — no coins involved. '
+                            'Picking an item below is optional.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.teal.shade900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               // -------- USER NAME ----------
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -726,10 +822,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                       if (_selectedItems.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(
-                          widget.post.price > 0
-                              ? 'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins · '
-                                  'Minimum quote: ${CoinFormat.amount(_minimumQuotedCoinsForBoth)} coins'
-                              : 'Your items total: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins',
+                          'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade600,
@@ -737,6 +830,29 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                         ),
                       ],
                     ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              if (widget.offerMode == OfferSubmissionMode.barter &&
+                  _selectedItems.isNotEmpty &&
+                  widget.post.price > 0) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    _pureBarterValueGap == null
+                        ? 'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins · Values match ✓'
+                        : 'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins · '
+                              'Listing: ${CoinFormat.amount(widget.post.price)} coins · '
+                              'Values must match for a pure barter offer',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _pureBarterValueGap == null
+                          ? Colors.green.shade700
+                          : Colors.orange.shade800,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -1162,15 +1278,32 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                                             alpha: 0.5,
                                           ),
                                         ),
-                                        child: Text(
-                                          item.name,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              item.name,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            if (item.value > 0)
+                                              Text(
+                                                '${CoinFormat.amount(item.value)} coins',
+                                                style: const TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 10,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                          ],
                                         ),
                                       ),
                                     ),

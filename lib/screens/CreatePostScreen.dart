@@ -1,10 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/models/ProductPost.dart';
-import 'package:YemPover_app/utils/image_picker_utils.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/models/ProductPost.dart';
+import 'package:yempover_app/utils/image_picker_utils.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/utils/validators.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final Function(UserItem) onPostCreated;
@@ -186,6 +187,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     TextFormField(
                       controller: _priceController,
                       keyboardType: TextInputType.number,
+                      inputFormatters: Validators.amountInputFormatters(),
                       decoration: AppInputDecoration.build(
                         label: 'Price (optional)',
                         hint: 'Enter price',

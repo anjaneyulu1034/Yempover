@@ -31,10 +31,14 @@ class ContentData {
   ContentData({this.title, this.content, this.slug, this.lastUpdated});
 
   ContentData.fromJson(Map<String, dynamic> json) {
-    title = json['title'];
-    content = json['content'];
-    slug = json['slug'];
-    lastUpdated = json['lastUpdated'];
+    final source = json['page'] is Map<String, dynamic>
+        ? json['page'] as Map<String, dynamic>
+        : json;
+
+    title = source['title'] as String?;
+    content = source['content'] as String?;
+    slug = source['slug'] as String?;
+    lastUpdated = source['lastUpdated'] as String?;
   }
 
   Map<String, dynamic> toJson() {

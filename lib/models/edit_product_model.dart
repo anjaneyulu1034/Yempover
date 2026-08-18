@@ -1,4 +1,4 @@
-import 'package:YemPover_app/models/my_post2_model.dart';
+import 'package:yempover_app/models/my_post2_model.dart';
 
 class EditProductRequest {
   String title;

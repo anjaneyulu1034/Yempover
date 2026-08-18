@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/trade_history_model.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
 
 class TradeDetailScreen extends StatelessWidget {
   final TradeItem trade;
@@ -130,9 +130,9 @@ class TradeDetailScreen extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // Items Swapped Section
+            // Item Section
             Text(
-              'Items Swapped:',
+              trade.hasBarterItemSnapshot ? 'Item Bartered:' : 'Item Details:',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -141,52 +141,56 @@ class TradeDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // User Profile and Items
-            Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    // Other User (the person they traded with)
-                    _buildUserSection(
-                      title: trade.otherUser.fullName,
-                      imageUrl:
-                          trade.otherUser.profileImage ??
-                          'https://via.placeholder.com/150',
-                      itemTitle: trade.product.title,
-                      itemImageUrl: trade.product.primaryImage.isNotEmpty
-                          ? trade.product.primaryImage
-                          : 'https://via.placeholder.com/150',
-                      isOtherUser: true,
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    const SizedBox(height: 16),
-
-                    // Current User (Me)
-                    _buildUserSection(
-                      title: 'Me',
-                      imageUrl:
-                          'https://via.placeholder.com/150', // Placeholder for current user
-                      itemTitle: trade.product.title,
-                      itemImageUrl: trade.product.primaryImage.isNotEmpty
-                          ? trade.product.primaryImage
-                          : 'https://via.placeholder.com/150',
-                      isOtherUser: false,
-                    ),
-                  ],
+            // A genuine two-item swap needs a distinct record for each side.
+            // This isn't gated on `isBarter` — that flag just says which
+            // bucket the backend sorted the trade into (Sold/Bought vs
+            // Barter), not whether a barter item was actually part of the
+            // deal. A "Barter + Coins" offer accepted on a for-sale listing
+            // lands in the Bought/Sold bucket (isBarter == false) but still
+            // has a real barterItemTitle/Images snapshot that must be shown.
+            // Older trades (before that was tracked) and pure sales never
+            // have a snapshot, so they still fall through to the single,
+            // honestly-labeled card below instead of fake "Their Item"/"My
+            // Item" cards.
+            if (trade.hasBarterItemSnapshot)
+              _buildBarterSwapCard(trade)
+            else
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _buildUserSection(
+                    title: trade.otherUser.fullName,
+                    imageUrl:
+                        trade.otherUser.profileImage ??
+                        'https://via.placeholder.com/150',
+                    badgeLabel: tradeType == 'Sold'
+                        ? 'Sold to this user'
+                        : tradeType == 'Purchased'
+                        ? 'Purchased from this user'
+                        : 'Bartered with this user',
+                    itemTitle: trade.product.title,
+                    itemImageUrl: trade.product.primaryImage.isNotEmpty
+                        ? trade.product.primaryImage
+                        : 'https://via.placeholder.com/150',
+                  ),
                 ),
               ),
-            ),
 
             const SizedBox(height: 24),
 
-            // Price Information (for Sold/Purchased)
-            if (!isBarter && price != null && actualPrice != null)
+            // Price Information: shown for Sold/Purchased trades, and also
+            // for a Barter + Coins deal that landed in the barter bucket but
+            // still had a real coin amount recorded (trade.sellingPrice).
+            // Excluded for a pure barter with no price component, since
+            // displayPrice would otherwise fall back to the listing's
+            // nominal price — a number that was never actually charged.
+            if ((!isBarter || trade.sellingPrice != null) &&
+                price != null &&
+                actualPrice != null)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -390,12 +394,69 @@ class TradeDetailScreen extends StatelessWidget {
     return difference > 0 ? Colors.green : Colors.red;
   }
 
+  Widget _buildBarterSwapCard(TradeItem trade) {
+    final barterImage = trade.barterItemImages.isNotEmpty
+        ? trade.barterItemImages.first
+        : 'https://via.placeholder.com/150';
+    final listedImage = trade.product.primaryImage.isNotEmpty
+        ? trade.product.primaryImage
+        : 'https://via.placeholder.com/150';
+
+    // isMyBarterItem == true: I made the accepted offer, so the barter
+    // snapshot is my item and `product` is the listing they posted.
+    // false/null: they made it — `product` is my listing, barter snapshot
+    // is their item.
+    final theirItemTitle = trade.isMyBarterItem == true
+        ? trade.product.title
+        : (trade.barterItemTitle ?? trade.product.title);
+    final theirItemImage = trade.isMyBarterItem == true
+        ? listedImage
+        : barterImage;
+    final myItemTitle = trade.isMyBarterItem == true
+        ? (trade.barterItemTitle ?? trade.product.title)
+        : trade.product.title;
+    final myItemImage = trade.isMyBarterItem == true
+        ? barterImage
+        : listedImage;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            _buildUserSection(
+              title: trade.otherUser.fullName,
+              imageUrl:
+                  trade.otherUser.profileImage ??
+                  'https://via.placeholder.com/150',
+              badgeLabel: 'Their Item',
+              itemTitle: theirItemTitle,
+              itemImageUrl: theirItemImage,
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
+            _buildUserSection(
+              title: 'Me',
+              imageUrl: 'https://via.placeholder.com/150',
+              badgeLabel: 'My Item',
+              itemTitle: myItemTitle,
+              itemImageUrl: myItemImage,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildUserSection({
     required String title,
     required String imageUrl,
     required String itemTitle,
     required String itemImageUrl,
-    required bool isOtherUser,
+    required String badgeLabel,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -430,16 +491,14 @@ class TradeDetailScreen extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: isOtherUser
-                          ? Colors.blue.shade50
-                          : Colors.grey.shade100,
+                      color: Colors.blue.shade50,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      isOtherUser ? 'Their Item' : 'My Item',
-                      style: TextStyle(
+                      badgeLabel,
+                      style: const TextStyle(
                         fontSize: 12,
-                        color: isOtherUser ? Colors.blue : Colors.grey,
+                        color: Colors.blue,
                         fontWeight: FontWeight.w500,
                       ),
                     ),

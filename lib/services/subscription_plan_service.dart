@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:YemPover_app/models/get_current_subscription_plan_response.dart';
-import 'package:YemPover_app/models/get_subscription_plans_response.dart';
-import 'package:YemPover_app/models/get_my_profile_response.dart';
-import 'package:YemPover_app/services/my_profile_service.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/get_current_subscription_plan_response.dart';
+import 'package:yempover_app/models/get_subscription_plans_response.dart';
+import 'package:yempover_app/models/get_my_profile_response.dart';
+import 'package:yempover_app/services/my_profile_service.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/constants/api_constants.dart';
 
 class SubscriptionPlanService {
   static final SubscriptionPlanService _instance =

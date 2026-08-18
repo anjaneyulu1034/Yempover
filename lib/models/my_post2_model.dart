@@ -147,7 +147,11 @@ class MyPost {
 
   // Computed properties
   bool get isForSale => status == 'FOR_SALE';
-  bool get isSold => status == 'SOLD';
+  // Mirrors my_post_model.dart's isSold: the item that was bartered away in
+  // a completed trade is marked BARTERED (COMPLETED for services), not SOLD
+  // — both still mean this listing is done and should read as "sold".
+  bool get isSold =>
+      status == 'SOLD' || status == 'BARTERED' || status == 'COMPLETED';
   bool get isProvidingService => category.type == 'service';
   bool get isOpenForBarter => barterStatus == 'OPEN_FOR_BARTER';
   bool get hasAcceptedOffer =>

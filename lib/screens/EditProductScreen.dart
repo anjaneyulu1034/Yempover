@@ -2,16 +2,18 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:YemPover_app/widgets/app_text_field.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/api_constants.dart';
-import 'package:YemPover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
 import '../models/my_post_model.dart';
 import '../services/add_post_service.dart';
 import '../services/category_service.dart';
 import '../services/location_service.dart';
 import '../services/my_posts_service.dart';
+import '../utils/error_message_utils.dart';
+import '../utils/validators.dart';
 
 class EditProductScreen extends StatefulWidget {
   final MyPost post;
@@ -35,6 +37,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     'Hours',
     'Days',
     'Months',
+    'Years',
     'No expiry',
   ];
 
@@ -281,7 +284,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       if (!mounted) return;
       setState(() {
         _isLoadingCategories = false;
-        _categoryLoadError = e.toString().replaceAll('Exception: ', '');
+        _categoryLoadError = ErrorMessageUtils.sanitize(e);
       });
     }
   }
@@ -375,6 +378,30 @@ class _EditProductScreenState extends State<EditProductScreen> {
     });
   }
 
+  int _maxExpiryValueFor(String unit) {
+    switch (unit) {
+      case 'Minutes':
+        return 60;
+      case 'Hours':
+        return 24;
+      case 'Days':
+        return 99;
+      case 'Months':
+        return 999;
+      case 'Years':
+        return 9999;
+      default:
+        return 9999;
+    }
+  }
+
+  /// Minutes/Hours/Days are whole-number units (no decimal precision).
+  /// Months/Years allow a single decimal digit (e.g. "6.5" months).
+  bool get _isIntegerOnlyExpiryUnit =>
+      _selectedExpiryUnit == 'Minutes' ||
+      _selectedExpiryUnit == 'Hours' ||
+      _selectedExpiryUnit == 'Days';
+
   DateTime? _computeEditedExpiryDate() {
     if (_selectedExpiryUnit == _expiredExpiryUnit) {
       return widget.post.validUntil;
@@ -389,7 +416,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       return null;
     }
 
-    final value = int.tryParse(rawValue);
+    final value = double.tryParse(rawValue);
     if (value == null || value <= 0) {
       return null;
     }
@@ -397,20 +424,55 @@ class _EditProductScreenState extends State<EditProductScreen> {
     final now = DateTime.now();
     switch (_selectedExpiryUnit) {
       case 'Minutes':
-        return now.add(Duration(minutes: value));
+        return now.add(Duration(minutes: value.round()));
       case 'Hours':
-        return now.add(Duration(hours: value));
+        return now.add(Duration(hours: value.round()));
       case 'Days':
-        return now.add(Duration(days: value));
-      case 'Months':
-        return DateTime(
-          now.year,
-          now.month + value,
-          now.day,
-          now.hour,
-          now.minute,
-          now.second,
+        return now.add(
+          Duration(seconds: (value * Duration.secondsPerDay).round()),
         );
+      case 'Months':
+        {
+          final wholeMonths = value.truncate();
+          final fraction = value - wholeMonths;
+          var date = DateTime(
+            now.year,
+            now.month + wholeMonths,
+            now.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          if (fraction > 0) {
+            date = date.add(
+              Duration(
+                seconds: (fraction * 30 * Duration.secondsPerDay).round(),
+              ),
+            );
+          }
+          return date;
+        }
+      case 'Years':
+        {
+          final wholeYears = value.truncate();
+          final fraction = value - wholeYears;
+          var date = DateTime(
+            now.year + wholeYears,
+            now.month,
+            now.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          if (fraction > 0) {
+            date = date.add(
+              Duration(
+                seconds: (fraction * 365 * Duration.secondsPerDay).round(),
+              ),
+            );
+          }
+          return date;
+        }
       default:
         return null;
     }
@@ -425,7 +487,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       return true;
     }
 
-    final value = int.tryParse(_expiryValueController.text.trim());
+    final value = double.tryParse(_expiryValueController.text.trim());
     if (value == null || value <= 0) {
       setState(() {
         _expiryValidationError =
@@ -438,6 +500,19 @@ class _EditProductScreenState extends State<EditProductScreen> {
           ),
           backgroundColor: Colors.red,
         ),
+      );
+      return false;
+    }
+
+    final maxExpiryValue = _maxExpiryValueFor(_selectedExpiryUnit);
+    if (value > maxExpiryValue) {
+      final message =
+          '$_selectedExpiryUnit must be between 1 and $maxExpiryValue';
+      setState(() {
+        _expiryValidationError = message;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
       );
       return false;
     }
@@ -707,12 +782,20 @@ class _EditProductScreenState extends State<EditProductScreen> {
       if (!mounted) return;
 
       final raw = e.toString().toLowerCase();
-      String message = 'Unable to save changes right now. Please try again.';
+      String message;
       if (raw.contains('please add at least one image') ||
           raw.contains('at least one image')) {
         message = 'Please add at least one image to continue.';
       } else if (raw.contains('maximum 5 images')) {
         message = 'You can upload a maximum of 5 images.';
+      } else {
+        // Surface the real reason (validation error, session expiry, network
+        // issue, etc.) instead of always showing the same generic message
+        // no matter what actually went wrong.
+        message = ErrorMessageUtils.sanitize(
+          e,
+          fallback: 'Unable to save changes right now. Please try again.',
+        );
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -946,6 +1029,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                         prefixIcon: coinInputPrefix(),
                         prefixIconConstraints: coinPrefixIconConstraints,
                         isRequired: true,
+                        inputFormatters: Validators.amountInputFormatters(),
                         validator: (value) {
                           final priceText = value?.trim() ?? '';
                           if (priceText.isEmpty) {
@@ -959,6 +1043,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
                           if (parsedPrice <= 0) {
                             return 'Price must be greater than 0';
+                          }
+
+                          if (priceText.length > Validators.maxAmountLength) {
+                            return 'Price is too large';
                           }
 
                           return null;
@@ -1390,8 +1478,13 @@ class _EditProductScreenState extends State<EditProductScreen> {
             const SizedBox(height: 10),
             TextFormField(
               controller: _expiryValueController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              keyboardType: _isIntegerOnlyExpiryUnit
+                  ? TextInputType.number
+                  : const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: Validators.boundedCounterFormatters(
+                max: _maxExpiryValueFor(_selectedExpiryUnit),
+                allowDecimal: !_isIntegerOnlyExpiryUnit,
+              ),
               onChanged: (_) {
                 if (_expiryValidationError != null) {
                   setState(() {
@@ -1406,7 +1499,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
                     ? 'Hours'
                     : _selectedExpiryUnit == 'Days'
                     ? 'Days'
-                    : 'Months',
+                    : _selectedExpiryUnit == 'Months'
+                    ? 'Months'
+                    : 'Years',
                 hint: 'Enter value',
                 errorText: _expiryValidationError,
                 fillColor: Colors.white,
@@ -1433,6 +1528,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     Widget? suffixIcon,
     bool isRequired = false,
     String? Function(String?)? validator,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1454,6 +1550,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
             controller: controller,
             maxLines: maxLines,
             keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
             validator: validator,
             decoration: AppInputDecoration.build(
               label: isRequired ? '$label *' : label,

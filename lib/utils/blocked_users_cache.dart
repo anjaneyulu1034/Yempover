@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:YemPover_app/models/favorites_response.dart';
-import 'package:YemPover_app/services/blocked_user_service.dart';
+import 'package:yempover_app/models/favorites_response.dart';
+import 'package:yempover_app/services/blocked_user_service.dart';
 
 /// Cached blocked-user IDs used to hide posts across the app.
 class BlockedUsersCache extends ChangeNotifier {
@@ -59,6 +59,14 @@ class BlockedUsersCache extends ChangeNotifier {
 
   void invalidate() {
     _loaded = false;
+  }
+
+  /// Clears in-memory cached ids (used on logout/delete-account/re-signup).
+  void reset() {
+    final changed = _ids.isNotEmpty || _loaded;
+    _ids = {};
+    _loaded = false;
+    if (changed) notifyListeners();
   }
 
   List<FavoriteItem> filterFavorites(List<FavoriteItem> items) {

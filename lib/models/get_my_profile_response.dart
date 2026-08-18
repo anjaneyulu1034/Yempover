@@ -50,6 +50,7 @@ class ProfileData {
   bool? shareEmail;
   bool? sharePhone;
   bool? notificationEnabled;
+  bool? verificationPending;
 
   ProfileData({
     this.id,
@@ -78,6 +79,7 @@ class ProfileData {
     this.shareEmail,
     this.sharePhone,
     this.notificationEnabled,
+    this.verificationPending,
   });
 
   ProfileData.fromJson(Map<String, dynamic> json) {
@@ -107,6 +109,7 @@ class ProfileData {
     shareEmail = json['shareEmail'];
     sharePhone = json['sharePhone'];
     notificationEnabled = json['notificationEnabled'];
+    verificationPending = json['verificationPending'] == true;
   }
 
   Map<String, dynamic> toJson() {

@@ -142,7 +142,7 @@ class LocationService {
         return AlertDialog(
           title: const Text('Location Permission Required'),
           content: const Text(
-            'YemPover needs access to your location to set your current location for posts. '
+            'BarterX needs access to your location to set your current location for posts. '
             'Please enable location access in settings.',
           ),
           actions: <Widget>[

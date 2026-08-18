@@ -1,11 +1,25 @@
-import 'package:YemPover_app/services/notification1_service.dart';
+import 'package:yempover_app/services/notification1_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'utils/notification_provider.dart';
-import 'screens/SplashScreen.dart';
+import 'utils/chat_provider.dart';
+import 'models/ProductPostmain.dart';
+import 'screens/Home_screen.dart';
+import 'screens/LoginScreen.dart';
+import 'screens/OnboardingScreen.dart';
+import 'screens/PostDetailScreen.dart';
+import 'screens/tradechatscreen/ChatDetailScreen.dart';
+import 'services/api_service.dart';
+import 'services/resume_state_service.dart';
+import 'services/shared_prefs_service.dart';
+import 'services/token_service.dart';
+import 'services/trade_chat_service/trade_chat_service.dart';
+import 'widgets/location_permission_gate.dart';
+import 'widgets/subscription_resume_gate.dart';
 
 // Global notification plugin instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -37,7 +51,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+
+  // Keep the native launch screen on screen (instead of a separate Flutter
+  // splash widget) until we've resolved where the user should land.
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   // 🔥 STEP 1: Initialize Firebase FIRST
   await Firebase.initializeApp();
@@ -52,26 +70,117 @@ Future<void> main() async {
     debugPrint('Notification init failed (continuing app launch): $e');
   }
 
-  // 🔥 STEP 4: Run app
-  runApp(const MyApp());
+  // 🔥 STEP 4: Resolve the first screen (was previously SplashScreen's job)
+  final initialScreen = await _resolveInitialScreen();
+
+  // 🔥 STEP 5: Run app
+  runApp(MyApp(initialScreen: initialScreen));
 
   WidgetsBinding.instance.addPostFrameCallback((_) {
     NotificationService1.flushPendingNavigation();
+    FlutterNativeSplash.remove();
+    _restoreLastScreen();
   });
 }
 
+/// Decides which screen the app should open on, based on auth/onboarding
+/// state — the same decision `SplashScreen` used to make, minus the extra
+/// screen: the native launch screen stays up (via `preserve()` above) while
+/// this runs, so there's no second splash to show it on top of.
+Future<Widget> _resolveInitialScreen() async {
+  try {
+    final isLoggedIn = await TokenService().isLoggedIn();
+    final isGuestUser = await TokenService().isGuestUser();
+
+    if (isLoggedIn || isGuestUser) {
+      debugPrint('🟢 main: User is authenticated or guest, opening Home');
+      return const HomeScreen();
+    }
+
+    final hasSeenOnboarding = await SharedPrefsService.hasSeenOnboarding();
+    if (!hasSeenOnboarding) {
+      debugPrint('🟢 main: First time user, opening Onboarding');
+      return const OnboardingScreen();
+    }
+
+    debugPrint('🟢 main: Returning user, opening Login');
+    return const LoginScreen();
+  } catch (e) {
+    debugPrint('🔴 main: Error checking login status: $e');
+    // On error, default to onboarding for safety.
+    return const OnboardingScreen();
+  }
+}
+
+/// Reopens the chat/post the user last had open, if the app recorded one
+/// (only true when the process was killed mid-screen rather than the user
+/// backing out normally — see [ResumeStateService]). Any failure here
+/// (deleted chat/post, network error, etc.) just leaves the user on Home
+/// rather than surfacing an error for something they didn't ask for. A
+/// no-op if there's no resume record, so it's safe to call unconditionally.
+Future<void> _restoreLastScreen() async {
+  try {
+    final record = await ResumeStateService.read();
+    if (record == null) return;
+
+    final navigator = rootNavigatorKey.currentState;
+    if (navigator == null) return;
+
+    final type = record['type'];
+    final id = record['id'];
+    if (id == null || id.isEmpty) return;
+
+    if (type == 'chat') {
+      final currentUserId = await TokenService().getUserId();
+      if (currentUserId == null || currentUserId.isEmpty) return;
+
+      final chat = await TradeChatService().getChatById(id);
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) => ChatDetailScreen(
+            chat: chat,
+            currentUserId: currentUserId,
+            onChatUpdated: (_) {},
+          ),
+        ),
+      );
+    } else if (type == 'post') {
+      final isService = record['isService'] == 'true';
+      final response = await ApiService().getPostDetail(
+        postId: id,
+        type: isService ? PostType.service : PostType.product,
+      );
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) =>
+              PostDetailScreen(post: response.post, userItems: const []),
+        ),
+      );
+    }
+  } catch (e) {
+    debugPrint('🟡 main: Could not restore last screen: $e');
+  } finally {
+    // Consume the record either way — don't keep retrying a broken restore
+    // on every future cold start.
+    await ResumeStateService.clear();
+  }
+}
+
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.initialScreen});
+
+  final Widget initialScreen;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => ChatProvider()),
       ],
       child: MaterialApp(
         navigatorKey: rootNavigatorKey,
-        title: 'YemPover',
+        title: 'BarterX',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           primaryColor: const Color(0xFF1A73E8),
@@ -161,10 +270,7 @@ class MyApp extends StatelessWidget {
             ),
             focusedBorder: const OutlineInputBorder(
               borderRadius: BorderRadius.all(Radius.circular(12)),
-              borderSide: BorderSide(
-                color: Color(0xFF1A73E8),
-                width: 1.5,
-              ),
+              borderSide: BorderSide(color: Color(0xFF1A73E8), width: 1.5),
             ),
             errorBorder: const OutlineInputBorder(
               borderRadius: BorderRadius.all(Radius.circular(12)),
@@ -241,18 +347,33 @@ class MyApp extends StatelessWidget {
         builder: (context, child) {
           final content = child ?? const SizedBox.shrink();
 
-          return Listener(
-            behavior: HitTestBehavior.translucent,
-            onPointerDown: (_) {
-              final currentFocus = FocusManager.instance.primaryFocus;
-              if (currentFocus != null && !currentFocus.hasPrimaryFocus) {
-                currentFocus.unfocus();
-              }
-            },
-            child: content,
+          return LocationPermissionGate(
+            child: SubscriptionResumeGate(
+              child: Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: (event) {
+                  final currentFocus = FocusManager.instance.primaryFocus;
+                  if (currentFocus == null || !currentFocus.hasFocus) return;
+
+                  // Don't dismiss when the tap landed on the focused field
+                  // itself (e.g. repositioning the cursor) — only when it's
+                  // genuinely outside, which is what should close the
+                  // keyboard on devices with no visible/gesture back button.
+                  final renderObject = currentFocus.context?.findRenderObject();
+                  if (renderObject is RenderBox && renderObject.attached) {
+                    final topLeft = renderObject.localToGlobal(Offset.zero);
+                    final bounds = topLeft & renderObject.size;
+                    if (bounds.contains(event.position)) return;
+                  }
+
+                  currentFocus.unfocus();
+                },
+                child: content,
+              ),
+            ),
           );
         },
-        home: const SplashScreen(),
+        home: initialScreen,
       ),
     );
   }

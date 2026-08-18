@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/services/content_service.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/services/content_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/widgets/rich_content.dart';
 
 class PrivacyScreen extends StatefulWidget {
   const PrivacyScreen({super.key});
@@ -38,7 +40,10 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = ErrorMessageUtils.sanitize(
+          e,
+          fallback: 'Failed to load privacy policy',
+        );
       });
 
       if (!mounted) return;
@@ -198,9 +203,9 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                         ),
                       ],
                     ),
-                    child: Text(
-                      _content,
-                      style: const TextStyle(
+                    child: RichContent(
+                      html: _content,
+                      baseTextStyle: const TextStyle(
                         fontSize: 15,
                         height: 1.7,
                         color: Colors.black87,
@@ -262,7 +267,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                                   ),
                                   SizedBox(width: 4),
                                   Text(
-                                    'privacy@YemPover.com',
+                                    'privacy@yempover.com',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.blue,
