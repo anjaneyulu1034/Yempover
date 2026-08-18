@@ -3967,7 +3967,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'No longer available — a deal was completed with another user.',
+              'No longer available',
               style: TextStyle(fontSize: 12.5, color: Colors.orange.shade900),
             ),
           ),
