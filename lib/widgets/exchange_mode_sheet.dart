@@ -67,7 +67,7 @@ Future<Object?> showExchangeModeSheet(
     ),
     builder: (context) => SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -84,12 +84,14 @@ Future<Object?> showExchangeModeSheet(
               ),
             ],
             const SizedBox(height: 14),
-            ...options.options.map(
-              (option) => _buildExchangeModeCard(context, option),
-            ),
+            for (final option in options.options) ...[
+              _buildExchangeModeCard(context, option),
+              const SizedBox(height: 12),
+            ],
             if (options.target == 'product') ...[
               const Divider(height: 24),
               _buildZeroCoinOption(context),
+              const SizedBox(height: 8),
             ],
           ],
         ),
@@ -107,7 +109,7 @@ Widget _buildZeroCoinOption(BuildContext context) {
       style: TextStyle(fontWeight: FontWeight.w600),
     ),
     subtitle: const Text(
-      'No coins involved — offer an item in return, or ask for it free.',
+      'No coins involved — offer a product in return, or ask for it free.',
       style: TextStyle(fontSize: 12),
     ),
     onTap: () async {
@@ -137,8 +139,8 @@ Future<bool?> _confirmZeroCoinSelection(BuildContext context) {
         ],
       ),
       content: const Text(
-        'No coins will be exchanged in this deal — only the item(s) '
-        'themselves, or you can ask for this item for free.',
+        'No coins will be exchanged in this deal — only the product(s) '
+        'themselves, or you can ask for this product for free.',
         style: TextStyle(fontSize: 14, height: 1.4),
       ),
       actions: [

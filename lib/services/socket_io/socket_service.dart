@@ -126,22 +126,18 @@ class SocketService {
       _notifyListeners('offer_withdrawn', data);
     });
 
-    // Chat room join/leave events (fired whenever a chat screen opens/closes
-    // — including app background/foreground, not just true connect/
-    // disconnect). Deliberately NOT forwarded as 'user_presence': mixing
-    // "has this chat screen open right now" into the same online/offline
-    // signal as true socket connectivity caused the header's Active/
-    // Inactive dot to flicker to Inactive whenever either side merely
-    // navigated away from (or backgrounded) the chat, even though they were
-    // still online in the app. The true 'user_online'/'user_offline' events
-    // below (driven by actual socket connect/disconnect) are the single
-    // source of truth for that indicator.
+    // Chat room join/leave presence — kept feeding 'user_presence' alongside
+    // the global user_online/user_offline events below, per spec (Points 5 &
+    // 6): the header's initial state now comes from getChatDetail's
+    // otherUserOnline, so these just keep it live from there.
     _socket!.on('chat:user_online', (data) {
-      print('🟢 Chat room joined: $data');
+      print('🟢 Chat user online: $data');
+      _notifyListeners('user_presence', {...?data, 'isOnline': true});
     });
 
     _socket!.on('chat:user_offline', (data) {
-      print('⚪ Chat room left: $data');
+      print('⚪ Chat user offline: $data');
+      _notifyListeners('user_presence', {...?data, 'isOnline': false});
     });
 
     // Typing events
@@ -179,6 +175,45 @@ class SocketService {
 
     _socket!.on('messages_read', (data) {
       _notifyListeners('messages_read', data);
+    });
+
+    // Canonical "something changed in this chat, refetch it" signal — the
+    // server now emits this alongside every granular event (message/offer/
+    // deal) straight from the REST handlers, so a chat screen that's missing
+    // a specific listener (or received a server-generated SYSTEM card it
+    // doesn't have a dedicated event for) still catches up live.
+    _socket!.on('chat:updated', (data) {
+      print('🔄 Chat updated: $data');
+      _notifyListeners('chat_updated', data);
+    });
+
+    // Block/unblock — the acting side already updates optimistically; these
+    // are for the OTHER participant so their open chat reacts immediately
+    // instead of only after their next manual refresh.
+    _socket!.on('chat:blocked', (data) {
+      print('🚫 Chat blocked: $data');
+      _notifyListeners('chat_blocked', data);
+    });
+
+    _socket!.on('chat:unblocked', (data) {
+      print('✅ Chat unblocked: $data');
+      _notifyListeners('chat_unblocked', data);
+    });
+
+    // Wallet balance changed — fires on every coin change (top-up, redeem,
+    // escrow hold/release/refund). Sent to the user's own room, so any
+    // screen bound to WalletBalanceProvider updates instantly.
+    _socket!.on('wallet:updated', (data) {
+      print('💰 Wallet updated: $data');
+      _notifyListeners('wallet:updated', data);
+    });
+
+    // The listing owner's offer count changed on a product/service they
+    // posted — sent to their personal room so an open detail screen can
+    // refetch the count live instead of only on next open.
+    _socket!.on('post:offers_updated', (data) {
+      print('📊 Post offers updated: $data');
+      _notifyListeners('post:offers_updated', data);
     });
 
     // User presence

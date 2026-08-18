@@ -7,6 +7,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'utils/notification_provider.dart';
 import 'utils/chat_provider.dart';
+import 'utils/wallet_balance_provider.dart';
 import 'models/ProductPostmain.dart';
 import 'screens/Home_screen.dart';
 import 'screens/LoginScreen.dart';
@@ -177,6 +178,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
+        ChangeNotifierProvider(create: (_) => WalletBalanceProvider()),
       ],
       child: MaterialApp(
         navigatorKey: rootNavigatorKey,

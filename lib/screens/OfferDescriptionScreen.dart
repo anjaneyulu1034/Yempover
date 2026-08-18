@@ -335,6 +335,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           chatId: chat.id,
           price: parsedPrice!,
           currency: 'USD',
+          description: _buildOfferDescription(),
         );
       } else if (widget.offerMode == OfferSubmissionMode.barter) {
         createdOffer = await _chatService.createBarterOffer(
