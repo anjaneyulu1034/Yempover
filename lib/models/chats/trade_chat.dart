@@ -457,10 +457,18 @@ class TradeOffer {
   final String? barterItemDescription;
   final List<String> barterItemImages;
   final List<String> barterWishCategories;
+  // Real Product ids (owned by madeBy) offered in exchange — lets the
+  // client look up the offered item's actual listed price and deep-link to
+  // its post detail, the same way the chat's own product/service already does.
+  final List<String> barterProductIds;
   final int counterOfferCount;
   final DateTime createdAt;
   final DateTime? acceptedAt;
   final DateTime? rejectedAt;
+  // A "no coins involved" request — item-for-item, or asking/giving for
+  // free. Never carries a price, and (per product decision) can't be
+  // countered — only accepted or rejected.
+  final bool isZeroCoin;
 
   TradeOffer({
     required this.id,
@@ -475,10 +483,12 @@ class TradeOffer {
     this.barterItemDescription,
     required this.barterItemImages,
     required this.barterWishCategories,
+    this.barterProductIds = const [],
     required this.counterOfferCount,
     required this.createdAt,
     this.acceptedAt,
     this.rejectedAt,
+    this.isZeroCoin = false,
   });
 
   factory TradeOffer.fromJson(Map<String, dynamic> json) {
@@ -503,12 +513,63 @@ class TradeOffer {
       barterWishCategories: (json['barterWishCategories'] as List? ?? [])
           .map((e) => e.toString())
           .toList(),
+      barterProductIds: (json['barterProductIds'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
       counterOfferCount: json['counterOfferCount'] ?? 0,
       createdAt: _parseLocal(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
       ),
       acceptedAt: _tryParseLocal(json['acceptedAt']),
       rejectedAt: _tryParseLocal(json['rejectedAt']),
+      isZeroCoin: json['isZeroCoin'] == true,
+    );
+  }
+
+  // Preserves every field not explicitly overridden — see TradeChat.copyWith
+  // for why: patching just offerStatus/acceptedAt/rejectedAt via the plain
+  // TradeOffer(...) constructor silently resets any field the call site
+  // forgets to list (isZeroCoin included) back to its default.
+  TradeOffer copyWith({
+    String? id,
+    String? tradeChatId,
+    String? madeById,
+    UserInfo? madeBy,
+    OfferType? offerType,
+    OfferStatus? offerStatus,
+    double? price,
+    String? currency,
+    String? barterItemTitle,
+    String? barterItemDescription,
+    List<String>? barterItemImages,
+    List<String>? barterWishCategories,
+    List<String>? barterProductIds,
+    int? counterOfferCount,
+    DateTime? createdAt,
+    DateTime? acceptedAt,
+    DateTime? rejectedAt,
+    bool? isZeroCoin,
+  }) {
+    return TradeOffer(
+      id: id ?? this.id,
+      tradeChatId: tradeChatId ?? this.tradeChatId,
+      madeById: madeById ?? this.madeById,
+      madeBy: madeBy ?? this.madeBy,
+      offerType: offerType ?? this.offerType,
+      offerStatus: offerStatus ?? this.offerStatus,
+      price: price ?? this.price,
+      currency: currency ?? this.currency,
+      barterItemTitle: barterItemTitle ?? this.barterItemTitle,
+      barterItemDescription:
+          barterItemDescription ?? this.barterItemDescription,
+      barterItemImages: barterItemImages ?? this.barterItemImages,
+      barterWishCategories: barterWishCategories ?? this.barterWishCategories,
+      barterProductIds: barterProductIds ?? this.barterProductIds,
+      counterOfferCount: counterOfferCount ?? this.counterOfferCount,
+      createdAt: createdAt ?? this.createdAt,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
+      rejectedAt: rejectedAt ?? this.rejectedAt,
+      isZeroCoin: isZeroCoin ?? this.isZeroCoin,
     );
   }
 
@@ -526,10 +587,12 @@ class TradeOffer {
       'barterItemDescription': barterItemDescription,
       'barterItemImages': barterItemImages,
       'barterWishCategories': barterWishCategories,
+      'barterProductIds': barterProductIds,
       'counterOfferCount': counterOfferCount,
       'createdAt': createdAt.toIso8601String(),
       'acceptedAt': acceptedAt?.toIso8601String(),
       'rejectedAt': rejectedAt?.toIso8601String(),
+      'isZeroCoin': isZeroCoin,
     };
   }
 
