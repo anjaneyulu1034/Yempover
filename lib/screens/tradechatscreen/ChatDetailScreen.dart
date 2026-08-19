@@ -2869,7 +2869,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     // barter (Point 1) — surface it on the system card too.
     final description = (data['description'] as String? ?? '').trim();
     if (description.isEmpty) return headline;
-    return '$headline\n$description';
+    return '$headline\nNote: $description';
   }
 
   Widget _buildMessageBubble(ChatMessage message) {
@@ -3725,6 +3725,30 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
+  // barterItemDescription is the offerer's own free-text note — the item
+  // name/image/price are already shown separately above, so this needs a
+  // clear "Note:" label or it reads as an unexplained fragment of text.
+  Widget _buildOfferNote(String description) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: RichText(
+        text: TextSpan(
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+          children: [
+            TextSpan(
+              text: 'Note: ',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            TextSpan(text: description),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBarterExchangePreview({
     required String myImage,
     required String myLabel,
@@ -4089,13 +4113,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ),
             if (latestOffer.barterItemDescription != null &&
                 latestOffer.barterItemDescription!.trim().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  latestOffer.barterItemDescription!,
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ),
+              _buildOfferNote(latestOffer.barterItemDescription!),
           ] else if (latestOffer.isBarterOffer || latestOffer.isBothOffer) ...[
             Text(
               isServiceChat
@@ -4141,10 +4159,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ),
             if (latestOffer.barterItemDescription != null &&
                 latestOffer.barterItemDescription!.trim().isNotEmpty)
-              Text(
-                latestOffer.barterItemDescription!,
-                style: const TextStyle(fontSize: 12),
-              ),
+              _buildOfferNote(latestOffer.barterItemDescription!),
             if (latestOffer.isBothOffer && (latestOffer.price ?? 0) > 0)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
@@ -4373,13 +4388,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ),
             if (latestOffer.barterItemDescription != null &&
                 latestOffer.barterItemDescription!.trim().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  latestOffer.barterItemDescription!,
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ),
+              _buildOfferNote(latestOffer.barterItemDescription!),
           ] else if (latestOffer.isBarterOffer || latestOffer.isBothOffer) ...[
             _buildBarterExchangePreview(
               myImage: latestOffer.barterItemImages.isNotEmpty
@@ -4418,11 +4427,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               'You are offering: ${latestOffer.barterItemTitle ?? 'Unknown'}',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
-            if (latestOffer.barterItemDescription != null)
-              Text(
-                latestOffer.barterItemDescription!,
-                style: const TextStyle(fontSize: 12),
-              ),
+            if (latestOffer.barterItemDescription != null &&
+                latestOffer.barterItemDescription!.trim().isNotEmpty)
+              _buildOfferNote(latestOffer.barterItemDescription!),
             if (latestOffer.isBothOffer && (latestOffer.price ?? 0) > 0)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
