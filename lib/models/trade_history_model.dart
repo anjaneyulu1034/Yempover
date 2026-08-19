@@ -236,6 +236,9 @@ class TradeItem {
   final String? barterItemTitle;
   final String? barterItemDescription;
   final List<String> barterItemImages;
+  // Same order as barterItemImages — pairs each image with the product it
+  // came from so it can deep-link to that product's detail page.
+  final List<String> barterProductIds;
   final bool? isMyBarterItem;
 
   TradeItem({
@@ -251,6 +254,7 @@ class TradeItem {
     this.barterItemTitle,
     this.barterItemDescription,
     this.barterItemImages = const [],
+    this.barterProductIds = const [],
     this.isMyBarterItem,
   });
 
@@ -273,6 +277,9 @@ class TradeItem {
       barterItemImages: _asList(
         json['barterItemImages'],
       ).map((e) => e.toString()).toList(),
+      barterProductIds: _asList(
+        json['barterProductIds'],
+      ).map((e) => e.toString()).toList(),
       isMyBarterItem: json['isMyBarterItem'] is bool
           ? json['isMyBarterItem'] as bool
           : null,
@@ -293,6 +300,7 @@ class TradeItem {
       'barterItemTitle': barterItemTitle,
       'barterItemDescription': barterItemDescription,
       'barterItemImages': barterItemImages,
+      'barterProductIds': barterProductIds,
       'isMyBarterItem': isMyBarterItem,
     };
   }
