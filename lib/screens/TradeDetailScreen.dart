@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/trade_history_model.dart';
+import 'package:yempover_app/services/profile_session_manager.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
 
 class TradeDetailScreen extends StatelessWidget {
@@ -394,6 +395,16 @@ class TradeDetailScreen extends StatelessWidget {
     return difference > 0 ? Colors.green : Colors.red;
   }
 
+  // The logged-in user's own profile image — was hardcoded to a placeholder
+  // before, unlike "Their Item" which already reads trade.otherUser's real
+  // image. Falls back to the same placeholder when no image is set.
+  String _myProfileImage() {
+    final image = ProfileSessionManager.instance.profile?.profileImage;
+    return (image != null && image.trim().isNotEmpty)
+        ? image
+        : 'https://via.placeholder.com/150';
+  }
+
   Widget _buildBarterSwapCard(TradeItem trade) {
     final barterImage = trade.barterItemImages.isNotEmpty
         ? trade.barterItemImages.first
@@ -440,7 +451,7 @@ class TradeDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
             _buildUserSection(
               title: 'Me',
-              imageUrl: 'https://via.placeholder.com/150',
+              imageUrl: _myProfileImage(),
               badgeLabel: 'My Item',
               itemTitle: myItemTitle,
               itemImageUrl: myItemImage,
