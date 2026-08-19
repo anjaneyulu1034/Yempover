@@ -1516,7 +1516,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
               ),
             ),
             subtitle: Text(
-              'Buyers can add your other items to a bundle offer.',
+              _canBeClubbed
+                  ? 'This item can be combined with your other items in a single exchange.'
+                  : 'This item can only be offered on its own.',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12),

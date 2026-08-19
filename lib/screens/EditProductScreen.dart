@@ -61,6 +61,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
   String? _selectedSubCategoryId;
   late String _postType;
   late bool _isListed;
+  late bool _canBeClubbed;
   late List<String> _images;
 
   List<Map<String, dynamic>> _mainCategories = [];
@@ -99,6 +100,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     _selectedCategoryId = widget.post.categoryId;
     _postType = widget.post.type;
     _isListed = widget.post.isListed;
+    _canBeClubbed = widget.post.isClubbable;
     _images = List.from(widget.post.images.take(_maxPostImages));
     _initializeTimelineFields();
     _validateStatus();
@@ -740,6 +742,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
         'barterStatus': _normalizeBarterStatus(_selectedBarterStatus),
         'categoryId': _selectedCategoryId,
         'isListed': _isListed,
+        if (_postType != 'service') ...{
+          'canBeClubbed': _canBeClubbed,
+          'isClubbable': _canBeClubbed,
+          'canClubItems': _canBeClubbed,
+        },
         'type': _postType, // IMPORTANT: Include the post type
         'validFrom': validFromIso,
         'validUntil': validUntilIso,
@@ -1179,6 +1186,65 @@ class _EditProductScreenState extends State<EditProductScreen> {
                           ],
                         ),
                       ),
+
+                      // Clubbing only applies to products offered in a
+                      // barter — not services.
+                      if (_postType != 'service') ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Can be clubbed',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _canBeClubbed
+                                          ? 'This item can be combined with your other items in a single exchange.'
+                                          : 'This item can only be offered on its own.',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch(
+                                value: _canBeClubbed,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _canBeClubbed = value;
+                                  });
+                                },
+                                activeThumbColor: Colors.blue,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
 
                       const SizedBox(height: 30),
 

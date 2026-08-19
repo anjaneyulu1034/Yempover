@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:yempover_app/services/socket_io/socket_service.dart';
 import 'package:yempover_app/services/service_booking_service.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +11,8 @@ import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:yempover_app/screens/OfferDeckScreen.dart';
 import 'package:yempover_app/screens/OfferDescriptionScreen.dart';
 import 'package:yempover_app/screens/PostDetailScreen.dart';
+import 'package:yempover_app/services/my_posts_service.dart';
+import 'package:yempover_app/utils/barter_clubbing.dart';
 import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
 import 'package:yempover_app/services/api_service.dart';
 import 'package:yempover_app/services/token_service.dart';
@@ -260,6 +263,50 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       final response = await ApiService().getPostDetail(
         postId: productId,
         type: PostType.product,
+      );
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              PostDetailScreen(post: response.post, userItems: const []),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (e is ApiException && (e.statusCode == 410 || e.statusCode == 403)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.statusCode == 410
+                  ? 'This item is no longer available.'
+                  : 'Post not available.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      } else {
+        _showErrorToast(e);
+      }
+    } finally {
+      if (mounted) setState(() => _isOpeningPostDetail = false);
+    }
+  }
+
+  // Generic deep-link for a `post` reference carried in a system message's
+  // eventData (currently DEAL_COMPLETED_PENDING_OTHER) — unlike
+  // _openBarterItemDetail this covers services too, keyed off postType.
+  Future<void> _openEventPost(Map<String, dynamic>? post) async {
+    if (post == null || _isOpeningPostDetail) return;
+    final isService = post['postType'] == 'service';
+    final postId = isService ? post['serviceId'] : post['productId'];
+    if (postId == null || postId is! String || postId.isEmpty) return;
+
+    setState(() => _isOpeningPostDetail = true);
+    try {
+      final response = await ApiService().getPostDetail(
+        postId: postId,
+        type: isService ? PostType.service : PostType.product,
       );
       if (!mounted) return;
       Navigator.push(
@@ -1612,16 +1659,296 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
-  Future<void> _showCounterBarterOfferDialog(TradeOffer originalOffer) async {
-    final titleController = TextEditingController(
-      text: originalOffer.barterItemTitle ?? '',
+  String _titleForCounterItems(List<UserItem> items) {
+    if (items.isEmpty) return '';
+    if (items.length == 1) return items.first.name;
+    final firstTwo = items.take(2).map((item) => item.name).join(', ');
+    final remaining = items.length - 2;
+    return remaining > 0 ? '$firstTwo +$remaining more' : firstTwo;
+  }
+
+  // Real product picker for counter-offers — sends actual barterItemIds
+  // (like the initial-offer flow already does) instead of a free-typed
+  // title, and enforces the same clubbing rule as OfferDeckScreen so a
+  // multi-product counter settles correctly (every id gets marked sold,
+  // not just the listing).
+  Future<List<UserItem>?> _pickCounterBarterItems(
+    List<UserItem> initialSelection,
+  ) async {
+    List<UserItem> allItems = [];
+    bool isLoading = true;
+    String? loadError;
+    List<UserItem> selected = List.from(initialSelection);
+
+    Future<void> loadItems(StateSetter setSheetState) async {
+      try {
+        final response = await MyPostsService().getMyPosts(page: 1, limit: 50);
+        final items = response.data.posts
+            .where((p) => p.postedById == widget.currentUserId)
+            .where((p) => p.type.toLowerCase() == 'product')
+            .where((p) => p.isListed == true)
+            .where((p) => !p.isExpiredOrUnavailable)
+            .where(
+              (p) =>
+                  p.isOpenForBarter ||
+                  p.status.trim().toUpperCase() == 'FOR_BARTER',
+            )
+            .where(
+              (p) =>
+                  p.status.toUpperCase() != 'SOLD' &&
+                  p.status.toUpperCase() != 'ARCHIVED' &&
+                  p.status.toUpperCase() != 'DELETED',
+            )
+            .map(
+              (p) => UserItem(
+                id: p.id,
+                name: p.title,
+                description: p.description,
+                imageUrl: p.images.isNotEmpty ? p.images.first : '',
+                category: p.category.name,
+                price: p.price ?? 0.0,
+                value: p.price ?? 0.0,
+                isClubbable: p.isClubbable,
+              ),
+            )
+            .toList();
+        setSheetState(() {
+          allItems = items;
+          isLoading = false;
+        });
+      } catch (e) {
+        setSheetState(() {
+          loadError = 'Could not load your items';
+          isLoading = false;
+        });
+      }
+    }
+
+    return showModalBottomSheet<List<UserItem>>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        bool hasStartedLoad = false;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            if (!hasStartedLoad) {
+              hasStartedLoad = true;
+              loadItems(setSheetState);
+            }
+            return DraggableScrollableSheet(
+              initialChildSize: 0.7,
+              minChildSize: 0.4,
+              maxChildSize: 0.9,
+              expand: false,
+              builder: (context, scrollController) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Select items to offer',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Items with clubbing off can only be offered alone.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: isLoading
+                            ? const Center(child: CircularProgressIndicator())
+                            : loadError != null
+                            ? Center(child: Text(loadError!))
+                            : allItems.isEmpty
+                            ? const Center(
+                                child: Text('No barter-eligible items'),
+                              )
+                            : GridView.builder(
+                                controller: scrollController,
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 3,
+                                      crossAxisSpacing: 10,
+                                      mainAxisSpacing: 10,
+                                      childAspectRatio: 0.8,
+                                    ),
+                                itemCount: allItems.length,
+                                itemBuilder: (context, index) {
+                                  final item = allItems[index];
+                                  final isSelected = selected.any(
+                                    (i) => i.id == item.id,
+                                  );
+                                  return GestureDetector(
+                                    onTap: () {
+                                      final result = applyClubbingSelection(
+                                        current: selected,
+                                        tapped: item,
+                                      );
+                                      setSheetState(
+                                        () => selected = result.items,
+                                      );
+                                      if (result.hint != null) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(result.hint!),
+                                            duration: const Duration(
+                                              seconds: 2,
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    child: Stack(
+                                      children: [
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            border: Border.all(
+                                              color: isSelected
+                                                  ? const Color(0xFF2E5BFF)
+                                                  : Colors.grey.shade300,
+                                              width: isSelected ? 2 : 1,
+                                            ),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(9),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
+                                              children: [
+                                                Expanded(
+                                                  child: item.imageUrl.isNotEmpty
+                                                      ? Image.network(
+                                                          item.imageUrl,
+                                                          fit: BoxFit.cover,
+                                                          errorBuilder:
+                                                              (
+                                                                context,
+                                                                error,
+                                                                stackTrace,
+                                                              ) => Container(
+                                                                color: Colors
+                                                                    .grey
+                                                                    .shade200,
+                                                                child: const Icon(
+                                                                  Icons.image,
+                                                                ),
+                                                              ),
+                                                        )
+                                                      : Container(
+                                                          color: Colors
+                                                              .grey
+                                                              .shade200,
+                                                          child: const Icon(
+                                                            Icons.image,
+                                                          ),
+                                                        ),
+                                                ),
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.all(4),
+                                                  child: Text(
+                                                    item.name,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        if (isSelected)
+                                          const Positioned(
+                                            top: 4,
+                                            right: 4,
+                                            child: Icon(
+                                              Icons.check_circle,
+                                              color: Color(0xFF2E5BFF),
+                                              size: 18,
+                                            ),
+                                          ),
+                                        if (!item.isClubbable)
+                                          Positioned(
+                                            bottom: 22,
+                                            left: 4,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 4,
+                                                    vertical: 1,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black54,
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: const Text(
+                                                'Solo only',
+                                                style: TextStyle(
+                                                  fontSize: 8,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: selected.isEmpty
+                              ? null
+                              : () => Navigator.pop(sheetContext, selected),
+                          child: Text(
+                            selected.isEmpty
+                                ? 'Select at least one item'
+                                : 'Use ${selected.length} item${selected.length > 1 ? 's' : ''}',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
+  }
+
+  Future<void> _showCounterBarterOfferDialog(TradeOffer originalOffer) async {
     // Deliberately empty, not seeded from originalOffer.barterItemDescription
     // — that text is the PREVIOUS round's note (already carrying its own
     // "Offered items: ..." line appended by OfferDescriptionScreen), so
     // pre-filling it here would let old notes compound across rounds
     // instead of the user writing a fresh one for this counter.
     final descriptionController = TextEditingController();
+    List<UserItem> selectedItems = [];
 
     final result = await showDialog<bool>(
       context: context,
@@ -1631,93 +1958,130 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           borderSide: BorderSide(color: Colors.grey.shade500, width: 1.2),
         );
 
-        return AlertDialog(
-          scrollable: true,
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 24,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: Colors.grey.shade300, width: 1.2),
-          ),
-          title: const Text('Counter Barter Offer'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: InputDecoration(
-                    labelText: 'Item Title',
-                    border: border,
-                    enabledBorder: border,
-                    focusedBorder: border.copyWith(
-                      borderSide: const BorderSide(
-                        color: Color(0xFF2E5BFF),
-                        width: 1.8,
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              scrollable: true,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 24,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: Colors.grey.shade300, width: 1.2),
+              ),
+              title: const Text('Counter Barter Offer'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final picked = await _pickCounterBarterItems(
+                          selectedItems,
+                        );
+                        if (picked != null) {
+                          setDialogState(() => selectedItems = picked);
+                        }
+                      },
+                      icon: const Icon(Icons.add_box_outlined),
+                      label: Text(
+                        selectedItems.isEmpty
+                            ? 'Select items to offer'
+                            : 'Edit selection (${selectedItems.length})',
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: descriptionController,
-                  maxLines: 3,
-                  decoration: InputDecoration(
-                    labelText: 'Description',
-                    hintText: 'Optional',
-                    border: border,
-                    enabledBorder: border,
-                    focusedBorder: border.copyWith(
-                      borderSide: const BorderSide(
-                        color: Color(0xFF2E5BFF),
-                        width: 1.8,
+                    if (selectedItems.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: selectedItems
+                            .map(
+                              (item) => Chip(
+                                avatar: item.imageUrl.isNotEmpty
+                                    ? CircleAvatar(
+                                        backgroundImage: NetworkImage(
+                                          item.imageUrl,
+                                        ),
+                                      )
+                                    : null,
+                                label: Text(
+                                  item.name,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: descriptionController,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        labelText: 'Description',
+                        hintText: 'Optional',
+                        border: border,
+                        enabledBorder: border,
+                        focusedBorder: border.copyWith(
+                          borderSide: const BorderSide(
+                            color: Color(0xFF2E5BFF),
+                            width: 1.8,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF2E5BFF),
-                side: const BorderSide(color: Color(0xFF2E5BFF), width: 1.2),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
+                  ],
                 ),
               ),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (titleController.text.trim().isNotEmpty) {
-                  Navigator.pop(context, true);
-                }
-              },
-              child: const Text('Send Counter'),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF2E5BFF),
+                    side: const BorderSide(
+                      color: Color(0xFF2E5BFF),
+                      width: 1.2,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: selectedItems.isEmpty
+                      ? null
+                      : () => Navigator.pop(context, true),
+                  child: const Text('Send Counter'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
 
-    if (result != true || titleController.text.trim().isEmpty) return;
+    if (result != true || selectedItems.isEmpty) return;
 
     await _createCounterOffer(
       originalOffer: originalOffer,
       offerType: 'BARTER',
-      barterItemTitle: titleController.text.trim(),
+      barterItemTitle: _titleForCounterItems(selectedItems),
       barterItemDescription: descriptionController.text.trim().isNotEmpty
           ? descriptionController.text.trim()
           : null,
+      barterItemIds: selectedItems.map((item) => item.id).toList(),
+      barterItemImages: selectedItems
+          .map((item) => item.imageUrl)
+          .where((url) => url.trim().isNotEmpty)
+          .toList(),
     );
   }
 
@@ -1726,13 +2090,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   /// (Condition 2: barter + price difference), so this keeps both the
   /// barter item fields and the coin amount editable together.
   Future<void> _showCounterBothOfferDialog(TradeOffer originalOffer) async {
-    final titleController = TextEditingController(
-      text: originalOffer.barterItemTitle ?? '',
-    );
     // Same reasoning as the pure-barter counter dialog: start empty rather
     // than carrying the previous round's (already-appended) description
     // forward, so notes don't compound across counters.
     final descriptionController = TextEditingController();
+    List<UserItem> selectedItems = [];
     final priceController = TextEditingController(
       text: originalOffer.price != null && originalOffer.price! > 0
           ? (originalOffer.price == originalOffer.price!.roundToDouble()
@@ -1779,20 +2141,49 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                         ),
                       ),
                     ),
-                  TextField(
-                    controller: titleController,
-                    decoration: InputDecoration(
-                      labelText: 'Item Title',
-                      border: border,
-                      enabledBorder: border,
-                      focusedBorder: border.copyWith(
-                        borderSide: const BorderSide(
-                          color: Color(0xFF2E5BFF),
-                          width: 1.8,
-                        ),
-                      ),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final picked = await _pickCounterBarterItems(
+                        selectedItems,
+                      );
+                      if (picked != null) {
+                        setDialogState(() {
+                          selectedItems = picked;
+                          dialogError = null;
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.add_box_outlined),
+                    label: Text(
+                      selectedItems.isEmpty
+                          ? 'Select items to offer'
+                          : 'Edit selection (${selectedItems.length})',
                     ),
                   ),
+                  if (selectedItems.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: selectedItems
+                          .map(
+                            (item) => Chip(
+                              avatar: item.imageUrl.isNotEmpty
+                                  ? CircleAvatar(
+                                      backgroundImage: NetworkImage(
+                                        item.imageUrl,
+                                      ),
+                                    )
+                                  : null,
+                              label: Text(
+                                item.name,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   TextField(
                     controller: descriptionController,
@@ -1858,8 +2249,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               ),
               ElevatedButton(
                 onPressed: () {
-                  if (titleController.text.trim().isEmpty) {
-                    setDialogState(() => dialogError = 'Enter an item title');
+                  if (selectedItems.isEmpty) {
+                    setDialogState(
+                      () => dialogError = 'Select at least one item',
+                    );
                     return;
                   }
 
@@ -1894,7 +2287,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       ),
     );
 
-    if (result != true || titleController.text.trim().isEmpty) return;
+    if (result != true || selectedItems.isEmpty) return;
 
     final parsedPrice = double.tryParse(priceController.text.trim());
     if (parsedPrice == null) return;
@@ -1914,10 +2307,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       originalOffer: originalOffer,
       offerType: 'BOTH',
       price: parsedPrice,
-      barterItemTitle: titleController.text.trim(),
+      barterItemTitle: _titleForCounterItems(selectedItems),
       barterItemDescription: descriptionController.text.trim().isNotEmpty
           ? descriptionController.text.trim()
           : null,
+      barterItemIds: selectedItems.map((item) => item.id).toList(),
+      barterItemImages: selectedItems
+          .map((item) => item.imageUrl)
+          .where((url) => url.trim().isNotEmpty)
+          .toList(),
     );
   }
 
@@ -1927,6 +2325,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     double? price,
     String? barterItemTitle,
     String? barterItemDescription,
+    List<String> barterItemIds = const [],
+    List<String> barterItemImages = const [],
   }) async {
     if (!_currentChat.isActive ||
         _currentChat.hasAcceptedOffer ||
@@ -1957,6 +2357,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         price: price,
         barterItemTitle: barterItemTitle,
         barterItemDescription: barterItemDescription,
+        barterItemIds: barterItemIds,
+        barterItemImages: barterItemImages,
       );
 
       _socketService.emitOfferCreated(_currentChat.id, counterOffer.toJson());
@@ -2872,6 +3274,67 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return '$headline\nNote: $description';
   }
 
+  // DEAL_COMPLETED_PENDING_OTHER carries a `post` reference in eventData so
+  // the item name can deep-link, same as CHAT_STARTED used to — but here
+  // only the item name itself is tappable, inline within the sentence,
+  // rather than the whole card. Falls back to the plain display text for
+  // every other system message type, or when eventData/post is missing.
+  Widget _buildSystemMessageText(
+    ChatMessage message, {
+    required double fontSize,
+    required FontWeight fontWeight,
+  }) {
+    final baseStyle = TextStyle(
+      fontSize: fontSize,
+      color: const Color(0xFF374151),
+      fontWeight: fontWeight,
+      height: 1.3,
+    );
+
+    if (message.eventType == 'DEAL_COMPLETED_PENDING_OTHER') {
+      final data = message.eventData;
+      final rawPost = data?['post'];
+      final post = rawPost is Map
+          ? Map<String, dynamic>.from(rawPost)
+          : null;
+      final itemName = (data?['itemName'] as String?)?.trim();
+      final actorName = (data?['actorName'] as String?)?.trim();
+
+      if (post != null &&
+          itemName != null &&
+          itemName.isNotEmpty &&
+          actorName != null &&
+          actorName.isNotEmpty) {
+        return Text.rich(
+          TextSpan(
+            style: baseStyle,
+            children: [
+              TextSpan(text: '$actorName has completed the Deal for \''),
+              TextSpan(
+                text: itemName,
+                style: TextStyle(
+                  color: Colors.blue.shade700,
+                  fontWeight: FontWeight.w700,
+                  decoration: TextDecoration.underline,
+                ),
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => _openEventPost(post),
+              ),
+              const TextSpan(text: '\'. Request for your deal completion.'),
+            ],
+          ),
+          textAlign: TextAlign.center,
+        );
+      }
+    }
+
+    return Text(
+      _systemMessageDisplayText(message),
+      textAlign: TextAlign.center,
+      style: baseStyle,
+    );
+  }
+
   Widget _buildMessageBubble(ChatMessage message) {
     final isCurrentUser = _isMessageFromCurrentUser(message);
     final isSystemMessage = message.messageType == MessageType.SYSTEM;
@@ -2924,15 +3387,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             Icon(style.icon, size: isTerminalEvent ? 17 : 14, color: style.color),
             const SizedBox(width: 6),
             Flexible(
-              child: Text(
-                _systemMessageDisplayText(message),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: isTerminalEvent ? 12.5 : 12,
-                  color: const Color(0xFF374151),
-                  fontWeight: isTerminalEvent ? FontWeight.w700 : FontWeight.w500,
-                  height: 1.3,
-                ),
+              child: _buildSystemMessageText(
+                message,
+                fontSize: isTerminalEvent ? 12.5 : 12,
+                fontWeight: isTerminalEvent ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
             if (isTappable) ...[

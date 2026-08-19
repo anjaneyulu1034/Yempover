@@ -8,6 +8,7 @@ import 'package:yempover_app/services/my_posts_service.dart';
 import 'package:yempover_app/screens/OfferDescriptionScreen.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
 import 'package:yempover_app/screens/AddPostScreen.dart';
+import 'package:yempover_app/utils/barter_clubbing.dart';
 import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:yempover_app/utils/wallet_offer_guard.dart';
@@ -102,6 +103,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
             category: myPost.category.name,
             price: myPost.price ?? 0.0,
             value: myPost.price ?? 0.0,
+            isClubbable: myPost.isClubbable,
           );
         })
         .toList();
@@ -398,16 +400,20 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   }
 
   void _toggleItemSelection(UserItem item) {
+    final result = applyClubbingSelection(
+      current: _selectedItems,
+      tapped: item,
+    );
     setState(() {
-      final existingIndex = _selectedItems.indexWhere((i) => i.id == item.id);
-      if (existingIndex != -1) {
-        _selectedItems.removeAt(existingIndex);
-      } else {
-        _selectedItems.add(item);
-      }
+      _selectedItems
+        ..clear()
+        ..addAll(result.items);
       _syncQuotedPriceWithMinimum();
       _revalidateQuotedPrice();
     });
+    if (result.hint != null) {
+      SnackbarUtils.showInfo(context, result.hint!);
+    }
   }
 
   void _removeSelectedItem(UserItem item) {
@@ -574,6 +580,21 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       return;
     }
 
+    // Barter + Coins doesn't require the item value to match the listing
+    // (that's the pure-barter rule above) — but if the selected item(s)
+    // alone are already worth more than the listing, on top of whatever
+    // coins are quoted, that's worth a heads-up in case it's a mistake
+    // rather than silently accepting it.
+    if (widget.offerMode == OfferSubmissionMode.both &&
+        _selectedItems.isNotEmpty &&
+        widget.post.price > 0 &&
+        _selectedBarterItemsCoinTotal > widget.post.price) {
+      final proceed = await _confirmItemsWorthMoreThanListing(
+        _selectedBarterItemsCoinTotal - widget.post.price,
+      );
+      if (!mounted || proceed != true) return;
+    }
+
     if (widget.offerMode == OfferSubmissionMode.both) {
       final quoted = double.tryParse(_quotedPriceController.text.trim());
       if (quoted != null && quoted > 0) {
@@ -610,6 +631,220 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
           offerMode: widget.offerMode,
           initialQuotedPrice: _quotedPriceController.text.trim(),
           isZeroCoin: widget.isZeroCoin,
+        ),
+      ),
+    );
+  }
+
+  Widget _valueCompareRow(
+    String label,
+    String amount, {
+    bool bold = false,
+    Color? color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13.5,
+              color: color ?? Colors.grey.shade700,
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CoinIcon(size: bold ? 16 : 14, iconSize: bold ? 10 : 9),
+              const SizedBox(width: 4),
+              Text(
+                amount,
+                style: TextStyle(
+                  fontSize: bold ? 14.5 : 13.5,
+                  color: color ?? Colors.black87,
+                  fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Barter + Coins doesn't require item value to match the listing, so this
+  /// isn't a hard block — just a confirmation in case picking an item worth
+  /// noticeably more than the listing was a mistake. Shows what's actually
+  /// selected plus a clear line-by-line breakdown rather than one dense
+  /// sentence of numbers.
+  Future<bool?> _confirmItemsWorthMoreThanListing(double excess) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.info_outline,
+                  color: Colors.orange.shade700,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Item worth more than the listing',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'That\'s okay if intended — here\'s the breakdown.',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 16),
+
+              // Selected items being offered
+              ..._selectedItems.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: item.imageUrl.isNotEmpty
+                            ? Image.network(
+                                item.imageUrl,
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      color: Colors.grey.shade200,
+                                      child: const Icon(Icons.image, size: 18),
+                                    ),
+                              )
+                            : Container(
+                                width: 40,
+                                height: 40,
+                                color: Colors.grey.shade200,
+                                child: const Icon(Icons.image, size: 18),
+                              ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          item.name,
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CoinIcon(size: 13, iconSize: 8),
+                          const SizedBox(width: 3),
+                          Text(
+                            CoinFormat.amount(item.value),
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+
+              // Calculation breakdown
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  children: [
+                    _valueCompareRow(
+                      'Your items',
+                      CoinFormat.amount(_selectedBarterItemsCoinTotal),
+                    ),
+                    _valueCompareRow(
+                      'Listing price',
+                      CoinFormat.amount(widget.post.price),
+                    ),
+                    const Divider(height: 16),
+                    _valueCompareRow(
+                      'Difference',
+                      '+${CoinFormat.amount(excess)}',
+                      bold: true,
+                      color: Colors.orange.shade800,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        side: BorderSide(color: Colors.grey.shade400),
+                        foregroundColor: Colors.black87,
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text('Continue'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1067,6 +1302,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                               color: Colors.grey.shade500,
                             ),
                             textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          OutlinedButton.icon(
+                            onPressed: _openAddPostAndRefresh,
+                            icon: const Icon(Icons.add_circle_outline),
+                            label: const Text('Add Post'),
                           ),
                         ],
                       ),

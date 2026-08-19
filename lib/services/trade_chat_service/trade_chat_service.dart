@@ -725,6 +725,7 @@ class TradeChatService {
     String? barterItemDescription,
     List<String> barterItemImages = const [],
     List<String> barterWishCategories = const [],
+    List<String> barterItemIds = const [],
   }) async {
     try {
       final headers = await _getHeaders();
@@ -751,6 +752,7 @@ class TradeChatService {
           'barterItemDescription': barterItemDescription ?? '',
           'barterItemImages': barterItemImages,
           'barterWishCategories': barterWishCategories,
+          'barterItemIds': barterItemIds,
         };
       } else {
         body = {
@@ -760,6 +762,7 @@ class TradeChatService {
           'barterItemDescription': barterItemDescription ?? '',
           'barterItemImages': barterItemImages,
           'barterWishCategories': barterWishCategories,
+          'barterItemIds': barterItemIds,
         };
       }
 
