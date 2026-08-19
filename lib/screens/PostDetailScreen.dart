@@ -9,6 +9,7 @@ import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 import 'package:yempover_app/services/api_service.dart';
 import 'package:yempover_app/services/post_action_service.dart';
 import 'package:yempover_app/services/resume_state_service.dart';
+import 'package:yempover_app/services/socket_io/socket_service.dart';
 import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:yempover_app/utils/loading_widget.dart';
@@ -38,6 +39,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   final TokenService _tokenService = TokenService();
   final PostActionService _postActionService = PostActionService();
   final TradeChatService _tradeChatService = TradeChatService();
+  final SocketService _socketService = SocketService();
   bool _isOpeningExistingChat = false;
   bool _isFetchingExchangeModes = false;
 
@@ -74,6 +76,34 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       widget.post.id,
       isService: widget.post.type == PostType.service,
     );
+    _socketService.on('post:offers_updated', _handlePostOffersUpdated);
+    _ensureSocketConnected();
+  }
+
+  // This screen can be reached without any chat screen ever having
+  // connected the socket first, so best-effort connect here too — mirrors
+  // the same pattern used before offer creation in OfferDescriptionScreen.
+  Future<void> _ensureSocketConnected() async {
+    if (_socketService.isConnected) return;
+    try {
+      final token = await _tokenService.getToken();
+      if (token == null || token.isEmpty) return;
+      _socketService.init(token: token);
+    } catch (_) {}
+  }
+
+  // Live offer count (Point 2) — the owner's post detail refetches the
+  // number of offers without needing to leave and reopen the screen.
+  void _handlePostOffersUpdated(dynamic data) {
+    if (!mounted || data == null) return;
+    try {
+      final productId = data['productId']?.toString();
+      final serviceId = data['serviceId']?.toString();
+      final matches = (productId != null && productId == _post.id) ||
+          (serviceId != null && serviceId == _post.id);
+      if (!matches) return;
+      _loadPostDetails();
+    } catch (_) {}
   }
 
   Future<void> _loadGuestFlag() async {
@@ -110,11 +140,22 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       });
     } on ApiException catch (e) {
       if (!mounted) return;
+      // 410 (deal completed elsewhere) and 403 (blocked) are expected,
+      // friendly states — not real errors. Only a genuine 5xx/network
+      // failure should ever show the generic error snackbar below.
       if (e.statusCode == 410) {
         setState(() {
           _isLoading = false;
           _isNoLongerAvailable = true;
           _noLongerAvailableMessage = e.message;
+        });
+        return;
+      }
+      if (e.statusCode == 403) {
+        setState(() {
+          _isLoading = false;
+          _isNoLongerAvailable = true;
+          _noLongerAvailableMessage = 'Post not available';
         });
         return;
       }
@@ -141,6 +182,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   void dispose() {
     ResumeStateService.clearIfCurrent('post', widget.post.id);
+    _socketService.off('post:offers_updated', _handlePostOffersUpdated);
     _imagePageController.dispose();
     super.dispose();
   }
@@ -872,7 +914,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       _buildStatItem('Posts', '$posts'),
-                      _buildStatItem('Rating', '-'),
                       _buildStatItem('Trades', '$trades'),
                     ],
                   ),

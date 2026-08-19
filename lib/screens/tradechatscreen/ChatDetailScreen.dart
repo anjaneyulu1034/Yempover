@@ -67,9 +67,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   bool _isShowingDealCompletionDialog = false;
   bool _isTyping = false;
   bool _isOtherUserOnline = false;
+  // True when either side has blocked the other — hides the composer,
+  // gallery button, offer-type button, and all accept/reject/counter/deal
+  // actions. Seeded from the server's isBlocked (getChatDetail) on load and
+  // every refresh, and kept live via chat:blocked/chat:unblocked so it
+  // updates with no refresh needed.
+  bool _isBlocked = false;
   bool _isPreparingOffer = false;
   bool _isOpeningPostDetail = false;
   Timer? _typingTimer;
+  // Lazily-fetched detail for the offered barter item(s) referenced by
+  // offer.barterProductIds — lets the offer preview show that item's real
+  // listed price and deep-link into its post, the same way the chat's own
+  // product/service already does via _openPostDetail.
+  final Map<String, Post> _barterItemPostCache = {};
+  final Set<String> _barterItemFetchInProgress = {};
 
   bool get _isReferenceUnavailable {
     // The backend marks the product/service SOLD as soon as an offer is
@@ -105,21 +117,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return true;
   }
 
-  // The listing owner (responder) only ever accepts/rejects/counters what's
-  // proposed to them — they never start a fresh offer on their own listing.
-  bool get _isListingOwner => widget.currentUserId == _currentChat.responderId;
-
   // Whether THIS user can start a brand-new offer right now — distinct from
-  // _canShowOfferActions (which is about responding to an existing
-  // incoming offer). Server-authoritative: correctly re-opens after a
-  // reject/counter/cancel and correctly blocks while my own offer is still
-  // PENDING, without the client having to reconstruct that logic itself.
-  // !_isListingOwner is a client-side belt-and-suspenders check mirroring
-  // the same rule the server now applies to canMakeOffer.
-  bool get _canMakeNewOffer =>
-      _currentChat.canMakeOffer &&
-      !_isReferenceUnavailable &&
-      !_isListingOwner;
+  // _canShowOfferActions (which is about responding to an existing incoming
+  // offer). Driven purely off the server's canMakeOffer: it's already false
+  // for the owner, during an in-flight negotiation (either direction), once
+  // accepted/completed, when the listing is unavailable, or when blocked —
+  // and already true again for the interested user right after the owner
+  // rejects an offer or cancels an accepted deal. Not recomputed
+  // client-side, so it can't drift from what the server actually allows.
+  bool get _canMakeNewOffer => _currentChat.canMakeOffer;
 
   // Whether THIS user is the one who would pay coins if a PRICE/BOTH offer
   // in this chat is accepted — mirrors the backend's deriveTerms rule
@@ -184,7 +190,101 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      _showErrorToast(e);
+      // 410 (deal completed elsewhere) / 403 (blocked) are expected states
+      // for a post reached via a deep link, not real errors — show them
+      // calmly instead of as a red failure toast.
+      if (e is ApiException && (e.statusCode == 410 || e.statusCode == 403)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.statusCode == 410
+                  ? 'This item is no longer available.'
+                  : 'Post not available.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      } else {
+        _showErrorToast(e);
+      }
+    } finally {
+      if (mounted) setState(() => _isOpeningPostDetail = false);
+    }
+  }
+
+  // Best-effort background fetch so the offered barter item's real price is
+  // ready by the time the preview renders — a no-op once cached, and safe
+  // to call repeatedly (e.g. on every build) since it's guarded against
+  // duplicate concurrent fetches.
+  void _ensureBarterItemLoaded(String productId) {
+    if (productId.isEmpty) return;
+    if (_barterItemPostCache.containsKey(productId)) return;
+    if (_barterItemFetchInProgress.contains(productId)) return;
+
+    _barterItemFetchInProgress.add(productId);
+    ApiService()
+        .getPostDetail(postId: productId, type: PostType.product)
+        .then((response) {
+          if (!mounted) return;
+          setState(() => _barterItemPostCache[productId] = response.post);
+        })
+        .catchError((_) {
+          // Item may have been deleted/sold/blocked since the offer was
+          // made — leave it out of the cache so the preview just omits the
+          // price/tap instead of erroring.
+        })
+        .whenComplete(() => _barterItemFetchInProgress.remove(productId));
+  }
+
+  // Deep-link to the OFFERED item's post detail (as opposed to
+  // _openPostDetail, which is always the chat's own product/service).
+  // Reuses the cache from _ensureBarterItemLoaded when available so tapping
+  // is instant; falls back to a fresh fetch otherwise.
+  Future<void> _openBarterItemDetail(String productId) async {
+    if (productId.isEmpty || _isOpeningPostDetail) return;
+
+    final cached = _barterItemPostCache[productId];
+    if (cached != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              PostDetailScreen(post: cached, userItems: const []),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isOpeningPostDetail = true);
+    try {
+      final response = await ApiService().getPostDetail(
+        postId: productId,
+        type: PostType.product,
+      );
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              PostDetailScreen(post: response.post, userItems: const []),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (e is ApiException && (e.statusCode == 410 || e.statusCode == 403)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.statusCode == 410
+                  ? 'This item is no longer available.'
+                  : 'Post not available.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      } else {
+        _showErrorToast(e);
+      }
     } finally {
       if (mounted) setState(() => _isOpeningPostDetail = false);
     }
@@ -198,6 +298,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (_currentChat.otherUserOnline != null) {
       _isOtherUserOnline = _currentChat.otherUserOnline!;
     }
+    _isBlocked = _currentChat.isBlocked;
     Future.microtask(_refreshChat);
     _scrollToBottom();
     _initializeSocketListeners();
@@ -228,6 +329,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     _socketService.off('messages_read', _handleMessagesRead);
     _socketService.off('typing', _handleTypingIndicator);
     _socketService.off('user_presence', _handleUserPresence);
+    _socketService.off('chat_blocked', _handleChatBlocked);
+    _socketService.off('chat_unblocked', _handleChatUnblocked);
     WidgetsBinding.instance.removeObserver(this);
     _chatService.dispose();
     _blockedUserService.dispose();
@@ -277,6 +380,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     // Listen for user online/offline updates
     _socketService.on('user_presence', _handleUserPresence);
+
+    // Listen for the other participant blocking/unblocking us — reacts
+    // immediately instead of waiting on a manual refresh.
+    _socketService.on('chat_blocked', _handleChatBlocked);
+    _socketService.on('chat_unblocked', _handleChatUnblocked);
   }
 
   Future<void> _initializeSocketAndJoin() async {
@@ -331,17 +439,63 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     try {
       final chatId = data['chatId'];
       final userId = data['userId'];
-      final isOnline = data['isOnline'] == true;
+      var isOnline = data['isOnline'] == true;
       final otherUser = _getOtherUser();
 
       if (chatId != null && chatId != _currentChat.id) return;
       if (userId != otherUser.id) return;
+
+      // The live global user_online/offline broadcast isn't block-aware
+      // server-side (unlike the REST getChatDetail snapshot, which already
+      // forces this to false) — never show online for someone this user has
+      // blocked (Point 6: "ignore if blocked user").
+      if (isOnline && BlockedUsersCache.instance.isBlocked(userId)) {
+        isOnline = false;
+      }
 
       setState(() {
         _isOtherUserOnline = isOnline;
       });
     } catch (e) {
       print('Error handling user presence: $e');
+    }
+  }
+
+  // Either side blocking the other disables messaging symmetrically
+  // server-side, so react the same way regardless of who blocked whom —
+  // no refresh needed, the composer disables the moment this arrives.
+  void _handleChatBlocked(dynamic data) {
+    if (!mounted || data == null) return;
+
+    try {
+      final chatId = data['chatId'];
+      if (chatId != null && chatId != _currentChat.id) return;
+
+      setState(() {
+        _isBlocked = true;
+      });
+    } catch (e) {
+      print('Error handling chat blocked: $e');
+    }
+  }
+
+  // No chatId on this event (it's sent to a personal room, not a chat
+  // room) — match on the other participant's id instead, then refetch so
+  // canMakeOffer/status/etc. are back in sync with the now-unblocked state.
+  void _handleChatUnblocked(dynamic data) {
+    if (!mounted || data == null) return;
+
+    try {
+      final otherUserId = data['otherUserId'];
+      final currentOtherUserId = _getOtherUser().id;
+      if (otherUserId != null && otherUserId != currentOtherUserId) return;
+
+      setState(() {
+        _isBlocked = false;
+      });
+      unawaited(_refreshChat());
+    } catch (e) {
+      print('Error handling chat unblocked: $e');
     }
   }
 
@@ -359,24 +513,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       // Don't add if it's our own message (already added optimistically)
       if (newMessage.sentById == widget.currentUserId) return;
 
+      // The server now also broadcasts chat:message_received authoritatively
+      // from the REST send-message path (in addition to the raw socket
+      // chat:message handler, and this client's own message:created relay
+      // for images) — the same message id can arrive more than once.
+      if (_messages.any((m) => m.id == newMessage.id)) return;
+
       setState(() {
         _messages.add(newMessage);
-        _currentChat = TradeChat(
-          id: _currentChat.id,
-          initiatorId: _currentChat.initiatorId,
-          responderId: _currentChat.responderId,
-          productId: _currentChat.productId,
-          serviceId: _currentChat.serviceId,
-          status: _currentChat.status,
+        _currentChat = _currentChat.copyWith(
           lastMessageAt: DateTime.now(),
-          createdAt: _currentChat.createdAt,
           updatedAt: DateTime.now(),
-          initiator: _currentChat.initiator,
-          responder: _currentChat.responder,
-          product: _currentChat.product,
-          service: _currentChat.service,
           messages: _messages,
-          offers: _currentChat.offers,
         );
       });
 
@@ -417,26 +565,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         if (index != -1) {
           final updatedOffer = offerData != null
               ? TradeOffer.fromJson(offerData)
-              : TradeOffer(
-                  id: _currentChat.offers[index].id,
-                  tradeChatId: _currentChat.offers[index].tradeChatId,
-                  madeById: _currentChat.offers[index].madeById,
-                  madeBy: _currentChat.offers[index].madeBy,
-                  offerType: _currentChat.offers[index].offerType,
+              : _currentChat.offers[index].copyWith(
                   offerStatus: OfferStatus.ACCEPTED,
-                  price: _currentChat.offers[index].price,
-                  currency: _currentChat.offers[index].currency,
-                  barterItemTitle: _currentChat.offers[index].barterItemTitle,
-                  barterItemDescription:
-                      _currentChat.offers[index].barterItemDescription,
-                  barterItemImages: _currentChat.offers[index].barterItemImages,
-                  barterWishCategories:
-                      _currentChat.offers[index].barterWishCategories,
-                  counterOfferCount:
-                      _currentChat.offers[index].counterOfferCount,
-                  createdAt: _currentChat.offers[index].createdAt,
                   acceptedAt: DateTime.now(),
-                  rejectedAt: _currentChat.offers[index].rejectedAt,
                 );
           _currentChat.offers[index] = updatedOffer;
         }
@@ -492,25 +623,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         if (index != -1) {
           final updatedOffer = offerData != null
               ? TradeOffer.fromJson(offerData)
-              : TradeOffer(
-                  id: _currentChat.offers[index].id,
-                  tradeChatId: _currentChat.offers[index].tradeChatId,
-                  madeById: _currentChat.offers[index].madeById,
-                  madeBy: _currentChat.offers[index].madeBy,
-                  offerType: _currentChat.offers[index].offerType,
+              : _currentChat.offers[index].copyWith(
                   offerStatus: OfferStatus.REJECTED,
-                  price: _currentChat.offers[index].price,
-                  currency: _currentChat.offers[index].currency,
-                  barterItemTitle: _currentChat.offers[index].barterItemTitle,
-                  barterItemDescription:
-                      _currentChat.offers[index].barterItemDescription,
-                  barterItemImages: _currentChat.offers[index].barterItemImages,
-                  barterWishCategories:
-                      _currentChat.offers[index].barterWishCategories,
-                  counterOfferCount:
-                      _currentChat.offers[index].counterOfferCount,
-                  createdAt: _currentChat.offers[index].createdAt,
-                  acceptedAt: _currentChat.offers[index].acceptedAt,
                   rejectedAt: DateTime.now(),
                 );
           _currentChat.offers[index] = updatedOffer;
@@ -587,23 +701,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         final index = _currentChat.offers.indexWhere((o) => o.id == offerId);
         if (index != -1) {
           final offer = _currentChat.offers[index];
-          _currentChat.offers[index] = TradeOffer(
-            id: offer.id,
-            tradeChatId: offer.tradeChatId,
-            madeById: offer.madeById,
-            madeBy: offer.madeBy,
-            offerType: offer.offerType,
+          _currentChat.offers[index] = offer.copyWith(
             offerStatus: OfferStatus.WITHDRAWN,
-            price: offer.price,
-            currency: offer.currency,
-            barterItemTitle: offer.barterItemTitle,
-            barterItemDescription: offer.barterItemDescription,
-            barterItemImages: offer.barterItemImages,
-            barterWishCategories: offer.barterWishCategories,
-            counterOfferCount: offer.counterOfferCount,
-            createdAt: offer.createdAt,
-            acceptedAt: offer.acceptedAt,
-            rejectedAt: offer.rejectedAt,
           );
         }
 
@@ -648,6 +747,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       setState(() {
         _currentChat = updatedChat;
         _messages = List.from(updatedChat.messages);
+        _isBlocked = updatedChat.isBlocked;
       });
 
       _scrollToBottom();
@@ -681,7 +781,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
   }
 
-  void _handleDealCancelled(dynamic data) {
+  Future<void> _handleDealCancelled(dynamic data) async {
     if (!mounted) return;
 
     try {
@@ -690,28 +790,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       if (chatId != _currentChat.id) return;
 
       setState(() {
-        _currentChat = TradeChat(
-          id: _currentChat.id,
-          initiatorId: _currentChat.initiatorId,
-          responderId: _currentChat.responderId,
-          productId: _currentChat.productId,
-          serviceId: _currentChat.serviceId,
+        _currentChat = _currentChat.copyWith(
           status: ChatStatus.CANCELLED,
-          lastMessageAt: _currentChat.lastMessageAt,
-          createdAt: _currentChat.createdAt,
           updatedAt: DateTime.now(),
-          initiator: _currentChat.initiator,
-          responder: _currentChat.responder,
-          product: _currentChat.product,
-          service: _currentChat.service,
           messages: _messages,
-          offers: _currentChat.offers,
         );
         _appendSystemMessageIfNotDuplicate('Trade cancelled');
       });
 
       _scrollToBottom();
       widget.onChatUpdated(_currentChat);
+
+      // Cancelling reopens offering for the interested party — resync
+      // canMakeOffer (and everything else server-computed) from the server
+      // instead of leaving it stale until a manual refresh (Point: "Make
+      // offer again" should reappear live after the owner cancels).
+      await _refreshChat();
     } catch (e) {
       print('Error handling deal cancelled: $e');
     }
@@ -879,14 +973,26 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       _updateChatLastMessage();
       widget.onChatUpdated(_currentChat);
     } catch (e) {
+      // A block (either direction) rejects the send with a 403/"cannot
+      // message this user" — belt-and-suspenders alongside the live
+      // chat:blocked event, in case that broadcast is delayed or missed.
+      final isBlockedError = e.toString().toLowerCase().contains(
+        'cannot message this user',
+      );
+
       setState(() {
         _messages.removeWhere((m) => m.id == tempMessage.id);
+        if (isBlockedError) _isBlocked = true;
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to send message: ${e.toString()}'),
+            content: Text(
+              isBlockedError
+                  ? 'You can no longer message this user.'
+                  : 'Failed to send message: ${e.toString()}',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -895,22 +1001,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   }
 
   void _updateChatLastMessage() {
-    _currentChat = TradeChat(
-      id: _currentChat.id,
-      initiatorId: _currentChat.initiatorId,
-      responderId: _currentChat.responderId,
-      productId: _currentChat.productId,
-      serviceId: _currentChat.serviceId,
-      status: _currentChat.status,
+    _currentChat = _currentChat.copyWith(
       lastMessageAt: DateTime.now(),
-      createdAt: _currentChat.createdAt,
       updatedAt: DateTime.now(),
-      initiator: _currentChat.initiator,
-      responder: _currentChat.responder,
-      product: _currentChat.product,
-      service: _currentChat.service,
       messages: _messages,
-      offers: _currentChat.offers,
     );
   }
 
@@ -923,11 +1017,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         if (updatedChat.otherUserOnline != null) {
           _isOtherUserOnline = updatedChat.otherUserOnline!;
         }
+        _isBlocked = updatedChat.isBlocked;
       });
       _scrollToBottom();
     } catch (e) {
       print('Error refreshing chat: $e');
     }
+  }
+
+  // Same as _refreshChat, but with the full-screen loading state Accept/
+  // Reject already show while they refetch — used only for
+  // DealVerificationPanel's Deal Completed / Deal Not Completed actions so
+  // all four offer/deal actions give the same clear "the screen just
+  // refreshed" feedback. Deliberately NOT used for pull-to-refresh or
+  // background socket-driven refreshes, which already have their own
+  // (non-disruptive) way of showing progress.
+  Future<void> _refreshChatWithFullScreenLoader() async {
+    if (mounted) setState(() => _isLoading = true);
+    await _refreshChat();
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _pickAndSendImage() async {
@@ -987,15 +1095,24 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
       _scrollToBottom();
     } catch (e) {
+      final isBlockedError = e.toString().toLowerCase().contains(
+        'cannot message this user',
+      );
+
       setState(() {
         _isSendingImage = false;
         _messages.removeWhere((m) => m.messageText == 'Sending image...');
+        if (isBlockedError) _isBlocked = true;
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to send image: ${e.toString()}'),
+            content: Text(
+              isBlockedError
+                  ? 'You can no longer message this user.'
+                  : 'Failed to send image: ${e.toString()}',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -1368,6 +1485,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 : originalOffer.price!.toStringAsFixed(2))
           : '',
     );
+    // Empty, not seeded from the original offer's description — same
+    // reasoning as the barter counter dialogs (a previous round's note
+    // shouldn't carry forward and compound).
+    final descriptionController = TextEditingController();
     String? dialogError;
 
     final result = await showDialog<bool>(
@@ -1409,6 +1530,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     prefixIcon: coinInputPrefix(),
                     prefixIconConstraints: coinPrefixIconConstraints,
                     border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: descriptionController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    hintText: 'Optional',
+                    border: OutlineInputBorder(),
                   ),
                 ),
               ],
@@ -1475,6 +1606,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       originalOffer: originalOffer,
       offerType: 'PRICE',
       price: parsedPrice,
+      barterItemDescription: descriptionController.text.trim().isNotEmpty
+          ? descriptionController.text.trim()
+          : null,
     );
   }
 
@@ -1482,9 +1616,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final titleController = TextEditingController(
       text: originalOffer.barterItemTitle ?? '',
     );
-    final descriptionController = TextEditingController(
-      text: originalOffer.barterItemDescription ?? '',
-    );
+    // Deliberately empty, not seeded from originalOffer.barterItemDescription
+    // — that text is the PREVIOUS round's note (already carrying its own
+    // "Offered items: ..." line appended by OfferDescriptionScreen), so
+    // pre-filling it here would let old notes compound across rounds
+    // instead of the user writing a fresh one for this counter.
+    final descriptionController = TextEditingController();
 
     final result = await showDialog<bool>(
       context: context,
@@ -1528,7 +1665,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   controller: descriptionController,
                   maxLines: 3,
                   decoration: InputDecoration(
-                    labelText: 'Your Thoughts / Description',
+                    labelText: 'Description',
+                    hintText: 'Optional',
                     border: border,
                     enabledBorder: border,
                     focusedBorder: border.copyWith(
@@ -1591,9 +1729,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final titleController = TextEditingController(
       text: originalOffer.barterItemTitle ?? '',
     );
-    final descriptionController = TextEditingController(
-      text: originalOffer.barterItemDescription ?? '',
-    );
+    // Same reasoning as the pure-barter counter dialog: start empty rather
+    // than carrying the previous round's (already-appended) description
+    // forward, so notes don't compound across counters.
+    final descriptionController = TextEditingController();
     final priceController = TextEditingController(
       text: originalOffer.price != null && originalOffer.price! > 0
           ? (originalOffer.price == originalOffer.price!.roundToDouble()
@@ -1659,7 +1798,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     controller: descriptionController,
                     maxLines: 3,
                     decoration: InputDecoration(
-                      labelText: 'Description (Optional)',
+                      labelText: 'Description',
+                      hintText: 'Optional',
                       border: border,
                       enabledBorder: border,
                       focusedBorder: border.copyWith(
@@ -1874,23 +2014,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       setState(() {
         final index = _currentChat.offers.indexWhere((o) => o.id == offer.id);
         if (index != -1) {
-          _currentChat.offers[index] = TradeOffer(
-            id: offer.id,
-            tradeChatId: offer.tradeChatId,
-            madeById: offer.madeById,
-            madeBy: offer.madeBy,
-            offerType: offer.offerType,
+          _currentChat.offers[index] = offer.copyWith(
             offerStatus: OfferStatus.WITHDRAWN,
-            price: offer.price,
-            currency: offer.currency,
-            barterItemTitle: offer.barterItemTitle,
-            barterItemDescription: offer.barterItemDescription,
-            barterItemImages: offer.barterItemImages,
-            barterWishCategories: offer.barterWishCategories,
-            counterOfferCount: offer.counterOfferCount,
-            createdAt: offer.createdAt,
-            acceptedAt: offer.acceptedAt,
-            rejectedAt: offer.rejectedAt,
           );
         }
         _messages.add(systemMessage);
@@ -2414,7 +2539,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       BlockedUsersCache.instance.remove(otherUser.id);
 
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _isBlocked = false;
+      });
+      unawaited(_refreshChat());
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2698,8 +2827,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   // server-side, from the offer-maker's point of view — but it's shown to
   // BOTH participants verbatim, so the recipient wrongly sees "sent"
   // instead of "received". Rebuild the label client-side from the
-  // structured eventData (which carries madeById) so each viewer sees the
-  // direction that's actually true for them.
+  // structured eventData (madeById, price, offerType, isCounter) so each
+  // viewer sees "You offered X coins" vs "{name} offered you X coins".
   String _systemMessageDisplayText(ChatMessage message) {
     final data = message.eventData;
     if (message.eventType != 'OFFER_PENDING' || data == null) {
@@ -2710,37 +2839,37 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final madeById = data['madeById'] as String?;
     final isMine = madeById == widget.currentUserId;
     final isCounter = data['isCounter'] == true;
-    final label = isCounter
-        ? (isMine ? 'Counter offer sent' : 'Counter offer received')
-        : (isMine ? 'Offer sent' : 'Offer received');
+    final otherName = _getOtherUser().firstName;
+    final actorLabel = isCounter
+        ? (isMine ? 'You countered with' : '$otherName countered your offer with')
+        : (isMine ? 'You offered' : '$otherName offered you');
 
     final offerType = (data['offerType'] as String? ?? '').toUpperCase();
     final barterTitle = (data['barterItemTitle'] as String? ?? '').trim();
     final rawPrice = data['price'];
-    final currency = (data['currency'] as String? ?? 'USD').toUpperCase();
-    String? amount;
+    double? price;
     if (rawPrice != null) {
-      final parsedPrice = rawPrice is num
-          ? rawPrice.toDouble()
-          : double.tryParse(rawPrice.toString());
-      if (parsedPrice != null) {
-        amount = currency == 'USD'
-            ? '\$${parsedPrice.toStringAsFixed(2)}'
-            : '$currency ${parsedPrice.toStringAsFixed(2)}';
-      }
+      price = rawPrice is num ? rawPrice.toDouble() : double.tryParse(rawPrice.toString());
+    }
+    final amount = price != null ? '${CoinFormat.amount(price)} coins' : null;
+
+    String headline;
+    if (offerType == 'BOTH' && amount != null && barterTitle.isNotEmpty) {
+      headline = '$actorLabel $barterTitle + $amount.';
+    } else if (offerType == 'PRICE' && amount != null) {
+      headline = '$actorLabel $amount.';
+    } else if ((offerType == 'BARTER' || offerType == 'BOTH') &&
+        barterTitle.isNotEmpty) {
+      headline = '$actorLabel $barterTitle.';
+    } else {
+      headline = '$actorLabel.';
     }
 
-    if (offerType == 'BOTH' && amount != null && barterTitle.isNotEmpty) {
-      return '$label: $barterTitle + $amount.';
-    }
-    if (offerType == 'PRICE' && amount != null) {
-      return '$label: $amount.';
-    }
-    if ((offerType == 'BARTER' || offerType == 'BOTH') &&
-        barterTitle.isNotEmpty) {
-      return '$label: $barterTitle.';
-    }
-    return '$label.';
+    // The offerer's note now rides along with every offer type, not just
+    // barter (Point 1) — surface it on the system card too.
+    final description = (data['description'] as String? ?? '').trim();
+    if (description.isEmpty) return headline;
+    return '$headline\nNote: $description';
   }
 
   Widget _buildMessageBubble(ChatMessage message) {
@@ -2756,6 +2885,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     // Render it as a centered timeline entry, distinct from left/right chat
     // bubbles, not another bubble.
     if (isSystemMessage) {
+      // Redundant with the tappable post header card already pinned above
+      // the message list — drop it from the timeline instead of showing
+      // the same "what this chat is about" info twice.
+      final isChatStarted = message.eventType == 'CHAT_STARTED' ||
+          message.messageText.toLowerCase().contains('chat started');
+      if (isChatStarted) return const SizedBox.shrink();
+
       final style = _eventTypeStyle(message.eventType) ??
           _systemMessageStyle(message.messageText);
       // The two terminal deal outcomes get a bolder card (spec calls them
@@ -3589,40 +3725,102 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
+  // barterItemDescription is the offerer's own free-text note — the item
+  // name/image/price are already shown separately above, so this needs a
+  // clear "Note:" label or it reads as an unexplained fragment of text.
+  Widget _buildOfferNote(String description) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: RichText(
+        text: TextSpan(
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+          children: [
+            TextSpan(
+              text: 'Note: ',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            TextSpan(text: description),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBarterExchangePreview({
     required String myImage,
     required String myLabel,
     String? myName,
+    String? myPriceLabel,
+    VoidCallback? onMyTap,
     required String theirImage,
     required String theirLabel,
     String? theirName,
+    String? theirPriceLabel,
+    VoidCallback? onTheirTap,
   }) {
+    Widget side({
+      required String image,
+      required String label,
+      String? name,
+      String? priceLabel,
+      VoidCallback? onTap,
+    }) {
+      final column = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+          ),
+          const SizedBox(height: 4),
+          _buildOfferItemThumb(image),
+          if (name != null && name.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              name,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          if (priceLabel != null && priceLabel.trim().isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              priceLabel,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.green.shade700,
+              ),
+            ),
+          ],
+        ],
+      );
+
+      if (onTap == null) return column;
+      return InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: column,
+      );
+    }
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                myLabel,
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-              ),
-              const SizedBox(height: 4),
-              _buildOfferItemThumb(myImage),
-              if (myName != null && myName.trim().isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  myName,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ],
+          child: side(
+            image: myImage,
+            label: myLabel,
+            name: myName,
+            priceLabel: myPriceLabel,
+            onTap: onMyTap,
           ),
         ),
         const Padding(
@@ -3630,28 +3828,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           child: Icon(Icons.swap_horiz, color: Colors.grey),
         ),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                theirLabel,
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-              ),
-              const SizedBox(height: 4),
-              _buildOfferItemThumb(theirImage),
-              if (theirName != null && theirName.trim().isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  theirName,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ],
+          child: side(
+            image: theirImage,
+            label: theirLabel,
+            name: theirName,
+            priceLabel: theirPriceLabel,
+            onTap: onTheirTap,
           ),
         ),
       ],
@@ -3809,7 +3991,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'No longer available — a deal was completed with another user.',
+              'No longer available',
               style: TextStyle(fontSize: 12.5, color: Colors.orange.shade900),
             ),
           ),
@@ -3860,6 +4042,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         _currentChat.service != null;
 
     if (!isIncoming) return const SizedBox();
+
+    if (latestOffer.barterProductIds.isNotEmpty) {
+      _ensureBarterItemLoaded(latestOffer.barterProductIds.first);
+    }
 
     final senderName = _getOtherUser().firstName;
     final statusText = latestOffer.offerStatus.value;
@@ -3925,6 +4111,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 ),
               ],
             ),
+            if (latestOffer.barterItemDescription != null &&
+                latestOffer.barterItemDescription!.trim().isNotEmpty)
+              _buildOfferNote(latestOffer.barterItemDescription!),
           ] else if (latestOffer.isBarterOffer || latestOffer.isBothOffer) ...[
             Text(
               isServiceChat
@@ -3937,11 +4126,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               myImage: _currentChat.postImage,
               myLabel: isServiceChat ? 'Your service' : 'Your product',
               myName: _currentChat.postTitle,
+              myPriceLabel: _listingPrice != null
+                  ? '${CoinFormat.amount(_listingPrice)} coins'
+                  : null,
+              onMyTap: _isOpeningPostDetail ? null : _openPostDetail,
               theirImage: latestOffer.barterItemImages.isNotEmpty
                   ? latestOffer.barterItemImages.first
                   : '',
               theirLabel: '$senderName offers',
               theirName: latestOffer.barterItemTitle,
+              theirPriceLabel: latestOffer.barterProductIds.isNotEmpty
+                  ? () {
+                      final post = _barterItemPostCache[latestOffer
+                          .barterProductIds
+                          .first];
+                      return post != null
+                          ? '${CoinFormat.amount(post.price)} coins'
+                          : null;
+                    }()
+                  : null,
+              onTheirTap: latestOffer.barterProductIds.isNotEmpty &&
+                      !_isOpeningPostDetail
+                  ? () => _openBarterItemDetail(
+                        latestOffer.barterProductIds.first,
+                      )
+                  : null,
             ),
             const SizedBox(height: 10),
             Text(
@@ -3950,10 +4159,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ),
             if (latestOffer.barterItemDescription != null &&
                 latestOffer.barterItemDescription!.trim().isNotEmpty)
-              Text(
-                latestOffer.barterItemDescription!,
-                style: const TextStyle(fontSize: 12),
-              ),
+              _buildOfferNote(latestOffer.barterItemDescription!),
             if (latestOffer.isBothOffer && (latestOffer.price ?? 0) > 0)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
@@ -3967,7 +4173,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               ),
           ],
 
-          if (latestOffer.isPending && !_currentChat.hasAcceptedOffer) ...[
+          if (latestOffer.isPending &&
+              !_currentChat.hasAcceptedOffer &&
+              !_isBlocked) ...[
             const SizedBox(height: 12),
             if (isServiceChat)
               SizedBox(
@@ -4046,23 +4254,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   ),
                 ],
               ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed:
-                    _isOfferActionInProgress &&
-                        _processingOfferId == latestOffer.id
-                    ? null
-                    : isServiceChat
-                    ? () => _openServiceProposalEditor(latestOffer)
-                    : () => _showCounterOfferDialog(latestOffer),
-                icon: Icon(
-                  isServiceChat ? Icons.edit_calendar : Icons.swap_horiz,
+            // Zero-coin offers are a simple accept/reject — no coins or
+            // barter value to negotiate, so countering doesn't apply.
+            if (!latestOffer.isZeroCoin) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed:
+                      _isOfferActionInProgress &&
+                          _processingOfferId == latestOffer.id
+                      ? null
+                      : isServiceChat
+                      ? () => _openServiceProposalEditor(latestOffer)
+                      : () => _showCounterOfferDialog(latestOffer),
+                  icon: Icon(
+                    isServiceChat ? Icons.edit_calendar : Icons.swap_horiz,
+                  ),
+                  label: Text(isServiceChat ? 'Edit Slot' : 'Counter Offer'),
                 ),
-                label: Text(isServiceChat ? 'Edit Slot' : 'Counter Offer'),
               ),
-            ),
+            ],
           ],
         ],
       ),
@@ -4086,6 +4298,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     myOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final latestOffer = myOffers.last;
+    if (latestOffer.barterProductIds.isNotEmpty) {
+      _ensureBarterItemLoaded(latestOffer.barterProductIds.first);
+    }
     final isServiceChat =
         (_currentChat.serviceId != null &&
             _currentChat.serviceId!.isNotEmpty) ||
@@ -4171,6 +4386,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 ),
               ],
             ),
+            if (latestOffer.barterItemDescription != null &&
+                latestOffer.barterItemDescription!.trim().isNotEmpty)
+              _buildOfferNote(latestOffer.barterItemDescription!),
           ] else if (latestOffer.isBarterOffer || latestOffer.isBothOffer) ...[
             _buildBarterExchangePreview(
               myImage: latestOffer.barterItemImages.isNotEmpty
@@ -4178,22 +4396,40 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   : '',
               myLabel: 'You offer',
               myName: latestOffer.barterItemTitle,
+              myPriceLabel: latestOffer.barterProductIds.isNotEmpty
+                  ? () {
+                      final post = _barterItemPostCache[latestOffer
+                          .barterProductIds
+                          .first];
+                      return post != null
+                          ? '${CoinFormat.amount(post.price)} coins'
+                          : null;
+                    }()
+                  : null,
+              onMyTap: latestOffer.barterProductIds.isNotEmpty &&
+                      !_isOpeningPostDetail
+                  ? () => _openBarterItemDetail(
+                        latestOffer.barterProductIds.first,
+                      )
+                  : null,
               theirImage: _currentChat.postImage,
               theirLabel: isServiceChat
                   ? '$recipientName\'s service'
                   : '$recipientName\'s product',
               theirName: _currentChat.postTitle,
+              theirPriceLabel: _listingPrice != null
+                  ? '${CoinFormat.amount(_listingPrice)} coins'
+                  : null,
+              onTheirTap: _isOpeningPostDetail ? null : _openPostDetail,
             ),
             const SizedBox(height: 10),
             Text(
               'You are offering: ${latestOffer.barterItemTitle ?? 'Unknown'}',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
-            if (latestOffer.barterItemDescription != null)
-              Text(
-                latestOffer.barterItemDescription!,
-                style: const TextStyle(fontSize: 12),
-              ),
+            if (latestOffer.barterItemDescription != null &&
+                latestOffer.barterItemDescription!.trim().isNotEmpty)
+              _buildOfferNote(latestOffer.barterItemDescription!),
             if (latestOffer.isBothOffer && (latestOffer.price ?? 0) > 0)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
@@ -4213,6 +4449,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   Widget _buildDealCompletionBanner() {
     if (_isReferenceUnavailable) return const SizedBox();
+    if (_isBlocked) return const SizedBox();
     if (!_currentChat.canCompleteDeal(widget.currentUserId)) {
       return const SizedBox();
     }
@@ -4454,7 +4691,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                                 offererName: _dealOffererName,
                                 receiverName: _dealReceiverName,
                                 offeredItemLabel: _dealOfferedItemLabel,
-                                onChatShouldRefresh: _refreshChat,
+                                onChatShouldRefresh:
+                                    _refreshChatWithFullScreenLoader,
                               )
                             else
                               _buildDealCompletionBanner(),
@@ -4479,6 +4717,32 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   // entirely, so surface a dedicated re-offer entry point instead of
   // nothing when that's the situation.
   Widget _buildBottomInputArea() {
+    // Live block signal (isBlocked from getChatDetail, kept live via
+    // chat:blocked/chat:unblocked) — disable immediately, no refresh
+    // required, regardless of what the composer would otherwise show.
+    if (_isBlocked) {
+      return SafeArea(
+        top: false,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          color: Colors.red.shade50,
+          child: Row(
+            children: [
+              Icon(Icons.block, size: 16, color: Colors.red.shade700),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'You can no longer interact with this user.',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (_currentChat.isActive) {
       return _buildMessageInput();
     }

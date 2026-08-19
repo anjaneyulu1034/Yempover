@@ -55,7 +55,14 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
       setState(() {
         _isLoading = false;
       });
-      _showErrorSnackBar('Failed to refresh post');
+      // "No longer available" / "Post not available" are expected, friendly
+      // states (deal completed elsewhere / blocked) — not real errors. Only
+      // show the generic failure message for anything else (5xx/network).
+      final message = e.toString().replaceFirst('Exception: ', '');
+      final isFriendlyState =
+          message == 'This item is no longer available' ||
+          message == 'Post not available';
+      _showErrorSnackBar(isFriendlyState ? message : 'Failed to refresh post');
     }
   }
 

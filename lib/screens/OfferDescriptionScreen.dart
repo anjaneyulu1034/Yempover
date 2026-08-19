@@ -103,32 +103,11 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
         .toList();
   }
 
-  String _buildOfferDescription() {
-    final userDescription = _descriptionController.text.trim();
-    final selectedItemNames = widget.selectedItems
-        .map((item) => item.name)
-        .join(', ');
-    final selectedBundleItemNames = widget.selectedBundleItems
-        .map((item) => item.name)
-        .join(', ');
-
-    if (selectedItemNames.isEmpty && selectedBundleItemNames.isEmpty) {
-      return userDescription;
-    }
-
-    final lines = <String>[];
-    if (userDescription.isNotEmpty) {
-      lines.add(userDescription);
-    }
-    if (selectedItemNames.isNotEmpty) {
-      lines.add('Offered items: $selectedItemNames');
-    }
-    if (selectedBundleItemNames.isNotEmpty) {
-      lines.add('Requested bundle items: $selectedBundleItemNames');
-    }
-
-    return lines.join('\n\n');
-  }
+  // The item names themselves are already shown separately (offer summary
+  // card, barter exchange preview, "You are offering: X" line) — this field
+  // should only ever carry the offerer's own free-text note, not a
+  // duplicate, unlabeled restatement of the item name.
+  String _buildOfferDescription() => _descriptionController.text.trim();
 
   @override
   void dispose() {
@@ -335,6 +314,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           chatId: chat.id,
           price: parsedPrice!,
           currency: 'USD',
+          description: _buildOfferDescription(),
         );
       } else if (widget.offerMode == OfferSubmissionMode.barter) {
         createdOffer = await _chatService.createBarterOffer(
@@ -604,6 +584,18 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                       fontSize: 11,
                                     ),
                                   ),
+                                  if (widget.post.price > 0)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        '${CoinFormat.amount(widget.post.price)} coins',
+                                        style: TextStyle(
+                                          color: Colors.green.shade700,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
@@ -677,13 +669,31 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                           ),
                                           const SizedBox(width: 8),
                                           Expanded(
-                                            child: Text(
-                                              item.name,
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  item.name,
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                                if (item.value > 0)
+                                                  Text(
+                                                    '${CoinFormat.amount(item.value)} coins',
+                                                    style: TextStyle(
+                                                      color:
+                                                          Colors.green.shade700,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                              ],
                                             ),
                                           ),
                                         ],

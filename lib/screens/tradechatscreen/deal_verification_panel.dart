@@ -307,7 +307,10 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
             _buildCompletedRow()
           else
             _buildCompletionAction(verification.completion),
-          if (!isDone) ...[
+          // Once this user has already marked their side completed,
+          // backing out via "Deal Not Completed" no longer makes sense —
+          // they've committed, so only the waiting note above shows.
+          if (!isDone && !verification.completion.iCompleted) ...[
             const SizedBox(height: 16),
             const Divider(height: 1),
             const SizedBox(height: 12),

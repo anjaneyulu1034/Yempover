@@ -457,10 +457,18 @@ class TradeOffer {
   final String? barterItemDescription;
   final List<String> barterItemImages;
   final List<String> barterWishCategories;
+  // Real Product ids (owned by madeBy) offered in exchange — lets the
+  // client look up the offered item's actual listed price and deep-link to
+  // its post detail, the same way the chat's own product/service already does.
+  final List<String> barterProductIds;
   final int counterOfferCount;
   final DateTime createdAt;
   final DateTime? acceptedAt;
   final DateTime? rejectedAt;
+  // A "no coins involved" request — item-for-item, or asking/giving for
+  // free. Never carries a price, and (per product decision) can't be
+  // countered — only accepted or rejected.
+  final bool isZeroCoin;
 
   TradeOffer({
     required this.id,
@@ -475,10 +483,12 @@ class TradeOffer {
     this.barterItemDescription,
     required this.barterItemImages,
     required this.barterWishCategories,
+    this.barterProductIds = const [],
     required this.counterOfferCount,
     required this.createdAt,
     this.acceptedAt,
     this.rejectedAt,
+    this.isZeroCoin = false,
   });
 
   factory TradeOffer.fromJson(Map<String, dynamic> json) {
@@ -503,12 +513,63 @@ class TradeOffer {
       barterWishCategories: (json['barterWishCategories'] as List? ?? [])
           .map((e) => e.toString())
           .toList(),
+      barterProductIds: (json['barterProductIds'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
       counterOfferCount: json['counterOfferCount'] ?? 0,
       createdAt: _parseLocal(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
       ),
       acceptedAt: _tryParseLocal(json['acceptedAt']),
       rejectedAt: _tryParseLocal(json['rejectedAt']),
+      isZeroCoin: json['isZeroCoin'] == true,
+    );
+  }
+
+  // Preserves every field not explicitly overridden — see TradeChat.copyWith
+  // for why: patching just offerStatus/acceptedAt/rejectedAt via the plain
+  // TradeOffer(...) constructor silently resets any field the call site
+  // forgets to list (isZeroCoin included) back to its default.
+  TradeOffer copyWith({
+    String? id,
+    String? tradeChatId,
+    String? madeById,
+    UserInfo? madeBy,
+    OfferType? offerType,
+    OfferStatus? offerStatus,
+    double? price,
+    String? currency,
+    String? barterItemTitle,
+    String? barterItemDescription,
+    List<String>? barterItemImages,
+    List<String>? barterWishCategories,
+    List<String>? barterProductIds,
+    int? counterOfferCount,
+    DateTime? createdAt,
+    DateTime? acceptedAt,
+    DateTime? rejectedAt,
+    bool? isZeroCoin,
+  }) {
+    return TradeOffer(
+      id: id ?? this.id,
+      tradeChatId: tradeChatId ?? this.tradeChatId,
+      madeById: madeById ?? this.madeById,
+      madeBy: madeBy ?? this.madeBy,
+      offerType: offerType ?? this.offerType,
+      offerStatus: offerStatus ?? this.offerStatus,
+      price: price ?? this.price,
+      currency: currency ?? this.currency,
+      barterItemTitle: barterItemTitle ?? this.barterItemTitle,
+      barterItemDescription:
+          barterItemDescription ?? this.barterItemDescription,
+      barterItemImages: barterItemImages ?? this.barterItemImages,
+      barterWishCategories: barterWishCategories ?? this.barterWishCategories,
+      barterProductIds: barterProductIds ?? this.barterProductIds,
+      counterOfferCount: counterOfferCount ?? this.counterOfferCount,
+      createdAt: createdAt ?? this.createdAt,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
+      rejectedAt: rejectedAt ?? this.rejectedAt,
+      isZeroCoin: isZeroCoin ?? this.isZeroCoin,
     );
   }
 
@@ -526,10 +587,12 @@ class TradeOffer {
       'barterItemDescription': barterItemDescription,
       'barterItemImages': barterItemImages,
       'barterWishCategories': barterWishCategories,
+      'barterProductIds': barterProductIds,
       'counterOfferCount': counterOfferCount,
       'createdAt': createdAt.toIso8601String(),
       'acceptedAt': acceptedAt?.toIso8601String(),
       'rejectedAt': rejectedAt?.toIso8601String(),
+      'isZeroCoin': isZeroCoin,
     };
   }
 
@@ -911,6 +974,10 @@ class TradeChat {
   // when the backend response didn't include them (older cached data) —
   // callers should treat null as "unknown", not "offline"/"zero".
   final bool? otherUserOnline;
+  // The other participant's id — sent on both getChatDetail and every list
+  // endpoint (all/inbox/outbox) alongside otherUserOnline. Prefer this over
+  // getOtherUserInfo() when only the id is needed (e.g. list rows).
+  final String? otherUserId;
   final int? unreadCount;
   // PIN-free Deal PIN verification snapshot — null until an offer has been
   // accepted (or on chats predating this feature). Presence of this alone
@@ -927,6 +994,23 @@ class TradeChat {
   // completed in a *different* chat on the same item — distinct from
   // canMakeOffer being false for this chat's own reasons (pending/accepted).
   final bool listingUnavailable;
+  // getChatDetail only: true when the current user is the listing owner
+  // (responder) — server-authoritative version of what the client used to
+  // derive itself from responderId. The owner only accepts/rejects/counters;
+  // they never start a fresh offer, so canMakeOffer is already false for
+  // them, but this flag lets other owner-only UI decisions (e.g. skipping
+  // the buyer's wallet check) key off it directly.
+  final bool isOwner;
+  // getChatDetail only: true while ANY offer (either party) is PENDING —
+  // i.e. a negotiation is currently in progress. canMakeOffer already
+  // factors this in, but exposed separately for UI that wants to explain
+  // *why* offering again isn't available right now.
+  final bool hasPendingOffer;
+  // getChatDetail only: true when either side has blocked the other.
+  // canMakeOffer already factors this in, but the client needs this
+  // separately to hide the composer/gallery/accept/reject/counter/deal
+  // actions entirely (not just the offer button) while blocked.
+  final bool isBlocked;
   // List endpoints only (getChatDetail doesn't send these): server-derived
   // status chip for the chat row — PENDING | ACTIVE | COMPLETED |
   // NOT_COMPLETED, with badgeLabel as ready-to-render display copy.
@@ -951,10 +1035,14 @@ class TradeChat {
     required this.messages,
     required this.offers,
     this.otherUserOnline,
+    this.otherUserId,
     this.unreadCount,
     this.dealVerification,
     this.canMakeOffer = true,
     this.myPendingOffer = false,
+    this.isOwner = false,
+    this.hasPendingOffer = false,
+    this.isBlocked = false,
     this.listingUnavailable = false,
     this.badge,
     this.badgeLabel,
@@ -993,6 +1081,7 @@ class TradeChat {
           .map((offer) => TradeOffer.fromJson(offer))
           .toList(),
       otherUserOnline: json['otherUserOnline'] as bool?,
+      otherUserId: json['otherUserId'] as String?,
       unreadCount: json['unreadCount'] is int
           ? json['unreadCount'] as int
           : int.tryParse('${json['unreadCount'] ?? ''}'),
@@ -1006,8 +1095,79 @@ class TradeChat {
           : true,
       myPendingOffer: json['myPendingOffer'] == true,
       listingUnavailable: json['listingUnavailable'] == true,
+      isOwner: json['isOwner'] == true,
+      hasPendingOffer: json['hasPendingOffer'] == true,
+      isBlocked: json['isBlocked'] == true,
       badge: json['badge'] as String?,
       badgeLabel: json['badgeLabel'] as String?,
+    );
+  }
+
+  // Preserves every field not explicitly overridden — used when a socket
+  // handler needs to patch just one or two fields (e.g. append a message,
+  // bump lastMessageAt) without silently resetting every other
+  // server-computed flag (canMakeOffer, isOwner, isBlocked, otherUserOnline,
+  // ...) back to its constructor default the way rebuilding via the plain
+  // TradeChat(...) constructor field-by-field does if a field is missed.
+  TradeChat copyWith({
+    String? id,
+    String? initiatorId,
+    String? responderId,
+    String? productId,
+    String? serviceId,
+    ChatStatus? status,
+    DateTime? lastMessageAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    UserInfo? initiator,
+    UserInfo? responder,
+    ProductInfo? product,
+    ServiceInfo? service,
+    DealCompletionInfo? dealCompletion,
+    List<ChatMessage>? messages,
+    List<TradeOffer>? offers,
+    bool? otherUserOnline,
+    String? otherUserId,
+    int? unreadCount,
+    DealVerificationSummary? dealVerification,
+    bool? canMakeOffer,
+    bool? myPendingOffer,
+    bool? isOwner,
+    bool? hasPendingOffer,
+    bool? isBlocked,
+    bool? listingUnavailable,
+    String? badge,
+    String? badgeLabel,
+  }) {
+    return TradeChat(
+      id: id ?? this.id,
+      initiatorId: initiatorId ?? this.initiatorId,
+      responderId: responderId ?? this.responderId,
+      productId: productId ?? this.productId,
+      serviceId: serviceId ?? this.serviceId,
+      status: status ?? this.status,
+      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      initiator: initiator ?? this.initiator,
+      responder: responder ?? this.responder,
+      product: product ?? this.product,
+      service: service ?? this.service,
+      dealCompletion: dealCompletion ?? this.dealCompletion,
+      messages: messages ?? this.messages,
+      offers: offers ?? this.offers,
+      otherUserOnline: otherUserOnline ?? this.otherUserOnline,
+      otherUserId: otherUserId ?? this.otherUserId,
+      unreadCount: unreadCount ?? this.unreadCount,
+      dealVerification: dealVerification ?? this.dealVerification,
+      canMakeOffer: canMakeOffer ?? this.canMakeOffer,
+      myPendingOffer: myPendingOffer ?? this.myPendingOffer,
+      isOwner: isOwner ?? this.isOwner,
+      hasPendingOffer: hasPendingOffer ?? this.hasPendingOffer,
+      isBlocked: isBlocked ?? this.isBlocked,
+      listingUnavailable: listingUnavailable ?? this.listingUnavailable,
+      badge: badge ?? this.badge,
+      badgeLabel: badgeLabel ?? this.badgeLabel,
     );
   }
 

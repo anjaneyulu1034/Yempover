@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:yempover_app/screens/AddCoinsScreen.dart';
 import 'package:yempover_app/services/coin_service.dart';
+import 'package:yempover_app/utils/wallet_balance_provider.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
 
 class CoinsWalletScreen extends StatefulWidget {
@@ -30,6 +32,31 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
   void initState() {
     super.initState();
     _loadWallet();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final provider = Provider.of<WalletBalanceProvider>(
+        context,
+        listen: false,
+      );
+      provider.ensureLive();
+      provider.addListener(_onLiveBalanceChanged);
+    });
+  }
+
+  // Keeps the displayed balance current the instant a coin change happens
+  // anywhere (top-up, redeem, escrow hold/release/refund) while this screen
+  // is open, without waiting for a full _loadWallet() refetch.
+  void _onLiveBalanceChanged() {
+    if (!mounted) return;
+    final live = Provider.of<WalletBalanceProvider>(
+      context,
+      listen: false,
+    ).balance;
+    if (live == null || live == _balance) return;
+    setState(() {
+      _hasWallet = true;
+      _balance = live;
+    });
   }
 
   Future<void> _loadWallet({bool keepExistingOnFailure = false}) async {
@@ -107,6 +134,15 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
     if (result == null || !mounted) return;
 
     await _loadWallet();
+  }
+
+  @override
+  void dispose() {
+    Provider.of<WalletBalanceProvider>(
+      context,
+      listen: false,
+    ).removeListener(_onLiveBalanceChanged);
+    super.dispose();
   }
 
   @override

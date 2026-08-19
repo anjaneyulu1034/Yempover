@@ -622,9 +622,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Coins to be Deducted'),
         content: Row(
           mainAxisSize: MainAxisSize.min,
@@ -835,7 +833,8 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                 const SizedBox(height: 12),
               ],
 
-              if (widget.offerMode == OfferSubmissionMode.barter &&
+              if (!widget.isZeroCoin &&
+                  widget.offerMode == OfferSubmissionMode.barter &&
                   _selectedItems.isNotEmpty &&
                   widget.post.price > 0) ...[
                 Padding(
@@ -859,79 +858,38 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
               ],
 
               // -------- OFFER DECK ROW ----------
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    // TARGET ITEM
-                    Expanded(
-                      child: Container(
-                        height: 140,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.blue.shade200),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: widget.post.images.isNotEmpty
-                              ? Image.network(
-                                  widget.post.images.first,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      color: Colors.grey.shade200,
-                                      child: const Center(
-                                        child: Icon(Icons.image),
-                                      ),
-                                    );
-                                  },
-                                )
-                              : Container(
-                                  color: Colors.grey.shade200,
-                                  child: const Center(child: Icon(Icons.image)),
-                                ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-
-                    // ADD CARD
-                    Expanded(
-                      child: InkWell(
-                        onTap: _openAddPostAndRefresh,
-                        child: Container(
-                          height: 140,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.blue.shade200),
-                            color: Colors.white,
-                          ),
-                          child: Center(
-                            child: Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.add, size: 28),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 8),
+              // Only the target listing goes here now — adding a new post
+              // to offer from is already covered by the "Add New" tile in
+              // the My Items row below, so the duplicate + card is gone.
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    'Tap + to add new post',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    width: 160,
+                    height: 140,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: widget.post.images.isNotEmpty
+                          ? Image.network(
+                              widget.post.images.first,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: Colors.grey.shade200,
+                                  child: const Center(child: Icon(Icons.image)),
+                                );
+                              },
+                            )
+                          : Container(
+                              color: Colors.grey.shade200,
+                              child: const Center(child: Icon(Icons.image)),
+                            ),
+                    ),
                   ),
                 ),
               ),
