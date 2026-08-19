@@ -68,32 +68,35 @@ Future<Object?> showExchangeModeSheet(
     builder: (context) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'How do you want to exchange?',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            if (options.listingPrice != null && options.listingPrice! > 0) ...[
-              const SizedBox(height: 4),
-              Text(
-                'Listed at \$${options.listingPrice!.toStringAsFixed(2)}',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'How do you want to exchange?',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
+              if (options.listingPrice != null &&
+                  options.listingPrice! > 0) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Listed at \$${options.listingPrice!.toStringAsFixed(2)}',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+              ],
+              const SizedBox(height: 14),
+              for (final option in options.options) ...[
+                _buildExchangeModeCard(context, option),
+                const SizedBox(height: 12),
+              ],
+              if (options.target == 'product') ...[
+                const Divider(height: 24),
+                _buildZeroCoinOption(context),
+                const SizedBox(height: 8),
+              ],
             ],
-            const SizedBox(height: 14),
-            for (final option in options.options) ...[
-              _buildExchangeModeCard(context, option),
-              const SizedBox(height: 12),
-            ],
-            if (options.target == 'product') ...[
-              const Divider(height: 24),
-              _buildZeroCoinOption(context),
-              const SizedBox(height: 8),
-            ],
-          ],
+          ),
         ),
       ),
     ),
