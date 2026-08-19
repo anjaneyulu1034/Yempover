@@ -9,6 +9,7 @@ import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/utils/blocked_users_cache.dart';
 import 'package:yempover_app/utils/chat_provider.dart';
 import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/error_widget.dart';
@@ -166,7 +167,15 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     try {
       final userId = data['userId']?.toString();
       if (userId == null || userId.isEmpty) return;
-      final isOnline = data['isOnline'] == true;
+      var isOnline = data['isOnline'] == true;
+
+      // The live global user_online/offline broadcast isn't block-aware
+      // server-side — never light up the dot for someone this user has
+      // blocked (Point 6: "ignore if blocked user").
+      if (isOnline && BlockedUsersCache.instance.isBlocked(userId)) {
+        isOnline = false;
+      }
+
       setState(() {
         _onlineStatusByUserId[userId] = isOnline;
       });

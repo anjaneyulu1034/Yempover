@@ -911,6 +911,10 @@ class TradeChat {
   // when the backend response didn't include them (older cached data) —
   // callers should treat null as "unknown", not "offline"/"zero".
   final bool? otherUserOnline;
+  // The other participant's id — sent on both getChatDetail and every list
+  // endpoint (all/inbox/outbox) alongside otherUserOnline. Prefer this over
+  // getOtherUserInfo() when only the id is needed (e.g. list rows).
+  final String? otherUserId;
   final int? unreadCount;
   // PIN-free Deal PIN verification snapshot — null until an offer has been
   // accepted (or on chats predating this feature). Presence of this alone
@@ -927,6 +931,23 @@ class TradeChat {
   // completed in a *different* chat on the same item — distinct from
   // canMakeOffer being false for this chat's own reasons (pending/accepted).
   final bool listingUnavailable;
+  // getChatDetail only: true when the current user is the listing owner
+  // (responder) — server-authoritative version of what the client used to
+  // derive itself from responderId. The owner only accepts/rejects/counters;
+  // they never start a fresh offer, so canMakeOffer is already false for
+  // them, but this flag lets other owner-only UI decisions (e.g. skipping
+  // the buyer's wallet check) key off it directly.
+  final bool isOwner;
+  // getChatDetail only: true while ANY offer (either party) is PENDING —
+  // i.e. a negotiation is currently in progress. canMakeOffer already
+  // factors this in, but exposed separately for UI that wants to explain
+  // *why* offering again isn't available right now.
+  final bool hasPendingOffer;
+  // getChatDetail only: true when either side has blocked the other.
+  // canMakeOffer already factors this in, but the client needs this
+  // separately to hide the composer/gallery/accept/reject/counter/deal
+  // actions entirely (not just the offer button) while blocked.
+  final bool isBlocked;
   // List endpoints only (getChatDetail doesn't send these): server-derived
   // status chip for the chat row — PENDING | ACTIVE | COMPLETED |
   // NOT_COMPLETED, with badgeLabel as ready-to-render display copy.
@@ -951,10 +972,14 @@ class TradeChat {
     required this.messages,
     required this.offers,
     this.otherUserOnline,
+    this.otherUserId,
     this.unreadCount,
     this.dealVerification,
     this.canMakeOffer = true,
     this.myPendingOffer = false,
+    this.isOwner = false,
+    this.hasPendingOffer = false,
+    this.isBlocked = false,
     this.listingUnavailable = false,
     this.badge,
     this.badgeLabel,
@@ -993,6 +1018,7 @@ class TradeChat {
           .map((offer) => TradeOffer.fromJson(offer))
           .toList(),
       otherUserOnline: json['otherUserOnline'] as bool?,
+      otherUserId: json['otherUserId'] as String?,
       unreadCount: json['unreadCount'] is int
           ? json['unreadCount'] as int
           : int.tryParse('${json['unreadCount'] ?? ''}'),
@@ -1006,8 +1032,79 @@ class TradeChat {
           : true,
       myPendingOffer: json['myPendingOffer'] == true,
       listingUnavailable: json['listingUnavailable'] == true,
+      isOwner: json['isOwner'] == true,
+      hasPendingOffer: json['hasPendingOffer'] == true,
+      isBlocked: json['isBlocked'] == true,
       badge: json['badge'] as String?,
       badgeLabel: json['badgeLabel'] as String?,
+    );
+  }
+
+  // Preserves every field not explicitly overridden — used when a socket
+  // handler needs to patch just one or two fields (e.g. append a message,
+  // bump lastMessageAt) without silently resetting every other
+  // server-computed flag (canMakeOffer, isOwner, isBlocked, otherUserOnline,
+  // ...) back to its constructor default the way rebuilding via the plain
+  // TradeChat(...) constructor field-by-field does if a field is missed.
+  TradeChat copyWith({
+    String? id,
+    String? initiatorId,
+    String? responderId,
+    String? productId,
+    String? serviceId,
+    ChatStatus? status,
+    DateTime? lastMessageAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    UserInfo? initiator,
+    UserInfo? responder,
+    ProductInfo? product,
+    ServiceInfo? service,
+    DealCompletionInfo? dealCompletion,
+    List<ChatMessage>? messages,
+    List<TradeOffer>? offers,
+    bool? otherUserOnline,
+    String? otherUserId,
+    int? unreadCount,
+    DealVerificationSummary? dealVerification,
+    bool? canMakeOffer,
+    bool? myPendingOffer,
+    bool? isOwner,
+    bool? hasPendingOffer,
+    bool? isBlocked,
+    bool? listingUnavailable,
+    String? badge,
+    String? badgeLabel,
+  }) {
+    return TradeChat(
+      id: id ?? this.id,
+      initiatorId: initiatorId ?? this.initiatorId,
+      responderId: responderId ?? this.responderId,
+      productId: productId ?? this.productId,
+      serviceId: serviceId ?? this.serviceId,
+      status: status ?? this.status,
+      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      initiator: initiator ?? this.initiator,
+      responder: responder ?? this.responder,
+      product: product ?? this.product,
+      service: service ?? this.service,
+      dealCompletion: dealCompletion ?? this.dealCompletion,
+      messages: messages ?? this.messages,
+      offers: offers ?? this.offers,
+      otherUserOnline: otherUserOnline ?? this.otherUserOnline,
+      otherUserId: otherUserId ?? this.otherUserId,
+      unreadCount: unreadCount ?? this.unreadCount,
+      dealVerification: dealVerification ?? this.dealVerification,
+      canMakeOffer: canMakeOffer ?? this.canMakeOffer,
+      myPendingOffer: myPendingOffer ?? this.myPendingOffer,
+      isOwner: isOwner ?? this.isOwner,
+      hasPendingOffer: hasPendingOffer ?? this.hasPendingOffer,
+      isBlocked: isBlocked ?? this.isBlocked,
+      listingUnavailable: listingUnavailable ?? this.listingUnavailable,
+      badge: badge ?? this.badge,
+      badgeLabel: badgeLabel ?? this.badgeLabel,
     );
   }
 

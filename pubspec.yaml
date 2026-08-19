@@ -2,7 +2,7 @@ name: yempover_app
 description: "BarterX mobile application."
 publish_to: "none"
 
-version: 1.0.2+3
+version: 1.0.2+4
 
 environment:
   sdk: ^3.10.1

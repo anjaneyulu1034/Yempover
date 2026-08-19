@@ -835,7 +835,8 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                 const SizedBox(height: 12),
               ],
 
-              if (widget.offerMode == OfferSubmissionMode.barter &&
+              if (!widget.isZeroCoin &&
+                  widget.offerMode == OfferSubmissionMode.barter &&
                   _selectedItems.isNotEmpty &&
                   widget.post.price > 0) ...[
                 Padding(
