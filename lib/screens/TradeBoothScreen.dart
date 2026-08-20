@@ -924,7 +924,7 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
                       ),
                       if (displayPrice.isNotEmpty)
                         CoinPriceLabel(
-                          text: '$displayPrice coins',
+                          text: CoinFormat.withLabel(post.price),
                           iconSize: 14,
                           style: TextStyle(
                             fontSize: 13,

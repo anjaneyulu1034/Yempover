@@ -39,18 +39,41 @@ class CoinIcon extends StatelessWidget {
   }
 }
 
-/// Formats barter coin amounts without a dollar sign.
+/// Formats barter coin amounts without a dollar sign. The app's currency is
+/// in-app "coins", never fiat — nothing here should ever emit a $ or USD.
 class CoinFormat {
+  // Plain number, no unit word: whole numbers with no decimals (130), up to
+  // 2 decimals only when fractional (135.5). Returns 'Free' for null/<=0 —
+  // used for LISTING prices, where an unset/zero price conventionally means
+  // the item is free, not "0 coins".
   static String amount(num? value) {
     if (value == null || value <= 0) return 'Free';
+    return _formatNumber(value);
+  }
+
+  static String _formatNumber(num value) {
     final d = value.toDouble();
     if (d == d.roundToDouble()) return d.toInt().toString();
     return d.toStringAsFixed(2);
   }
 
+  // Number + singular/plural unit ("1 coin" / "2 coins"), still 'Free' for
+  // null/<=0 — use for LISTING/item prices displayed with the word "coins"
+  // instead of a CoinIcon.
   static String withLabel(num? value) {
-    final a = amount(value);
-    return a == 'Free' ? a : '$a coins';
+    if (value == null || value <= 0) return 'Free';
+    return _withUnitUnchecked(value);
+  }
+
+  // Number + singular/plural unit, but WITHOUT the 'Free' fallback — 0 reads
+  // as "0 coins". Use for offer amounts, totals, balances, and shortfalls,
+  // where zero is a real value rather than "no price set".
+  static String withUnit(num? value) => _withUnitUnchecked(value ?? 0);
+
+  static String _withUnitUnchecked(num value) {
+    final formatted = _formatNumber(value);
+    final isSingular = value == 1 || value == -1;
+    return '$formatted ${isSingular ? 'coin' : 'coins'}';
   }
 }
 

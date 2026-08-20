@@ -79,7 +79,7 @@ Future<Object?> showExchangeModeSheet(
             if (options.listingPrice != null && options.listingPrice! > 0) ...[
               const SizedBox(height: 4),
               Text(
-                'Listed at \$${options.listingPrice!.toStringAsFixed(2)}',
+                'Listed at ${CoinFormat.withLabel(options.listingPrice)}',
                 style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
               ),
             ],

@@ -1790,7 +1790,8 @@ class _ServiceDetailBookingScreenState
   }
 
   Widget _buildCoinPriceRow(String label, String value) {
-    final display = value == '-' ? value : '$value coins';
+    final parsed = num.tryParse(value);
+    final display = parsed == null ? value : CoinFormat.withUnit(parsed);
     return Row(
       children: [
         const CoinIcon(size: 20, iconSize: 12),

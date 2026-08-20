@@ -79,12 +79,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   bool _isPreparingOffer = false;
   bool _isOpeningPostDetail = false;
   Timer? _typingTimer;
-  // Lazily-fetched detail for the offered barter item(s) referenced by
-  // offer.barterProductIds — lets the offer preview show that item's real
-  // listed price and deep-link into its post, the same way the chat's own
-  // product/service already does via _openPostDetail.
+  // Cache of full Post detail for offered barter items, populated lazily on
+  // tap (see _openBarterItemDetail) so a second tap on the same item is
+  // instant. The offer preview itself (image/title/price) now renders
+  // straight from offer.barterProducts — this cache is only needed for the
+  // full PostDetailScreen navigation, which wants more than that summary.
   final Map<String, Post> _barterItemPostCache = {};
-  final Set<String> _barterItemFetchInProgress = {};
 
   bool get _isReferenceUnavailable {
     // The backend marks the product/service SOLD as soon as an offer is
@@ -143,7 +143,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (_currentChat.serviceId == null) {
       return widget.currentUserId == _currentChat.initiatorId;
     }
-    final ownerIsProvider = _currentChat.service?.status != 'LOOKING_FOR_SERVICE';
+    final ownerIsProvider =
+        _currentChat.service?.status != 'LOOKING_FOR_SERVICE';
     final providerId = ownerIsProvider
         ? _currentChat.responderId
         : _currentChat.initiatorId;
@@ -215,34 +216,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
   }
 
-  // Best-effort background fetch so the offered barter item's real price is
-  // ready by the time the preview renders — a no-op once cached, and safe
-  // to call repeatedly (e.g. on every build) since it's guarded against
-  // duplicate concurrent fetches.
-  void _ensureBarterItemLoaded(String productId) {
-    if (productId.isEmpty) return;
-    if (_barterItemPostCache.containsKey(productId)) return;
-    if (_barterItemFetchInProgress.contains(productId)) return;
-
-    _barterItemFetchInProgress.add(productId);
-    ApiService()
-        .getPostDetail(postId: productId, type: PostType.product)
-        .then((response) {
-          if (!mounted) return;
-          setState(() => _barterItemPostCache[productId] = response.post);
-        })
-        .catchError((_) {
-          // Item may have been deleted/sold/blocked since the offer was
-          // made — leave it out of the cache so the preview just omits the
-          // price/tap instead of erroring.
-        })
-        .whenComplete(() => _barterItemFetchInProgress.remove(productId));
-  }
-
   // Deep-link to the OFFERED item's post detail (as opposed to
   // _openPostDetail, which is always the chat's own product/service).
-  // Reuses the cache from _ensureBarterItemLoaded when available so tapping
-  // is instant; falls back to a fresh fetch otherwise.
+  // Reuses _barterItemPostCache when available so a second tap is instant;
+  // falls back to a fresh fetch otherwise.
   Future<void> _openBarterItemDetail(String productId) async {
     if (productId.isEmpty || _isOpeningPostDetail) return;
 
@@ -1478,7 +1455,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return null;
   }
 
-
   String? _validateOfferPriceAgainstListing(double price) {
     if (price <= 0) {
       return 'Enter a valid price';
@@ -1497,7 +1473,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     if (price.round() > listing.round()) {
       return 'Offer cannot exceed listing price of '
-          '${CoinFormat.amount(listing)} coins';
+          '${CoinFormat.withUnit(listing)}';
     }
 
     return null;
@@ -1600,9 +1576,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 onPressed: () {
                   final trimmed = priceController.text.trim();
                   if (trimmed.isEmpty) {
-                    setDialogState(
-                      () => dialogError = 'Enter coins',
-                    );
+                    setDialogState(() => dialogError = 'Enter coins');
                     return;
                   }
 
@@ -1614,8 +1588,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     return;
                   }
 
-                  final validationError =
-                      _validateOfferPriceAgainstListing(parsed);
+                  final validationError = _validateOfferPriceAgainstListing(
+                    parsed,
+                  );
                   if (validationError != null) {
                     setDialogState(() => dialogError = validationError);
                     return;
@@ -1699,6 +1674,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   p.status.toUpperCase() != 'ARCHIVED' &&
                   p.status.toUpperCase() != 'DELETED',
             )
+            // Exclude items already committed to the live pending offer —
+            // they can't be re-added to a fresh counter-offer selection.
+            .where((p) => !_currentChat.activeBarterProductIds.contains(p.id))
+            // Exclude the listing itself (chat.product) — it's the item
+            // being negotiated FOR, not something the listing owner can
+            // also offer back as a barter item in the same deal. Without
+            // this, the owner's own listing kept reappearing as a
+            // selectable "item to offer" alongside their other products.
+            .where((p) => p.id != _currentChat.productId)
             .map(
               (p) => UserItem(
                 id: p.id,
@@ -1744,193 +1728,197 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               maxChildSize: 0.9,
               expand: false,
               builder: (context, scrollController) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Select items to offer',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Items with clubbing off can only be offered alone.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: isLoading
-                            ? const Center(child: CircularProgressIndicator())
-                            : loadError != null
-                            ? Center(child: Text(loadError!))
-                            : allItems.isEmpty
-                            ? const Center(
-                                child: Text('No barter-eligible items'),
-                              )
-                            : GridView.builder(
-                                controller: scrollController,
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 3,
-                                      crossAxisSpacing: 10,
-                                      mainAxisSpacing: 10,
-                                      childAspectRatio: 0.8,
-                                    ),
-                                itemCount: allItems.length,
-                                itemBuilder: (context, index) {
-                                  final item = allItems[index];
-                                  final isSelected = selected.any(
-                                    (i) => i.id == item.id,
-                                  );
-                                  return GestureDetector(
-                                    onTap: () {
-                                      final result = applyClubbingSelection(
-                                        current: selected,
-                                        tapped: item,
-                                      );
-                                      setSheetState(
-                                        () => selected = result.items,
-                                      );
-                                      if (result.hint != null) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(result.hint!),
-                                            duration: const Duration(
-                                              seconds: 2,
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    child: Stack(
-                                      children: [
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                            border: Border.all(
-                                              color: isSelected
-                                                  ? const Color(0xFF2E5BFF)
-                                                  : Colors.grey.shade300,
-                                              width: isSelected ? 2 : 1,
-                                            ),
-                                          ),
-                                          child: ClipRRect(
-                                            borderRadius:
-                                                BorderRadius.circular(9),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.stretch,
-                                              children: [
-                                                Expanded(
-                                                  child: item.imageUrl.isNotEmpty
-                                                      ? Image.network(
-                                                          item.imageUrl,
-                                                          fit: BoxFit.cover,
-                                                          errorBuilder:
-                                                              (
-                                                                context,
-                                                                error,
-                                                                stackTrace,
-                                                              ) => Container(
-                                                                color: Colors
-                                                                    .grey
-                                                                    .shade200,
-                                                                child: const Icon(
-                                                                  Icons.image,
-                                                                ),
-                                                              ),
-                                                        )
-                                                      : Container(
-                                                          color: Colors
-                                                              .grey
-                                                              .shade200,
-                                                          child: const Icon(
-                                                            Icons.image,
-                                                          ),
-                                                        ),
-                                                ),
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.all(4),
-                                                  child: Text(
-                                                    item.name,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: const TextStyle(
-                                                      fontSize: 11,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        if (isSelected)
-                                          const Positioned(
-                                            top: 4,
-                                            right: 4,
-                                            child: Icon(
-                                              Icons.check_circle,
-                                              color: Color(0xFF2E5BFF),
-                                              size: 18,
-                                            ),
-                                          ),
-                                        if (!item.isClubbable)
-                                          Positioned(
-                                            bottom: 22,
-                                            left: 4,
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 4,
-                                                    vertical: 1,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black54,
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                              ),
-                                              child: const Text(
-                                                'Solo only',
-                                                style: TextStyle(
-                                                  fontSize: 8,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: selected.isEmpty
-                              ? null
-                              : () => Navigator.pop(sheetContext, selected),
-                          child: Text(
-                            selected.isEmpty
-                                ? 'Select at least one item'
-                                : 'Use ${selected.length} item${selected.length > 1 ? 's' : ''}',
+                return SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Select items to offer',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          'Items with clubbing off can only be offered alone.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: isLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : loadError != null
+                              ? Center(child: Text(loadError!))
+                              : allItems.isEmpty
+                              ? const Center(
+                                  child: Text('No barter-eligible items'),
+                                )
+                              : GridView.builder(
+                                  controller: scrollController,
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 3,
+                                        crossAxisSpacing: 10,
+                                        mainAxisSpacing: 10,
+                                        childAspectRatio: 0.8,
+                                      ),
+                                  itemCount: allItems.length,
+                                  itemBuilder: (context, index) {
+                                    final item = allItems[index];
+                                    final isSelected = selected.any(
+                                      (i) => i.id == item.id,
+                                    );
+                                    return GestureDetector(
+                                      onTap: () {
+                                        final result = applyClubbingSelection(
+                                          current: selected,
+                                          tapped: item,
+                                        );
+                                        setSheetState(
+                                          () => selected = result.items,
+                                        );
+                                        if (result.hint != null) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(result.hint!),
+                                              duration: const Duration(
+                                                seconds: 2,
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      child: Stack(
+                                        children: [
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: isSelected
+                                                    ? const Color(0xFF2E5BFF)
+                                                    : Colors.grey.shade300,
+                                                width: isSelected ? 2 : 1,
+                                              ),
+                                            ),
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(9),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.stretch,
+                                                children: [
+                                                  Expanded(
+                                                    child:
+                                                        item.imageUrl.isNotEmpty
+                                                        ? Image.network(
+                                                            item.imageUrl,
+                                                            fit: BoxFit.cover,
+                                                            errorBuilder:
+                                                                (
+                                                                  context,
+                                                                  error,
+                                                                  stackTrace,
+                                                                ) => Container(
+                                                                  color: Colors
+                                                                      .grey
+                                                                      .shade200,
+                                                                  child: const Icon(
+                                                                    Icons.image,
+                                                                  ),
+                                                                ),
+                                                          )
+                                                        : Container(
+                                                            color: Colors
+                                                                .grey
+                                                                .shade200,
+                                                            child: const Icon(
+                                                              Icons.image,
+                                                            ),
+                                                          ),
+                                                  ),
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.all(4),
+                                                    child: Text(
+                                                      item.name,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                        fontSize: 11,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          if (isSelected)
+                                            const Positioned(
+                                              top: 4,
+                                              right: 4,
+                                              child: Icon(
+                                                Icons.check_circle,
+                                                color: Color(0xFF2E5BFF),
+                                                size: 18,
+                                              ),
+                                            ),
+                                          if (!item.isClubbable)
+                                            Positioned(
+                                              bottom: 22,
+                                              left: 4,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 4,
+                                                      vertical: 1,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black54,
+                                                  borderRadius:
+                                                      BorderRadius.circular(4),
+                                                ),
+                                                child: const Text(
+                                                  'Solo only',
+                                                  style: TextStyle(
+                                                    fontSize: 8,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: selected.isEmpty
+                                ? null
+                                : () => Navigator.pop(sheetContext, selected),
+                            child: Text(
+                              selected.isEmpty
+                                  ? 'Select at least one item'
+                                  : 'Use ${selected.length} item${selected.length > 1 ? 's' : ''}',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
@@ -2270,8 +2258,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     return;
                   }
 
-                  final validationError =
-                      _validateOfferPriceAgainstListing(parsed);
+                  final validationError = _validateOfferPriceAgainstListing(
+                    parsed,
+                  );
                   if (validationError != null) {
                     setDialogState(() => dialogError = validationError);
                     return;
@@ -2505,7 +2494,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         : _currentChat.initiatorId;
   }
 
-  String get _otherParticipantId => widget.currentUserId == _currentChat.initiatorId
+  String get _otherParticipantId =>
+      widget.currentUserId == _currentChat.initiatorId
       ? _currentChat.responderId
       : _currentChat.initiatorId;
 
@@ -2538,13 +2528,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       if (!mounted) return false;
 
       final refreshedWallet = await _coinService.getWallet();
-      final refreshedBalance =
-          CoinService.parseCoinAmount(refreshedWallet?['balance']);
+      final refreshedBalance = CoinService.parseCoinAmount(
+        refreshedWallet?['balance'],
+      );
       if (refreshedBalance < amount) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'You need ${CoinFormat.amount(amount)} coins to complete this deal.',
+              'You need ${CoinFormat.withUnit(amount)} to complete this deal.',
             ),
             backgroundColor: Colors.orange,
           ),
@@ -2583,7 +2574,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         // Only the participant who actually owes coins should see the
         // "coins will be deducted" prompt — the other side of the deal
         // never gets charged (see _currentUserPaysOnDealComplete).
-        isPriceOffer: _dealRequiresCoinPayment() && _currentUserPaysOnDealComplete(),
+        isPriceOffer:
+            _dealRequiresCoinPayment() && _currentUserPaysOnDealComplete(),
         acceptedPrice: (acceptedOffer != null && acceptedOffer.isBarterOffer)
             ? null
             : (acceptedOffer?.price ?? _currentChat.product?.price),
@@ -2642,9 +2634,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              e.toString().replaceFirst('Exception: ', ''),
-            ),
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
             backgroundColor: Colors.red,
           ),
         );
@@ -2695,7 +2685,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   },
                   decoration: const InputDecoration(
                     labelText: 'Reason',
-                    hintText: 'e.g. Buyer did not show up, item condition '
+                    hintText:
+                        'e.g. Buyer did not show up, item condition '
                         'mismatch...',
                     border: OutlineInputBorder(),
                   ),
@@ -2708,15 +2699,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 child: const Text('Back'),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
                 onPressed: () {
                   final reason = reasonController.text.trim();
                   if (reason.isEmpty) {
-                    setDialogState(
-                      () => dialogError = 'Please enter a reason',
-                    );
+                    setDialogState(() => dialogError = 'Please enter a reason');
                     return;
                   }
                   Navigator.pop(dialogContext, reason);
@@ -2764,9 +2751,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              e.toString().replaceFirst('Exception: ', ''),
-            ),
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
             backgroundColor: Colors.red,
           ),
         );
@@ -3048,7 +3033,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       return offer.barterItemTitle;
     }
     if (offer.isPriceOffer && offer.price != null) {
-      return '${CoinFormat.amount(offer.price)} coins';
+      return CoinFormat.withUnit(offer.price);
     }
     return null;
   }
@@ -3170,7 +3155,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       case 'DEAL_NOT_COMPLETED':
         return (icon: Icons.cancel_outlined, color: Colors.red.shade600);
       case 'CHAT_STARTED':
-        return (icon: Icons.chat_bubble_outline, color: Colors.blueGrey.shade400);
+        return (
+          icon: Icons.chat_bubble_outline,
+          color: Colors.blueGrey.shade400,
+        );
       case 'ITEM_UNAVAILABLE':
         return (icon: Icons.info_outline, color: Colors.orange.shade700);
       default:
@@ -3202,8 +3190,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (t.contains('accepted')) {
       return (icon: Icons.check_circle_outline, color: Colors.green.shade600);
     }
-    if (t.contains('coins') &&
-        (t.contains('secured') || t.contains('safe'))) {
+    if (t.contains('coins') && (t.contains('secured') || t.contains('safe'))) {
       return (icon: Icons.shield_outlined, color: Colors.blue.shade600);
     }
     if (t.contains('zero-coin')) {
@@ -3230,48 +3217,61 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   // BOTH participants verbatim, so the recipient wrongly sees "sent"
   // instead of "received". Rebuild the label client-side from the
   // structured eventData (madeById, price, offerType, isCounter) so each
-  // viewer sees "You offered X coins" vs "{name} offered you X coins".
-  String _systemMessageDisplayText(ChatMessage message) {
+  // viewer sees "You offered X coins to {name}" vs "{name} offered you X
+  // coins". Returns the headline plus an optional note separately (rather
+  // than one concatenated string) so the caller can render "Note: " in its
+  // own bold style — matching _buildOfferNote's treatment on the offer
+  // banner — instead of it blending into the plain system-message text.
+  ({String headline, String? note}) _systemMessageParts(ChatMessage message) {
     final data = message.eventData;
     if (message.eventType != 'OFFER_PENDING' || data == null) {
-      return message.messageText;
+      return (headline: message.messageText, note: null);
     }
-    if (data['isZeroCoin'] == true) return message.messageText;
+    if (data['isZeroCoin'] == true) {
+      return (headline: message.messageText, note: null);
+    }
 
     final madeById = data['madeById'] as String?;
     final isMine = madeById == widget.currentUserId;
     final isCounter = data['isCounter'] == true;
     final otherName = _getOtherUser().firstName;
     final actorLabel = isCounter
-        ? (isMine ? 'You countered with' : '$otherName countered your offer with')
+        ? (isMine
+              ? 'You countered with'
+              : '$otherName countered your offer with')
         : (isMine ? 'You offered' : '$otherName offered you');
+    // Only the actor's own copy needs the explicit "to {name}" — the
+    // recipient's copy already names the actor at the start of the
+    // sentence ("{name} offered you...").
+    final targetSuffix = isMine ? ' to $otherName' : '';
 
     final offerType = (data['offerType'] as String? ?? '').toUpperCase();
     final barterTitle = (data['barterItemTitle'] as String? ?? '').trim();
     final rawPrice = data['price'];
     double? price;
     if (rawPrice != null) {
-      price = rawPrice is num ? rawPrice.toDouble() : double.tryParse(rawPrice.toString());
+      price = rawPrice is num
+          ? rawPrice.toDouble()
+          : double.tryParse(rawPrice.toString());
     }
-    final amount = price != null ? '${CoinFormat.amount(price)} coins' : null;
+    final amount = price != null ? CoinFormat.withUnit(price) : null;
 
     String headline;
     if (offerType == 'BOTH' && amount != null && barterTitle.isNotEmpty) {
-      headline = '$actorLabel $barterTitle + $amount.';
+      headline = '$actorLabel $barterTitle + $amount$targetSuffix.';
     } else if (offerType == 'PRICE' && amount != null) {
-      headline = '$actorLabel $amount.';
+      headline = '$actorLabel $amount$targetSuffix.';
     } else if ((offerType == 'BARTER' || offerType == 'BOTH') &&
         barterTitle.isNotEmpty) {
-      headline = '$actorLabel $barterTitle.';
+      headline = '$actorLabel $barterTitle$targetSuffix.';
     } else {
-      headline = '$actorLabel.';
+      headline = '$actorLabel$targetSuffix.';
     }
 
     // The offerer's note now rides along with every offer type, not just
     // barter (Point 1) — surface it on the system card too.
     final description = (data['description'] as String? ?? '').trim();
-    if (description.isEmpty) return headline;
-    return '$headline\nNote: $description';
+    return (headline: headline, note: description.isEmpty ? null : description);
   }
 
   // DEAL_COMPLETED_PENDING_OTHER carries a `post` reference in eventData so
@@ -3294,9 +3294,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (message.eventType == 'DEAL_COMPLETED_PENDING_OTHER') {
       final data = message.eventData;
       final rawPost = data?['post'];
-      final post = rawPost is Map
-          ? Map<String, dynamic>.from(rawPost)
-          : null;
+      final post = rawPost is Map ? Map<String, dynamic>.from(rawPost) : null;
       final itemName = (data?['itemName'] as String?)?.trim();
       final actorName = (data?['actorName'] as String?)?.trim();
 
@@ -3328,10 +3326,29 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       }
     }
 
-    return Text(
-      _systemMessageDisplayText(message),
+    final parts = _systemMessageParts(message);
+    final note = parts.note;
+    if (note == null) {
+      return Text(
+        parts.headline,
+        textAlign: TextAlign.center,
+        style: baseStyle,
+      );
+    }
+
+    return Text.rich(
+      TextSpan(
+        style: baseStyle,
+        children: [
+          TextSpan(text: '${parts.headline}\n'),
+          TextSpan(
+            text: 'Note: ',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          TextSpan(text: note),
+        ],
+      ),
       textAlign: TextAlign.center,
-      style: baseStyle,
     );
   }
 
@@ -3351,21 +3368,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       // Redundant with the tappable post header card already pinned above
       // the message list — drop it from the timeline instead of showing
       // the same "what this chat is about" info twice.
-      final isChatStarted = message.eventType == 'CHAT_STARTED' ||
+      final isChatStarted =
+          message.eventType == 'CHAT_STARTED' ||
           message.messageText.toLowerCase().contains('chat started');
       if (isChatStarted) return const SizedBox.shrink();
 
-      final style = _eventTypeStyle(message.eventType) ??
+      final style =
+          _eventTypeStyle(message.eventType) ??
           _systemMessageStyle(message.messageText);
       // The two terminal deal outcomes get a bolder card (spec calls them
       // out explicitly by color) so they stand out from the rest of the
       // step-by-step timeline.
-      final isTerminalEvent = message.eventType == 'DEAL_COMPLETED' ||
+      final isTerminalEvent =
+          message.eventType == 'DEAL_COMPLETED' ||
           message.eventType == 'DEAL_NOT_COMPLETED';
       // CHAT_STARTED deep-links to the post detail screen (Point 7) — same
       // target as the header card above, using the chat's own product/
       // service id rather than re-deriving it from eventData.
-      final isTappable = message.eventType == 'CHAT_STARTED' &&
+      final isTappable =
+          message.eventType == 'CHAT_STARTED' &&
           (_currentChat.productId != null || _currentChat.serviceId != null);
 
       final card = Container(
@@ -3384,7 +3405,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(style.icon, size: isTerminalEvent ? 17 : 14, color: style.color),
+            Icon(
+              style.icon,
+              size: isTerminalEvent ? 17 : 14,
+              color: style.color,
+            ),
             const SizedBox(width: 6),
             Flexible(
               child: _buildSystemMessageText(
@@ -3425,8 +3450,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       child: Row(
-        mainAxisAlignment:
-            isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isCurrentUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         children: [
           if (!isCurrentUser)
             CircleAvatar(
@@ -4103,11 +4129,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                                     return;
                                   }
 
-                                  final proposalMessage =
-                                      await _chatService.sendMessage(
-                                    chatId: _currentChat.id,
-                                    messageText: lines.join('\n'),
-                                  );
+                                  final proposalMessage = await _chatService
+                                      .sendMessage(
+                                        chatId: _currentChat.id,
+                                        messageText: lines.join('\n'),
+                                      );
                                   _socketService.emitMessageCreated(
                                     _currentChat.id,
                                     proposalMessage.id,
@@ -4213,11 +4239,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     String? myName,
     String? myPriceLabel,
     VoidCallback? onMyTap,
+    // The actually-offered products for this side, when known — renders one
+    // thumbnail per product instead of a single image so a multi-item offer
+    // doesn't collapse down to just its first item. Falls back to the
+    // single myImage/myName/myPriceLabel when null/empty (free-text-only
+    // offers, or a side that's always a single listing).
+    List<BarterProductInfo>? myItems,
     required String theirImage,
     required String theirLabel,
     String? theirName,
     String? theirPriceLabel,
     VoidCallback? onTheirTap,
+    List<BarterProductInfo>? theirItems,
   }) {
     Widget side({
       required String image,
@@ -4239,10 +4272,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             const SizedBox(height: 4),
             Text(
               name,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -4269,30 +4299,98 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       );
     }
 
+    Widget multiSide({
+      required List<BarterProductInfo> items,
+      required String label,
+      String? priceLabel,
+    }) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 64,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const ClampingScrollPhysics(),
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 6),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                final thumb = _buildOfferItemThumb(item.firstImage);
+                if (item.id.isEmpty || _isOpeningPostDetail) return thumb;
+                return InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => _openBarterItemDetail(item.id),
+                  child: thumb,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            items.length == 1
+                ? items.first.title
+                : items.map((p) => p.title).join(', '),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (priceLabel != null && priceLabel.trim().isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              priceLabel,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.green.shade700,
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: side(
-            image: myImage,
-            label: myLabel,
-            name: myName,
-            priceLabel: myPriceLabel,
-            onTap: onMyTap,
-          ),
+          child: myItems != null && myItems.isNotEmpty
+              ? multiSide(
+                  items: myItems,
+                  label: myLabel,
+                  priceLabel: myPriceLabel,
+                )
+              : side(
+                  image: myImage,
+                  label: myLabel,
+                  name: myName,
+                  priceLabel: myPriceLabel,
+                  onTap: onMyTap,
+                ),
         ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 8),
           child: Icon(Icons.swap_horiz, color: Colors.grey),
         ),
         Expanded(
-          child: side(
-            image: theirImage,
-            label: theirLabel,
-            name: theirName,
-            priceLabel: theirPriceLabel,
-            onTap: onTheirTap,
-          ),
+          child: theirItems != null && theirItems.isNotEmpty
+              ? multiSide(
+                  items: theirItems,
+                  label: theirLabel,
+                  priceLabel: theirPriceLabel,
+                )
+              : side(
+                  image: theirImage,
+                  label: theirLabel,
+                  name: theirName,
+                  priceLabel: theirPriceLabel,
+                  onTap: onTheirTap,
+                ),
         ),
       ],
     );
@@ -4374,7 +4472,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                         height: 48,
                         color: Colors.grey.shade200,
                         child: Icon(
-                          isService ? Icons.build_circle : Icons.inventory_2_outlined,
+                          isService
+                              ? Icons.build_circle
+                              : Icons.inventory_2_outlined,
                           size: 20,
                           color: Colors.grey.shade500,
                         ),
@@ -4402,7 +4502,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                           const CoinIcon(size: 13, iconSize: 8),
                           const SizedBox(width: 3),
                           Text(
-                            '${CoinFormat.amount(price)} coins',
+                            CoinFormat.withUnit(price),
                             style: TextStyle(
                               fontSize: 11.5,
                               color: Colors.grey.shade600,
@@ -4421,7 +4521,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               else
-                Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade400),
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: Colors.grey.shade400,
+                ),
             ],
           ),
         ),
@@ -4501,10 +4605,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     if (!isIncoming) return const SizedBox();
 
-    if (latestOffer.barterProductIds.isNotEmpty) {
-      _ensureBarterItemLoaded(latestOffer.barterProductIds.first);
-    }
-
     final senderName = _getOtherUser().firstName;
     final statusText = latestOffer.offerStatus.value;
     final statusColor = latestOffer.isPending
@@ -4561,7 +4661,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Price: ${CoinFormat.amount(latestOffer.price)} coins',
+                        'Price: ${CoinFormat.withUnit(latestOffer.price)}',
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ],
@@ -4585,7 +4685,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               myLabel: isServiceChat ? 'Your service' : 'Your product',
               myName: _currentChat.postTitle,
               myPriceLabel: _listingPrice != null
-                  ? '${CoinFormat.amount(_listingPrice)} coins'
+                  ? CoinFormat.withUnit(_listingPrice)
                   : null,
               onMyTap: _isOpeningPostDetail ? null : _openPostDetail,
               theirImage: latestOffer.barterItemImages.isNotEmpty
@@ -4593,26 +4693,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   : '',
               theirLabel: '$senderName offers',
               theirName: latestOffer.barterItemTitle,
-              theirPriceLabel: latestOffer.barterProductIds.isNotEmpty
-                  ? () {
-                      final post = _barterItemPostCache[latestOffer
-                          .barterProductIds
-                          .first];
-                      return post != null
-                          ? '${CoinFormat.amount(post.price)} coins'
-                          : null;
-                    }()
+              theirItems: latestOffer.barterProducts,
+              theirPriceLabel: latestOffer.barterProducts.isNotEmpty
+                  ? CoinFormat.withUnit(latestOffer.barterProductsTotalValue)
                   : null,
-              onTheirTap: latestOffer.barterProductIds.isNotEmpty &&
+              onTheirTap:
+                  latestOffer.barterProducts.length == 1 &&
                       !_isOpeningPostDetail
                   ? () => _openBarterItemDetail(
-                        latestOffer.barterProductIds.first,
-                      )
+                      latestOffer.barterProducts.first.id,
+                    )
                   : null,
             ),
             const SizedBox(height: 10),
             Text(
-              '$senderName is offering: ${latestOffer.barterItemTitle ?? 'Unknown'}',
+              '$senderName is offering: ${_offeredItemsLabel(latestOffer)}',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             if (latestOffer.barterItemDescription != null &&
@@ -4622,11 +4717,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  '+ ${CoinFormat.amount(latestOffer.price)} coins added',
+                  '+ ${CoinFormat.withUnit(latestOffer.price)} added',
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     color: Colors.green,
                   ),
+                ),
+              ),
+            if (latestOffer.isBothOffer &&
+                latestOffer.barterProducts.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  'Total offer value: ${CoinFormat.withUnit(latestOffer.offerTotalValue)}',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                 ),
               ),
           ],
@@ -4756,9 +4860,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     myOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final latestOffer = myOffers.last;
-    if (latestOffer.barterProductIds.isNotEmpty) {
-      _ensureBarterItemLoaded(latestOffer.barterProductIds.first);
-    }
     final isServiceChat =
         (_currentChat.serviceId != null &&
             _currentChat.serviceId!.isNotEmpty) ||
@@ -4836,7 +4937,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Price: ${CoinFormat.amount(latestOffer.price)} coins',
+                        'Price: ${CoinFormat.withUnit(latestOffer.price)}',
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ],
@@ -4854,21 +4955,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   : '',
               myLabel: 'You offer',
               myName: latestOffer.barterItemTitle,
-              myPriceLabel: latestOffer.barterProductIds.isNotEmpty
-                  ? () {
-                      final post = _barterItemPostCache[latestOffer
-                          .barterProductIds
-                          .first];
-                      return post != null
-                          ? '${CoinFormat.amount(post.price)} coins'
-                          : null;
-                    }()
+              myItems: latestOffer.barterProducts,
+              myPriceLabel: latestOffer.barterProducts.isNotEmpty
+                  ? CoinFormat.withUnit(latestOffer.barterProductsTotalValue)
                   : null,
-              onMyTap: latestOffer.barterProductIds.isNotEmpty &&
+              onMyTap:
+                  latestOffer.barterProducts.length == 1 &&
                       !_isOpeningPostDetail
                   ? () => _openBarterItemDetail(
-                        latestOffer.barterProductIds.first,
-                      )
+                      latestOffer.barterProducts.first.id,
+                    )
                   : null,
               theirImage: _currentChat.postImage,
               theirLabel: isServiceChat
@@ -4876,13 +4972,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   : '$recipientName\'s product',
               theirName: _currentChat.postTitle,
               theirPriceLabel: _listingPrice != null
-                  ? '${CoinFormat.amount(_listingPrice)} coins'
+                  ? CoinFormat.withUnit(_listingPrice)
                   : null,
               onTheirTap: _isOpeningPostDetail ? null : _openPostDetail,
             ),
             const SizedBox(height: 10),
             Text(
-              'You are offering: ${latestOffer.barterItemTitle ?? 'Unknown'}',
+              'You are offering: ${_offeredItemsLabel(latestOffer)}',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             if (latestOffer.barterItemDescription != null &&
@@ -4892,17 +4988,36 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  '+ ${CoinFormat.amount(latestOffer.price)} coins added',
+                  '+ ${CoinFormat.withUnit(latestOffer.price)} added',
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     color: Colors.green,
                   ),
                 ),
               ),
+            if (latestOffer.isBothOffer &&
+                latestOffer.barterProducts.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  'Total offer value: ${CoinFormat.withUnit(latestOffer.offerTotalValue)}',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                ),
+              ),
           ],
         ],
       ),
     );
+  }
+
+  // Offered-item display name for the offer banners — prefers the resolved
+  // barterProducts (real product titles) over the offerer's free-text
+  // barterItemTitle, which is only a fallback for pre-barterProducts offers.
+  String _offeredItemsLabel(TradeOffer offer) {
+    if (offer.barterProducts.isNotEmpty) {
+      return offer.barterProducts.map((p) => p.title).join(', ');
+    }
+    return offer.barterItemTitle ?? 'Unknown';
   }
 
   Widget _buildDealCompletionBanner() {
@@ -4994,7 +5109,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
             isBlocked
                 ? ListTile(
-                    leading: const Icon(Icons.check_circle_outline, color: Colors.green),
+                    leading: const Icon(
+                      Icons.check_circle_outline,
+                      color: Colors.green,
+                    ),
                     title: const Text('Unblock User'),
                     subtitle: Text('Unblock ${otherUser.firstName}'),
                     onTap: () {
@@ -5135,11 +5253,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                             _buildPostHeaderCard(),
                             if (_currentChat.listingUnavailable)
                               _buildListingUnavailableBanner(),
-                            ..._buildOfferBannersInOrder(),
                             ..._sortedMessages.map(_buildMessageBubble),
-                            // Current deal status belongs at the end of the
-                            // timeline (chronologically "now"), not pinned
-                            // above the whole conversation history.
+                            // The actionable offer card (Accept/Reject/
+                            // Counter) reflects the CURRENT negotiation
+                            // state, so — like deal status below — it
+                            // belongs at the end of the timeline next to the
+                            // composer, not pinned above the whole
+                            // conversation history where it reads as if it
+                            // happened before everything shown beneath it.
+                            ..._buildOfferBannersInOrder(),
                             if (_currentChat.hasDealVerification)
                               DealVerificationPanel(
                                 key: ValueKey(_currentChat.id),
@@ -5149,6 +5271,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                                 offererName: _dealOffererName,
                                 receiverName: _dealReceiverName,
                                 offeredItemLabel: _dealOfferedItemLabel,
+                                otherUserName: _getOtherUser().firstName,
                                 onChatShouldRefresh:
                                     _refreshChatWithFullScreenLoader,
                               )
@@ -5257,11 +5380,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               color: Colors.orange.shade50,
               child: Row(
                 children: [
-                  Icon(Icons.hourglass_top, size: 14, color: Colors.orange.shade800),
+                  Icon(
+                    Icons.hourglass_top,
+                    size: 14,
+                    color: Colors.orange.shade800,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'Waiting for ${_getOtherUser().firstName} to respond to your offer.',
-                    style: TextStyle(fontSize: 11.5, color: Colors.orange.shade900),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: Colors.orange.shade900,
+                    ),
                   ),
                 ],
               ),
@@ -5287,9 +5417,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.request_page, color: Colors.orange),
-                    onPressed: !_isPreparingOffer
-                        ? _showMakeOfferDialog
-                        : null,
+                    onPressed: !_isPreparingOffer ? _showMakeOfferDialog : null,
                   ),
                 Expanded(
                   child: TextField(

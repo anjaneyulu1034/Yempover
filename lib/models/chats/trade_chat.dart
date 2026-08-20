@@ -297,6 +297,53 @@ class ProductInfo {
       barterStatus == 'OPEN_FOR_BARTER' || status == 'FOR_BARTER';
 }
 
+// The actual product being OFFERED in a barter (as opposed to ProductInfo,
+// which is the listing being bartered FOR). Resolved server-side from an
+// offer's barterProductIds — see TradeOffer.barterProducts.
+class BarterProductInfo {
+  final String id;
+  final String title;
+  final List<String> images;
+  final double? price;
+  final String status;
+  final String? postedById;
+
+  BarterProductInfo({
+    required this.id,
+    required this.title,
+    required this.images,
+    this.price,
+    required this.status,
+    this.postedById,
+  });
+
+  factory BarterProductInfo.fromJson(Map<String, dynamic> json) {
+    return BarterProductInfo(
+      id: json['id'] ?? '',
+      title: json['title'] ?? '',
+      images: (json['images'] as List? ?? []).map((e) => e.toString()).toList(),
+      price: json['price'] != null
+          ? double.tryParse(json['price'].toString())
+          : null,
+      status: json['status'] ?? '',
+      postedById: json['postedById'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'images': images,
+      'price': price,
+      'status': status,
+      'postedById': postedById,
+    };
+  }
+
+  String get firstImage => images.isNotEmpty ? images.first : '';
+}
+
 // Service Info Model
 class ServiceInfo {
   final String id;
@@ -461,6 +508,17 @@ class TradeOffer {
   // client look up the offered item's actual listed price and deep-link to
   // its post detail, the same way the chat's own product/service already does.
   final List<String> barterProductIds;
+  // The actually-OFFERED products, resolved server-side from
+  // barterProductIds — distinct from chat.product (the listing being
+  // bartered FOR). Render these for the offer preview instead of
+  // barterItemTitle/barterItemImages so the chat never shows the listing
+  // product as if it were the offered item. Empty for free-text-only offers.
+  final List<BarterProductInfo> barterProducts;
+  // Combined coin value of every product in barterProducts.
+  final double barterProductsTotalValue;
+  // barterProductsTotalValue + the coin top-up (price) for a Barter + Coins
+  // offer — the grand total value of the offer.
+  final double offerTotalValue;
   final int counterOfferCount;
   final DateTime createdAt;
   final DateTime? acceptedAt;
@@ -484,6 +542,9 @@ class TradeOffer {
     required this.barterItemImages,
     required this.barterWishCategories,
     this.barterProductIds = const [],
+    this.barterProducts = const [],
+    this.barterProductsTotalValue = 0,
+    this.offerTotalValue = 0,
     required this.counterOfferCount,
     required this.createdAt,
     this.acceptedAt,
@@ -516,6 +577,15 @@ class TradeOffer {
       barterProductIds: (json['barterProductIds'] as List? ?? [])
           .map((e) => e.toString())
           .toList(),
+      barterProducts: (json['barterProducts'] as List? ?? [])
+          .whereType<Map>()
+          .map((p) => BarterProductInfo.fromJson(Map<String, dynamic>.from(p)))
+          .toList(),
+      barterProductsTotalValue:
+          double.tryParse(json['barterProductsTotalValue']?.toString() ?? '') ??
+              0,
+      offerTotalValue:
+          double.tryParse(json['offerTotalValue']?.toString() ?? '') ?? 0,
       counterOfferCount: json['counterOfferCount'] ?? 0,
       createdAt: _parseLocal(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
@@ -544,6 +614,9 @@ class TradeOffer {
     List<String>? barterItemImages,
     List<String>? barterWishCategories,
     List<String>? barterProductIds,
+    List<BarterProductInfo>? barterProducts,
+    double? barterProductsTotalValue,
+    double? offerTotalValue,
     int? counterOfferCount,
     DateTime? createdAt,
     DateTime? acceptedAt,
@@ -565,6 +638,10 @@ class TradeOffer {
       barterItemImages: barterItemImages ?? this.barterItemImages,
       barterWishCategories: barterWishCategories ?? this.barterWishCategories,
       barterProductIds: barterProductIds ?? this.barterProductIds,
+      barterProducts: barterProducts ?? this.barterProducts,
+      barterProductsTotalValue:
+          barterProductsTotalValue ?? this.barterProductsTotalValue,
+      offerTotalValue: offerTotalValue ?? this.offerTotalValue,
       counterOfferCount: counterOfferCount ?? this.counterOfferCount,
       createdAt: createdAt ?? this.createdAt,
       acceptedAt: acceptedAt ?? this.acceptedAt,
@@ -588,6 +665,9 @@ class TradeOffer {
       'barterItemImages': barterItemImages,
       'barterWishCategories': barterWishCategories,
       'barterProductIds': barterProductIds,
+      'barterProducts': barterProducts.map((p) => p.toJson()).toList(),
+      'barterProductsTotalValue': barterProductsTotalValue,
+      'offerTotalValue': offerTotalValue,
       'counterOfferCount': counterOfferCount,
       'createdAt': createdAt.toIso8601String(),
       'acceptedAt': acceptedAt?.toIso8601String(),
@@ -608,19 +688,23 @@ class TradeOffer {
   bool get isBothOffer => offerType == OfferType.BOTH;
   bool get isServiceOffer => offerType == OfferType.SERVICE;
 
+  // Plain number, no $/USD — whole numbers with no decimals (130), up to 2
+  // decimals only when fractional (135.5), "coin" singular for exactly 1.
+  static String _coinsLabel(double value) {
+    final formatted = value == value.roundToDouble()
+        ? value.toInt().toString()
+        : value.toStringAsFixed(2);
+    final isSingular = value == 1 || value == -1;
+    return '$formatted ${isSingular ? 'coin' : 'coins'}';
+  }
+
   String get offerSummary {
     if (isPriceOffer && price != null) {
-      final amount = price! == price!.roundToDouble()
-          ? price!.toInt().toString()
-          : price!.toStringAsFixed(2);
-      return 'Price: $amount coins';
+      return 'Price: ${_coinsLabel(price!)}';
     } else if (isBarterOffer || isBothOffer) {
       final itemSummary = 'Barter: ${barterItemTitle ?? 'Item'}';
       if (isBothOffer && price != null && price! > 0) {
-        final amount = price! == price!.roundToDouble()
-            ? price!.toInt().toString()
-            : price!.toStringAsFixed(2);
-        return '$itemSummary + $amount coins';
+        return '$itemSummary + ${_coinsLabel(price!)}';
       }
       return itemSummary;
     } else if (isServiceOffer) {
@@ -1011,6 +1095,12 @@ class TradeChat {
   // separately to hide the composer/gallery/accept/reject/counter/deal
   // actions entirely (not just the offer button) while blocked.
   final bool isBlocked;
+  // getChatDetail only: product ids already committed to the live pending
+  // offer (sourced from the newest PENDING offer's barterProductIds). The
+  // counter-offer product picker should exclude these so a product already
+  // being bartered can't be selected again. Empty when there's no pending
+  // offer.
+  final List<String> activeBarterProductIds;
   // List endpoints only (getChatDetail doesn't send these): server-derived
   // status chip for the chat row — PENDING | ACTIVE | COMPLETED |
   // NOT_COMPLETED, with badgeLabel as ready-to-render display copy.
@@ -1043,6 +1133,7 @@ class TradeChat {
     this.isOwner = false,
     this.hasPendingOffer = false,
     this.isBlocked = false,
+    this.activeBarterProductIds = const [],
     this.listingUnavailable = false,
     this.badge,
     this.badgeLabel,
@@ -1098,6 +1189,9 @@ class TradeChat {
       isOwner: json['isOwner'] == true,
       hasPendingOffer: json['hasPendingOffer'] == true,
       isBlocked: json['isBlocked'] == true,
+      activeBarterProductIds: (json['activeBarterProductIds'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
       badge: json['badge'] as String?,
       badgeLabel: json['badgeLabel'] as String?,
     );
@@ -1135,6 +1229,7 @@ class TradeChat {
     bool? isOwner,
     bool? hasPendingOffer,
     bool? isBlocked,
+    List<String>? activeBarterProductIds,
     bool? listingUnavailable,
     String? badge,
     String? badgeLabel,
@@ -1165,6 +1260,8 @@ class TradeChat {
       isOwner: isOwner ?? this.isOwner,
       hasPendingOffer: hasPendingOffer ?? this.hasPendingOffer,
       isBlocked: isBlocked ?? this.isBlocked,
+      activeBarterProductIds:
+          activeBarterProductIds ?? this.activeBarterProductIds,
       listingUnavailable: listingUnavailable ?? this.listingUnavailable,
       badge: badge ?? this.badge,
       badgeLabel: badgeLabel ?? this.badgeLabel,

@@ -22,6 +22,9 @@ class DealVerificationPanel extends StatefulWidget {
   final String? offererName;
   final String? receiverName;
   final String? offeredItemLabel;
+  // The other chat participant's first name — used in place of the generic
+  // "the other user" wording so waiting/reassurance copy names them directly.
+  final String? otherUserName;
 
   const DealVerificationPanel({
     super.key,
@@ -32,6 +35,7 @@ class DealVerificationPanel extends StatefulWidget {
     this.offererName,
     this.receiverName,
     this.offeredItemLabel,
+    this.otherUserName,
   });
 
   @override
@@ -369,7 +373,9 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
               child: Text(
                 payment.message ??
                     'Your ${CoinFormat.withLabel(payment.amount)} are safe and only '
-                        'transferred to the other user when the deal is completed.',
+                        'transferred to '
+                        '${widget.otherUserName?.trim().isNotEmpty == true ? widget.otherUserName : 'the other user'} '
+                        'when the deal is completed.',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF1F2937)),
               ),
             ),
@@ -420,7 +426,8 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'You marked the deal completed — waiting for the other user.',
+              'You marked the deal completed — waiting for '
+              '${widget.otherUserName?.trim().isNotEmpty == true ? widget.otherUserName : 'the other user'}.',
               style: TextStyle(
                 fontSize: 12.5,
                 color: Colors.green.shade800,

@@ -298,7 +298,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
                             ),
                             if (widget.post.price > 0)
                               Text(
-                                'Original Price: ${CoinFormat.amount(widget.post.price)} coins',
+                                'Original Price: ${CoinFormat.withLabel(widget.post.price)}',
                                 style: const TextStyle(
                                   fontSize: 14,
                                   color: Colors.green,
@@ -329,7 +329,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
             const SizedBox(height: 8),
             if (widget.post.price > 0)
               Text(
-                'Listed at ${CoinFormat.amount(widget.post.price)} coins — enter the amount you want to offer.',
+                'Listed at ${CoinFormat.withLabel(widget.post.price)} — enter the amount you want to offer.',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
             if (widget.post.price > 0) const SizedBox(height: 8),

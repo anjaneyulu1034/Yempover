@@ -189,8 +189,8 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     if (widget.post.price > 0) {
       chips.add(
         _buildMetaChip(
-          icon: Icons.attach_money,
-          label: '${CoinFormat.amount(widget.post.price)} coins',
+          icon: Icons.monetization_on,
+          label: CoinFormat.withLabel(widget.post.price),
           fg: const Color(0xFF1565C0),
           bg: const Color(0xFFE3F2FD),
         ),
@@ -565,11 +565,11 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     final barterValueGap = _pureBarterValueGap;
     if (barterValueGap != null) {
       final message = barterValueGap > 0
-          ? 'Your items are worth ${CoinFormat.amount(barterValueGap)} coins '
+          ? 'Your items are worth ${CoinFormat.withUnit(barterValueGap)} '
                 'more than this listing. Use "Barter + Price" to offer the '
                 'difference, or adjust your selected items.'
-          : 'Your items are worth ${CoinFormat.amount(barterValueGap.abs())} '
-                'coins less than this listing. Use "Barter + Price" to add '
+          : 'Your items are worth ${CoinFormat.withUnit(barterValueGap.abs())} '
+                'less than this listing. Use "Barter + Price" to add '
                 'the difference, or adjust your selected items.';
       SnackbarUtils.showInfo(context, message);
       return;
@@ -1055,7 +1055,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                       if (_selectedItems.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(
-                          'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins',
+                          'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)}',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade600,
@@ -1076,9 +1076,9 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
                     _pureBarterValueGap == null
-                        ? 'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins · Values match ✓'
-                        : 'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins · '
-                              'Listing: ${CoinFormat.amount(widget.post.price)} coins · '
+                        ? 'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)} · Values match ✓'
+                        : 'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)} · '
+                              'Listing: ${CoinFormat.withLabel(widget.post.price)} · '
                               'Values must match for a pure barter offer',
                     style: TextStyle(
                       fontSize: 12,
@@ -1494,7 +1494,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                                             ),
                                             if (item.value > 0)
                                               Text(
-                                                '${CoinFormat.amount(item.value)} coins',
+                                                CoinFormat.withLabel(item.value),
                                                 style: const TextStyle(
                                                   color: Colors.white70,
                                                   fontSize: 10,

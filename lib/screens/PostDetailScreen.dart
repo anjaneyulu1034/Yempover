@@ -1244,7 +1244,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   ),
                 ),
               _buildCoinPricePill(
-                _post.price > 0 ? _post.formattedPrice : 'Price on request',
+                _post.price > 0
+                    ? CoinFormat.withUnit(_post.price)
+                    : 'Price on request',
               ),
               _buildInfoPill(
                 _post.isListed
@@ -1318,8 +1320,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     return InkWell(borderRadius: BorderRadius.circular(999), onTap: onTap, child: pill);
   }
 
-  Widget _buildCoinPricePill(String text) {
-    final label = text == 'Price on request' ? text : '$text coins';
+  Widget _buildCoinPricePill(String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -1612,7 +1613,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
                         if (_post.price > 0)
                           CoinPriceLabel(
-                            text: '${_post.formattedPrice} coins',
+                            text: CoinFormat.withUnit(_post.price),
                             iconSize: 22,
                             style: const TextStyle(
                               fontSize: 20,

@@ -317,7 +317,7 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                       const SizedBox(width: 8),
                       if (price != null)
                         CoinPriceLabel(
-                          text: '${CoinFormat.amount(price)} coins',
+                          text: CoinFormat.withLabel(price),
                           iconSize: 16,
                           style: TextStyle(
                             fontSize: 16,

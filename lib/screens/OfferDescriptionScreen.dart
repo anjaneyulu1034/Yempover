@@ -588,7 +588,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                     Padding(
                                       padding: const EdgeInsets.only(top: 2),
                                       child: Text(
-                                        '${CoinFormat.amount(widget.post.price)} coins',
+                                        CoinFormat.withLabel(widget.post.price),
                                         style: TextStyle(
                                           color: Colors.green.shade700,
                                           fontSize: 11,
@@ -684,7 +684,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                                 ),
                                                 if (item.value > 0)
                                                   Text(
-                                                    '${CoinFormat.amount(item.value)} coins',
+                                                    CoinFormat.withLabel(item.value),
                                                     style: TextStyle(
                                                       color:
                                                           Colors.green.shade700,
@@ -729,7 +729,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 4),
                                   child: Text(
-                                    '+ ${_priceController.text.trim().isEmpty ? '0' : _priceController.text.trim()} coins',
+                                    '+ ${CoinFormat.withUnit(double.tryParse(_priceController.text.trim()) ?? 0)}',
                                     style: TextStyle(
                                       color: Colors.green.shade700,
                                       fontSize: 12,
@@ -741,7 +741,12 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                               Text(
                                 _priceController.text.trim().isEmpty
                                     ? 'Enter a price below'
-                                    : '${_priceController.text.trim()} coins',
+                                    : CoinFormat.withUnit(
+                                        double.tryParse(
+                                              _priceController.text.trim(),
+                                            ) ??
+                                            0,
+                                      ),
                                 style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -769,7 +774,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text(
-                    'Listed at ${CoinFormat.amount(widget.post.price)} coins — enter the amount you want to offer.',
+                    'Listed at ${CoinFormat.withLabel(widget.post.price)} — enter the amount you want to offer.',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ),
