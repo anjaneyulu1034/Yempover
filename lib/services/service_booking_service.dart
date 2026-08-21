@@ -82,6 +82,8 @@ class ServiceBookingService {
     required String categoryId,
     required double price,
     required String location,
+    double? latitude,
+    double? longitude,
     List<String> images = const [],
     String? barterStatus,
     String? status,
@@ -100,6 +102,8 @@ class ServiceBookingService {
             'category': categoryId,
             'price': price,
             'location': location,
+            if (latitude != null) 'latitude': latitude,
+            if (longitude != null) 'longitude': longitude,
             'images': images,
             if (barterStatus != null && barterStatus.isNotEmpty)
               'barterStatus': barterStatus,
