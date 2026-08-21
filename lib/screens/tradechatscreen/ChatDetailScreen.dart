@@ -2073,16 +2073,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
-  /// Counter a Barter + Price ("Both") offer. Reusing the plain barter
-  /// counter dialog here would silently drop the price side of the deal
-  /// (Condition 2: barter + price difference), so this keeps both the
-  /// barter item fields and the coin amount editable together.
+  /// Counter a Barter + Price ("Both") offer with coins only — the
+  /// responder isn't required to swap an item back just to negotiate the
+  /// coin amount, so this no longer forces a barter item pick (it used to,
+  /// via the same item-selection block as the plain barter counter dialog).
   Future<void> _showCounterBothOfferDialog(TradeOffer originalOffer) async {
     // Same reasoning as the pure-barter counter dialog: start empty rather
     // than carrying the previous round's (already-appended) description
     // forward, so notes don't compound across counters.
     final descriptionController = TextEditingController();
-    List<UserItem> selectedItems = [];
     final priceController = TextEditingController(
       text: originalOffer.price != null && originalOffer.price! > 0
           ? (originalOffer.price == originalOffer.price!.roundToDouble()
@@ -2111,7 +2110,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               borderRadius: BorderRadius.circular(14),
               side: BorderSide(color: Colors.grey.shade300, width: 1.2),
             ),
-            title: const Text('Counter Barter + Coins Offer'),
+            title: const Text('Counter with Coins'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2129,50 +2128,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                         ),
                       ),
                     ),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final picked = await _pickCounterBarterItems(
-                        selectedItems,
-                      );
-                      if (picked != null) {
-                        setDialogState(() {
-                          selectedItems = picked;
-                          dialogError = null;
-                        });
-                      }
-                    },
-                    icon: const Icon(Icons.add_box_outlined),
-                    label: Text(
-                      selectedItems.isEmpty
-                          ? 'Select items to offer'
-                          : 'Edit selection (${selectedItems.length})',
-                    ),
-                  ),
-                  if (selectedItems.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: selectedItems
-                          .map(
-                            (item) => Chip(
-                              avatar: item.imageUrl.isNotEmpty
-                                  ? CircleAvatar(
-                                      backgroundImage: NetworkImage(
-                                        item.imageUrl,
-                                      ),
-                                    )
-                                  : null,
-                              label: Text(
-                                item.name,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
                   TextField(
                     controller: descriptionController,
                     maxLines: 3,
@@ -2237,13 +2192,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               ),
               ElevatedButton(
                 onPressed: () {
-                  if (selectedItems.isEmpty) {
-                    setDialogState(
-                      () => dialogError = 'Select at least one item',
-                    );
-                    return;
-                  }
-
                   final trimmedPrice = priceController.text.trim();
                   if (trimmedPrice.isEmpty) {
                     setDialogState(() => dialogError = 'Enter coins to pay');
@@ -2276,7 +2224,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       ),
     );
 
-    if (result != true || selectedItems.isEmpty) return;
+    if (result != true) return;
 
     final parsedPrice = double.tryParse(priceController.text.trim());
     if (parsedPrice == null) return;
@@ -2294,17 +2242,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     await _createCounterOffer(
       originalOffer: originalOffer,
-      offerType: 'BOTH',
+      offerType: 'PRICE',
       price: parsedPrice,
-      barterItemTitle: _titleForCounterItems(selectedItems),
       barterItemDescription: descriptionController.text.trim().isNotEmpty
           ? descriptionController.text.trim()
           : null,
-      barterItemIds: selectedItems.map((item) => item.id).toList(),
-      barterItemImages: selectedItems
-          .map((item) => item.imageUrl)
-          .where((url) => url.trim().isNotEmpty)
-          .toList(),
     );
   }
 
@@ -4816,9 +4758,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   ),
                 ],
               ),
-            // Zero-coin offers are a simple accept/reject — no coins or
-            // barter value to negotiate, so countering doesn't apply.
-            if (!latestOffer.isZeroCoin) ...[
+            // Zero-coin offers and pure product-swap barter offers are a
+            // simple accept/reject — there's no coin amount to negotiate,
+            // so countering doesn't apply (only Barter+Coins / Price offers
+            // have a number worth countering). Service chats keep "Edit
+            // Slot" regardless — that's about the proposed time, not value.
+            if (!latestOffer.isZeroCoin &&
+                !(latestOffer.isBarterOffer && !isServiceChat)) ...[
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,

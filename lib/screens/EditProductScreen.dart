@@ -14,6 +14,7 @@ import '../services/location_service.dart';
 import '../services/my_posts_service.dart';
 import '../utils/error_message_utils.dart';
 import '../utils/validators.dart';
+import 'service/ServiceAvailabilityScreen.dart';
 
 class EditProductScreen extends StatefulWidget {
   final MyPost post;
@@ -667,6 +668,15 @@ class _EditProductScreenState extends State<EditProductScreen> {
     });
   }
 
+  Future<void> _openManageAvailability() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ServiceAvailabilityScreen(serviceId: widget.post.id),
+      ),
+    );
+  }
+
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -1102,6 +1112,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
                         },
                       ),
 
+                      if (_postType == 'service') ...[
+                        const SizedBox(height: 16),
+                        _buildManageAvailabilitySection(),
+                      ],
+
                       const SizedBox(height: 16),
 
                       _buildTimelineExpirySection(),
@@ -1463,6 +1478,53 @@ class _EditProductScreenState extends State<EditProductScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildManageAvailabilitySection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Availability Slots',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Edit the weekly time slots customers can book for this service.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: _openManageAvailability,
+            icon: const Icon(Icons.schedule, size: 18),
+            label: const Text('Edit'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.deepPurple,
+              side: const BorderSide(color: Colors.deepPurple),
+            ),
+          ),
+        ],
       ),
     );
   }

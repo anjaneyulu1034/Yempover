@@ -79,6 +79,77 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
     }
   }
 
+  // "+N more" in the Offer Summary card only shows the first 2 selected
+  // items inline — this lists every selected item (image, name, value) so
+  // the rest aren't hidden with no way to see what they are.
+  void _showAllSelectedItemsDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Items you\'re offering'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: widget.selectedItems.length,
+            separatorBuilder: (_, _) => const Divider(height: 16),
+            itemBuilder: (context, index) {
+              final item = widget.selectedItems[index];
+              return Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: item.imageUrl.isNotEmpty
+                        ? SafeNetworkImage(
+                            url: item.imageUrl,
+                            width: 36,
+                            height: 36,
+                            fit: BoxFit.cover,
+                          )
+                        : Container(
+                            width: 36,
+                            height: 36,
+                            color: Colors.grey.shade200,
+                            child: const Icon(
+                              Icons.image,
+                              size: 18,
+                              color: Colors.grey,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.name, style: const TextStyle(fontSize: 13)),
+                        if (item.value > 0)
+                          Text(
+                            CoinFormat.withLabel(item.value),
+                            style: TextStyle(
+                              color: Colors.green.shade700,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _buildOfferTitle() {
     if (widget.selectedItems.isEmpty) {
       return 'Offer for ${widget.post.title}';
@@ -703,12 +774,16 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                               if (widget.selectedItems.length > 2)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    '+ ${widget.selectedItems.length - 2} more',
-                                    style: TextStyle(
-                                      color: Colors.blue.shade700,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
+                                  child: InkWell(
+                                    onTap: _showAllSelectedItemsDialog,
+                                    child: Text(
+                                      '+ ${widget.selectedItems.length - 2} more',
+                                      style: TextStyle(
+                                        color: Colors.blue.shade700,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        decoration: TextDecoration.underline,
+                                      ),
                                     ),
                                   ),
                                 ),
