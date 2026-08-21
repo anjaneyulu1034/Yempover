@@ -1733,7 +1733,9 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const TradeBoothScreen()),
-    );
+    ).then((_) {
+      if (mounted) _fetchPosts();
+    });
   }
 
   void _showNotificationScreen() async {
