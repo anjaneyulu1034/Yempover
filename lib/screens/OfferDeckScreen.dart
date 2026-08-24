@@ -1015,83 +1015,6 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
               const SizedBox(height: 12),
 
-              if (_requiresQuotedPrice) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Quoted Price',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _quotedPriceController,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(9),
-                        ],
-                        onChanged: (_) {
-                          setState(() {
-                            _quotedPriceError = _validateQuotedPrice(
-                              _quotedPriceController.text,
-                            );
-                          });
-                        },
-                        decoration: AppInputDecoration.build(
-                          label: 'Price Quote',
-                          hint: 'Enter your price quote',
-                          prefixIcon: coinInputPrefix(),
-                          prefixIconConstraints: coinPrefixIconConstraints,
-                          errorText: _quotedPriceError,
-                          fillColor: Colors.grey.shade50,
-                        ),
-                      ),
-                      if (_selectedItems.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-
-              if (!widget.isZeroCoin &&
-                  widget.offerMode == OfferSubmissionMode.barter &&
-                  _selectedItems.isNotEmpty &&
-                  widget.post.price > 0) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    _pureBarterValueGap == null
-                        ? 'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)} · Values match ✓'
-                        : 'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)} · '
-                              'Listing: ${CoinFormat.withLabel(widget.post.price)} · '
-                              'Values must match for a pure barter offer',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _pureBarterValueGap == null
-                          ? Colors.green.shade700
-                          : Colors.orange.shade800,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-
               // -------- OFFER DECK ROW ----------
               // Only the target listing goes here now — adding a new post
               // to offer from is already covered by the "Add New" tile in
@@ -1212,6 +1135,83 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                 ),
 
               const SizedBox(height: 16),
+
+              if (_requiresQuotedPrice) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Quoted Price',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _quotedPriceController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(9),
+                        ],
+                        onChanged: (_) {
+                          setState(() {
+                            _quotedPriceError = _validateQuotedPrice(
+                              _quotedPriceController.text,
+                            );
+                          });
+                        },
+                        decoration: AppInputDecoration.build(
+                          label: 'Price Quote',
+                          hint: 'Enter your price quote',
+                          prefixIcon: coinInputPrefix(),
+                          prefixIconConstraints: coinPrefixIconConstraints,
+                          errorText: _quotedPriceError,
+                          fillColor: Colors.grey.shade50,
+                        ),
+                      ),
+                      if (_selectedItems.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              if (!widget.isZeroCoin &&
+                  widget.offerMode == OfferSubmissionMode.barter &&
+                  _selectedItems.isNotEmpty &&
+                  widget.post.price > 0) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    _pureBarterValueGap == null
+                        ? 'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)} · Values match ✓'
+                        : 'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)} · '
+                              'Listing: ${CoinFormat.withLabel(widget.post.price)} · '
+                              'Values must match for a pure barter offer',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _pureBarterValueGap == null
+                          ? Colors.green.shade700
+                          : Colors.orange.shade800,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
 
               // -------- MY ITEMS TITLE ----------
               Padding(
