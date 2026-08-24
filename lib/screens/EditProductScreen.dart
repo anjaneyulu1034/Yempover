@@ -64,6 +64,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
   late bool _isListed;
   late bool _canBeClubbed;
   late List<String> _images;
+  double? _selectedLatitude;
+  double? _selectedLongitude;
 
   List<Map<String, dynamic>> _mainCategories = [];
   List<Map<String, dynamic>> _subCategories = [];
@@ -102,6 +104,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
     _postType = widget.post.type;
     _isListed = widget.post.isListed;
     _canBeClubbed = widget.post.isClubbable;
+    _selectedLatitude = widget.post.latitude;
+    _selectedLongitude = widget.post.longitude;
     _images = List.from(widget.post.images.take(_maxPostImages));
     _initializeTimelineFields();
     _validateStatus();
@@ -610,6 +614,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
         _locationController.text = (address != null && address.isNotEmpty)
             ? address
             : '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+        _selectedLatitude = position.latitude;
+        _selectedLongitude = position.longitude;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -766,6 +772,12 @@ class _EditProductScreenState extends State<EditProductScreen> {
       requestData['price'] = double.parse(_priceController.text.trim());
 
       requestData['location'] = _locationController.text.trim();
+      if (_selectedLatitude != null) {
+        requestData['latitude'] = _selectedLatitude;
+      }
+      if (_selectedLongitude != null) {
+        requestData['longitude'] = _selectedLongitude;
+      }
 
       debugPrint('📦 Sending update request with type: $_postType');
       debugPrint('📦 Request data: $requestData');

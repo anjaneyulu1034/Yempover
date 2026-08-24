@@ -2135,6 +2135,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
             categoryId: _selectedSubCategoryId!,
             price: price,
             location: _locationController.text.trim(),
+            latitude: _selectedLatitude,
+            longitude: _selectedLongitude,
             images: imageUrls,
             barterStatus: _barterAllowed ? 'OPEN_FOR_BARTER' : 'NO_BARTER',
             status: 'PROVIDE_SERVICE',
