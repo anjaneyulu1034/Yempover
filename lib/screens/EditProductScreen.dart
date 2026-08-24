@@ -1023,6 +1023,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                       if (_subCategories.isNotEmpty)
                         _buildDropdownField(
                           label: 'Sub Category',
+                          isRequired: true,
                           value: _selectedSubCategoryId,
                           items: _subCategories.map<DropdownMenuItem<String>>((
                             category,

@@ -726,6 +726,10 @@ class TradeChatService {
     List<String> barterItemImages = const [],
     List<String> barterWishCategories = const [],
     List<String> barterItemIds = const [],
+    // "Counter with Coins" on a Barter(+Coins) offer: keep the item already
+    // on the table (owned by the OTHER user) instead of requiring the
+    // countering user to own/re-offer it — see makeCounterOffer server-side.
+    bool keepOriginalBarterItems = false,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -753,6 +757,7 @@ class TradeChatService {
           'barterItemImages': barterItemImages,
           'barterWishCategories': barterWishCategories,
           'barterItemIds': barterItemIds,
+          if (keepOriginalBarterItems) 'keepOriginalBarterItems': true,
         };
       } else {
         body = {

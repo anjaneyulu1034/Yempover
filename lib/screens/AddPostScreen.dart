@@ -995,7 +995,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
               // Sub Category Dropdown (shown only after main category is selected)
               if (_selectedMainCategoryId != null) ...[
-                _fieldLabel('Sub Category'),
+                _fieldLabel('Sub Category', required: true),
                 const SizedBox(height: 10),
 
                 if (_isLoadingSubCategories)

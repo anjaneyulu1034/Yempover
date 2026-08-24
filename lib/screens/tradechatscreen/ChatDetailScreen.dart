@@ -2074,9 +2074,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   }
 
   /// Counter a Barter + Price ("Both") offer with coins only — the
-  /// responder isn't required to swap an item back just to negotiate the
-  /// coin amount, so this no longer forces a barter item pick (it used to,
-  /// via the same item-selection block as the plain barter counter dialog).
+  /// responder isn't required to pick an item of their own just to
+  /// negotiate the coin amount (it used to force that, via the same
+  /// item-selection block as the plain barter counter dialog). The barter
+  /// item already on the table from `originalOffer` is kept automatically —
+  /// this dialog only renegotiates the coin amount — so it survives to
+  /// acceptance and isn't lost from trade history the way it used to be
+  /// when this silently downgraded the counter to a coins-only PRICE offer.
   Future<void> _showCounterBothOfferDialog(TradeOffer originalOffer) async {
     // Same reasoning as the pure-barter counter dialog: start empty rather
     // than carrying the previous round's (already-appended) description
@@ -2128,6 +2132,50 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                         ),
                       ),
                     ),
+                  // The barter item already on the table stays part of the
+                  // deal — only the coin amount is being renegotiated here.
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        _buildOfferItemThumb(
+                          originalOffer.barterProducts.isNotEmpty
+                              ? originalOffer.barterProducts.first.firstImage
+                              : (originalOffer.barterItemImages.isNotEmpty
+                                    ? originalOffer.barterItemImages.first
+                                    : ''),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Item stays part of this offer',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              Text(
+                                _offeredItemsLabel(originalOffer),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   TextField(
                     controller: descriptionController,
                     maxLines: 3,
@@ -2242,11 +2290,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     await _createCounterOffer(
       originalOffer: originalOffer,
-      offerType: 'PRICE',
+      offerType: 'BOTH',
       price: parsedPrice,
       barterItemDescription: descriptionController.text.trim().isNotEmpty
           ? descriptionController.text.trim()
           : null,
+      // The server derives the actual barter item from `originalOffer`
+      // itself (the countering user doesn't own it, so it can't be
+      // re-validated as something they're offering) — these are sent too
+      // so the optimistic local update below renders correctly before the
+      // next refresh confirms the server's copy.
+      barterItemTitle: originalOffer.barterItemTitle,
+      barterItemImages: originalOffer.barterItemImages,
+      barterItemIds: originalOffer.barterProductIds,
+      keepOriginalBarterItems: true,
     );
   }
 
@@ -2258,6 +2315,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     String? barterItemDescription,
     List<String> barterItemIds = const [],
     List<String> barterItemImages = const [],
+    bool keepOriginalBarterItems = false,
   }) async {
     if (!_currentChat.isActive ||
         _currentChat.hasAcceptedOffer ||
@@ -2290,6 +2348,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         barterItemDescription: barterItemDescription,
         barterItemIds: barterItemIds,
         barterItemImages: barterItemImages,
+        keepOriginalBarterItems: keepOriginalBarterItems,
       );
 
       _socketService.emitOfferCreated(_currentChat.id, counterOffer.toJson());
