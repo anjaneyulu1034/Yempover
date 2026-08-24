@@ -698,6 +698,21 @@ class _EditProductScreenState extends State<EditProductScreen> {
       return;
     }
 
+    // Sub-category is mandatory whenever the selected category actually has
+    // sub-categories to choose from — the dropdown itself is only rendered
+    // in that case, so this mirrors the UI rather than blocking edits on
+    // categories that have none.
+    if (_subCategories.isNotEmpty &&
+        (_selectedSubCategoryId == null || _selectedSubCategoryId!.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a sub category'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     if (!_validateTimelineInput()) {
       return;
     }

@@ -41,6 +41,15 @@ class TradeDetailScreen extends StatelessWidget {
           )
         : null;
 
+    // Prefer the backend's exchangeSummary for the price block when present
+    // — it's computed once, server-side, from the actual transaction record.
+    // Falls back to the locally-derived values above for trades that predate
+    // this field.
+    final summary = trade.exchangeSummary;
+    final effectiveActualPrice = summary?.actualPrice ?? actualPrice;
+    final effectiveSellingPrice = summary?.coins ?? price;
+    final effectiveDifference = summary?.priceDifference ?? difference;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -103,6 +112,41 @@ class TradeDetailScreen extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (trade.exchangeSummary != null) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Exchange Type:',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Text(
+                              trade.exchangeSummary!.label,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     const Divider(),
                     const SizedBox(height: 12),
@@ -203,8 +247,8 @@ class TradeDetailScreen extends StatelessWidget {
             // displayPrice would otherwise fall back to the listing's
             // nominal price — a number that was never actually charged.
             if ((!isBarter || trade.sellingPrice != null) &&
-                price != null &&
-                actualPrice != null)
+                effectiveSellingPrice != null &&
+                effectiveActualPrice != null)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -228,13 +272,13 @@ class TradeDetailScreen extends StatelessWidget {
                         children: [
                           _buildPriceRow(
                             'Actual Price',
-                            CoinFormat.amount(actualPrice),
+                            CoinFormat.amount(effectiveActualPrice),
                             Colors.grey,
                           ),
                           const SizedBox(height: 12),
                           _buildPriceRow(
                             'Selling Price',
-                            CoinFormat.amount(price),
+                            CoinFormat.amount(effectiveSellingPrice),
                             Colors.green,
                           ),
                           const SizedBox(height: 12),
@@ -242,8 +286,8 @@ class TradeDetailScreen extends StatelessWidget {
                           const SizedBox(height: 12),
                           _buildPriceRow(
                             'Price Difference',
-                            _formatPriceDifference(difference),
-                            _priceDifferenceColor(difference),
+                            _formatPriceDifference(effectiveDifference),
+                            _priceDifferenceColor(effectiveDifference),
                           ),
                         ],
                       ),
@@ -430,6 +474,17 @@ class TradeDetailScreen extends StatelessWidget {
   // image with its product id (same order, see MobileUserService) so every
   // one of them deep-links, not just the first.
   List<_BarterLineItem> _barterSnapshotItems(TradeItem trade) {
+    // Prefer the resolved barterProducts — each one already carries its own
+    // id + image, so there's no index-pairing to get wrong (and it's robust
+    // to a clubbed offer where the images/ids arrays could ever drift).
+    if (trade.barterProducts.isNotEmpty) {
+      return trade.barterProducts.map((p) {
+        final image = p.images.isNotEmpty
+            ? p.images.first
+            : 'https://via.placeholder.com/150';
+        return _BarterLineItem(imageUrl: image, productId: p.id);
+      }).toList();
+    }
     if (trade.barterItemImages.isEmpty) {
       return const [
         _BarterLineItem(
@@ -498,11 +553,18 @@ class TradeDetailScreen extends StatelessWidget {
         ? _barterSnapshotItems(trade)
         : [_listingItem(trade)];
 
+    // Real per-item titles from the resolved barterProducts (handles a
+    // clubbed multi-item barter correctly) — falls back to the offerer's
+    // single free-text barterItemTitle for older trades.
+    final barterSideTitle = trade.barterProducts.isNotEmpty
+        ? trade.barterProducts.map((p) => p.title).join(', ')
+        : (trade.barterItemTitle ?? trade.product.title);
+
     final theirItemTitle = trade.isMyBarterItem == true
         ? trade.product.title
-        : (trade.barterItemTitle ?? trade.product.title);
+        : barterSideTitle;
     final myItemTitle = trade.isMyBarterItem == true
-        ? (trade.barterItemTitle ?? trade.product.title)
+        ? barterSideTitle
         : trade.product.title;
 
     return Card(

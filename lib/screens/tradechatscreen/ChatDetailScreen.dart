@@ -3198,16 +3198,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
     final amount = price != null ? CoinFormat.withUnit(price) : null;
 
+    // The listing this offer/counter is anchored to — names the product in
+    // the sentence so it reads e.g. "You offered 30 coins to John for Fish
+    // with Meat." even for a coins-only counter with no barter items.
+    final listingData = data['listing'];
+    final listingTitle = listingData is Map
+        ? (listingData['title'] as String? ?? '').trim()
+        : '';
+    final titleSuffix = listingTitle.isNotEmpty ? ' for $listingTitle' : '';
+
     String headline;
     if (offerType == 'BOTH' && amount != null && barterTitle.isNotEmpty) {
-      headline = '$actorLabel $barterTitle + $amount$targetSuffix.';
+      headline = '$actorLabel $barterTitle + $amount$targetSuffix$titleSuffix.';
     } else if (offerType == 'PRICE' && amount != null) {
-      headline = '$actorLabel $amount$targetSuffix.';
+      headline = '$actorLabel $amount$targetSuffix$titleSuffix.';
     } else if ((offerType == 'BARTER' || offerType == 'BOTH') &&
         barterTitle.isNotEmpty) {
-      headline = '$actorLabel $barterTitle$targetSuffix.';
+      headline = '$actorLabel $barterTitle$targetSuffix$titleSuffix.';
     } else {
-      headline = '$actorLabel$targetSuffix.';
+      headline = '$actorLabel$targetSuffix$titleSuffix.';
     }
 
     // The offerer's note now rides along with every offer type, not just
@@ -3331,6 +3340,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           message.eventType == 'CHAT_STARTED' &&
           (_currentChat.productId != null || _currentChat.serviceId != null);
 
+      // Offer/counter-offer and acceptance cards carry the listing's image
+      // in eventData now — show a small thumbnail so the product stays
+      // visible on every round of the negotiation timeline, not just the
+      // live banner above.
+      String? listingThumb;
+      if (message.eventType == 'OFFER_PENDING' ||
+          message.eventType == 'OFFER_ACCEPTED') {
+        final listingData = message.eventData?['listing'];
+        if (listingData is Map) {
+          final image = listingData['image'] as String?;
+          if (image != null && image.trim().isNotEmpty) {
+            listingThumb = image;
+          }
+        }
+      }
+
       final card = Container(
         padding: EdgeInsets.symmetric(
           horizontal: isTerminalEvent ? 14 : 12,
@@ -3347,6 +3372,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (listingThumb != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: Image.network(
+                  listingThumb,
+                  width: 20,
+                  height: 20,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const SizedBox(width: 20, height: 20),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
             Icon(
               style.icon,
               size: isTerminalEvent ? 17 : 14,
@@ -4589,21 +4628,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           if (latestOffer.isPriceOffer) ...[
             Row(
               children: [
-                _buildOfferItemThumb(_currentChat.postImage),
+                _buildOfferItemThumb(
+                  latestOffer.listing?.image ?? _currentChat.postImage,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _currentChat.postTitle,
+                        latestOffer.listing?.title ?? _currentChat.postTitle,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
+                      if ((latestOffer.listing?.price ?? _listingPrice) != null)
+                        Text(
+                          'Actual: ${CoinFormat.withUnit(latestOffer.listing?.price ?? _listingPrice)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
                       Text(
-                        'Price: ${CoinFormat.withUnit(latestOffer.price)}',
+                        'Offer: ${CoinFormat.withUnit(latestOffer.price)}',
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ],
@@ -4623,11 +4672,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ),
             const SizedBox(height: 10),
             _buildBarterExchangePreview(
-              myImage: _currentChat.postImage,
+              myImage: latestOffer.listing?.image ?? _currentChat.postImage,
               myLabel: isServiceChat ? 'Your service' : 'Your product',
-              myName: _currentChat.postTitle,
-              myPriceLabel: _listingPrice != null
-                  ? CoinFormat.withUnit(_listingPrice)
+              myName: latestOffer.listing?.title ?? _currentChat.postTitle,
+              myPriceLabel: (latestOffer.listing?.price ?? _listingPrice) != null
+                  ? CoinFormat.withUnit(latestOffer.listing?.price ?? _listingPrice)
                   : null,
               onMyTap: _isOpeningPostDetail ? null : _openPostDetail,
               theirImage: latestOffer.barterItemImages.isNotEmpty
@@ -4869,21 +4918,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           if (latestOffer.isPriceOffer) ...[
             Row(
               children: [
-                _buildOfferItemThumb(_currentChat.postImage),
+                _buildOfferItemThumb(
+                  latestOffer.listing?.image ?? _currentChat.postImage,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _currentChat.postTitle,
+                        latestOffer.listing?.title ?? _currentChat.postTitle,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
+                      if ((latestOffer.listing?.price ?? _listingPrice) != null)
+                        Text(
+                          'Actual: ${CoinFormat.withUnit(latestOffer.listing?.price ?? _listingPrice)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
                       Text(
-                        'Price: ${CoinFormat.withUnit(latestOffer.price)}',
+                        'Offer: ${CoinFormat.withUnit(latestOffer.price)}',
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ],
@@ -4912,13 +4971,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       latestOffer.barterProducts.first.id,
                     )
                   : null,
-              theirImage: _currentChat.postImage,
+              theirImage: latestOffer.listing?.image ?? _currentChat.postImage,
               theirLabel: isServiceChat
                   ? '$recipientName\'s service'
                   : '$recipientName\'s product',
-              theirName: _currentChat.postTitle,
-              theirPriceLabel: _listingPrice != null
-                  ? CoinFormat.withUnit(_listingPrice)
+              theirName: latestOffer.listing?.title ?? _currentChat.postTitle,
+              theirPriceLabel: (latestOffer.listing?.price ?? _listingPrice) != null
+                  ? CoinFormat.withUnit(latestOffer.listing?.price ?? _listingPrice)
                   : null,
               onTheirTap: _isOpeningPostDetail ? null : _openPostDetail,
             ),

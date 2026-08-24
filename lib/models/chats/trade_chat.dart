@@ -393,6 +393,52 @@ class ServiceInfo {
       barterStatus == 'OPEN_FOR_BARTER' || status == 'FOR_BARTER';
 }
 
+// The product/service the whole negotiation is anchored to — present on
+// every offer/counter-offer, including coins-only counters with no barter
+// items of their own. Distinct from BarterProductInfo, which is the item(s)
+// actually offered in exchange.
+class OfferListing {
+  final String postType; // 'product' | 'service'
+  final String? productId;
+  final String? serviceId;
+  final String title;
+  final String? image;
+  final double? price;
+
+  OfferListing({
+    required this.postType,
+    this.productId,
+    this.serviceId,
+    required this.title,
+    this.image,
+    this.price,
+  });
+
+  factory OfferListing.fromJson(Map<String, dynamic> json) {
+    return OfferListing(
+      postType: json['postType'] ?? '',
+      productId: json['productId'] as String?,
+      serviceId: json['serviceId'] as String?,
+      title: json['title'] ?? '',
+      image: json['image'] as String?,
+      price: json['price'] != null
+          ? double.tryParse(json['price'].toString())
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'postType': postType,
+      'productId': productId,
+      'serviceId': serviceId,
+      'title': title,
+      'image': image,
+      'price': price,
+    };
+  }
+}
+
 // ==================== CHAT MESSAGE MODEL ====================
 
 class ChatMessage {
@@ -527,6 +573,9 @@ class TradeOffer {
   // free. Never carries a price, and (per product decision) can't be
   // countered — only accepted or rejected.
   final bool isZeroCoin;
+  // The listing this offer/counter is anchored to — see OfferListing. Null
+  // only for offers fetched before the backend started sending this field.
+  final OfferListing? listing;
 
   TradeOffer({
     required this.id,
@@ -550,6 +599,7 @@ class TradeOffer {
     this.acceptedAt,
     this.rejectedAt,
     this.isZeroCoin = false,
+    this.listing,
   });
 
   factory TradeOffer.fromJson(Map<String, dynamic> json) {
@@ -593,6 +643,9 @@ class TradeOffer {
       acceptedAt: _tryParseLocal(json['acceptedAt']),
       rejectedAt: _tryParseLocal(json['rejectedAt']),
       isZeroCoin: json['isZeroCoin'] == true,
+      listing: json['listing'] is Map
+          ? OfferListing.fromJson(Map<String, dynamic>.from(json['listing'] as Map))
+          : null,
     );
   }
 
@@ -622,6 +675,7 @@ class TradeOffer {
     DateTime? acceptedAt,
     DateTime? rejectedAt,
     bool? isZeroCoin,
+    OfferListing? listing,
   }) {
     return TradeOffer(
       id: id ?? this.id,
@@ -647,6 +701,7 @@ class TradeOffer {
       acceptedAt: acceptedAt ?? this.acceptedAt,
       rejectedAt: rejectedAt ?? this.rejectedAt,
       isZeroCoin: isZeroCoin ?? this.isZeroCoin,
+      listing: listing ?? this.listing,
     );
   }
 
@@ -673,6 +728,7 @@ class TradeOffer {
       'acceptedAt': acceptedAt?.toIso8601String(),
       'rejectedAt': rejectedAt?.toIso8601String(),
       'isZeroCoin': isZeroCoin,
+      'listing': listing?.toJson(),
     };
   }
 

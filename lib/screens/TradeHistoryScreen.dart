@@ -314,6 +314,28 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                           ),
                         ),
                       ),
+                      if (trade.exchangeSummary != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Text(
+                            trade.exchangeSummary!.label,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(width: 8),
                       if (price != null)
                         CoinPriceLabel(
