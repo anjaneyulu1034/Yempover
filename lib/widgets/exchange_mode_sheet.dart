@@ -62,38 +62,47 @@ Future<Object?> showExchangeModeSheet(
 ) async {
   return showModalBottomSheet<Object>(
     context: context,
+    // Content height is variable (one card per exchange-mode option, plus
+    // the zero-coin row) and can exceed the default sheet height on smaller
+    // screens or when there are several options — isScrollControlled lets
+    // the sheet grow up to the full viewport instead of clipping content,
+    // and the SingleChildScrollView below handles anything taller than that.
+    isScrollControlled: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (context) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'How do you want to exchange?',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            if (options.listingPrice != null && options.listingPrice! > 0) ...[
-              const SizedBox(height: 4),
-              Text(
-                'Listed at ${CoinFormat.withLabel(options.listingPrice)}',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'How do you want to exchange?',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
+              if (options.listingPrice != null &&
+                  options.listingPrice! > 0) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Listed at ${CoinFormat.withLabel(options.listingPrice)}',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+              ],
+              const SizedBox(height: 14),
+              for (final option in options.options) ...[
+                _buildExchangeModeCard(context, option),
+                const SizedBox(height: 12),
+              ],
+              if (options.target == 'product') ...[
+                const Divider(height: 24),
+                _buildZeroCoinOption(context),
+                const SizedBox(height: 8),
+              ],
             ],
-            const SizedBox(height: 14),
-            for (final option in options.options) ...[
-              _buildExchangeModeCard(context, option),
-              const SizedBox(height: 12),
-            ],
-            if (options.target == 'product') ...[
-              const Divider(height: 24),
-              _buildZeroCoinOption(context),
-              const SizedBox(height: 8),
-            ],
-          ],
+          ),
         ),
       ),
     ),
