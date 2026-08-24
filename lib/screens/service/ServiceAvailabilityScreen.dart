@@ -1,16 +1,18 @@
-import 'package:YemPover_app/services/service_booking_service.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/services/service_booking_service.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 class ServiceAvailabilityScreen extends StatefulWidget {
   final String serviceId;
   final bool isInitialSetup;
+  final List<Map<String, dynamic>>? initialAvailabilitySlots;
 
   const ServiceAvailabilityScreen({
     super.key,
     required this.serviceId,
     this.isInitialSetup = false,
+    this.initialAvailabilitySlots,
   });
 
   @override
@@ -22,9 +24,18 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
   final ServiceBookingService _service = ServiceBookingService();
 
   bool _savingAvailability = false;
+  bool _loadingAvailability = false;
   bool _published = false;
 
   final DateFormat _timeFormat = DateFormat('h:mm a');
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.isInitialSetup) {
+      _loadExistingAvailability();
+    }
+  }
 
   Future<bool> _handleWillPop() async {
     if (!widget.isInitialSetup || _published) return true;
@@ -61,6 +72,100 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
   @override
   void dispose() {
     super.dispose();
+  }
+
+  String _normalizeTime(dynamic value, {String fallback = '09:00'}) {
+    final raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) return fallback;
+
+    if (raw.contains('T')) {
+      try {
+        final dt = DateTime.parse(raw);
+        return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      } catch (_) {
+        return fallback;
+      }
+    }
+
+    final chunks = raw.split(':');
+    if (chunks.length >= 2) {
+      final hour = int.tryParse(chunks[0]) ?? 9;
+      final minute = int.tryParse(chunks[1]) ?? 0;
+      return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+    }
+
+    return fallback;
+  }
+
+  String _optionalTime(dynamic value) {
+    final raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) return '';
+    return _normalizeTime(value);
+  }
+
+  void _applyAvailabilitySlots(List<Map<String, dynamic>> slots) {
+    for (final slot in slots) {
+      if (slot['isSpecialDate'] == true) continue;
+
+      final dayName = slot['dayOfWeek']?.toString().trim().toUpperCase();
+      if (dayName == null || dayName.isEmpty) continue;
+
+      final index = _days.indexWhere((day) => day['dayOfWeek'] == dayName);
+      if (index == -1) continue;
+
+      _days[index] = {
+        'dayOfWeek': dayName,
+        'isAvailable': slot['isAvailable'] != false,
+        'startTime': _normalizeTime(slot['startTime'], fallback: '09:00'),
+        'endTime': _normalizeTime(slot['endTime'], fallback: '17:00'),
+        'breakStartTime': _optionalTime(slot['breakStartTime']),
+        'breakEndTime': _optionalTime(slot['breakEndTime']),
+        'slotDurationMinutes':
+            slot['slotDurationMinutes'] is int
+            ? slot['slotDurationMinutes'] as int
+            : int.tryParse(slot['slotDurationMinutes']?.toString() ?? '') ??
+                  30,
+      };
+    }
+  }
+
+  Future<void> _loadExistingAvailability() async {
+    final seeded = widget.initialAvailabilitySlots;
+    if (seeded != null && seeded.isNotEmpty) {
+      setState(() => _applyAvailabilitySlots(seeded));
+      return;
+    }
+
+    setState(() => _loadingAvailability = true);
+
+    try {
+      final response = await _service.getServiceDetail(widget.serviceId);
+      final data = response['data'];
+      Map<String, dynamic> service = {};
+
+      if (data is Map<String, dynamic>) {
+        service = data['service'] is Map<String, dynamic>
+            ? Map<String, dynamic>.from(data['service'])
+            : Map<String, dynamic>.from(data);
+      }
+
+      final raw = service['availabilitySlots'];
+      if (raw is List && mounted) {
+        final slots = raw
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        setState(() => _applyAvailabilitySlots(slots));
+      }
+    } catch (error) {
+      if (mounted) {
+        SnackbarUtils.showError(context, _service.extractMessage(error));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingAvailability = false);
+      }
+    }
   }
 
   Future<void> _pickTime(int index, String key) async {
@@ -161,7 +266,11 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
 
       Future.microtask(() {
         if (!mounted) return;
-        Navigator.popUntil(context, (route) => route.isFirst);
+        if (widget.isInitialSetup) {
+          Navigator.popUntil(context, (route) => route.isFirst);
+        } else {
+          Navigator.pop(context, true);
+        }
       });
     } catch (error) {
       if (!mounted) return;
@@ -204,7 +313,9 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
             borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
           ),
         ),
-        body: SingleChildScrollView(
+        body: _loadingAvailability
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

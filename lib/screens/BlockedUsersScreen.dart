@@ -1,4 +1,5 @@
-import 'package:YemPover_app/services/blocked_user_service.dart';
+import 'package:yempover_app/services/blocked_user_service.dart';
+import 'package:yempover_app/utils/blocked_users_cache.dart';
 import 'package:flutter/material.dart';
 
 class BlockedUsersScreen extends StatefulWidget {
@@ -86,6 +87,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
 
     try {
       await _blockedUserService.unblockUser(user.blockedId);
+      BlockedUsersCache.instance.remove(user.blockedId);
       if (!mounted) return;
 
       setState(() {

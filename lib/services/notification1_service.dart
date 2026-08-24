@@ -2,20 +2,20 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/screens/PostDetailScreen.dart';
-import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
-import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:YemPover_app/services/api_service.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/screens/PostDetailScreen.dart';
+import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:yempover_app/services/api_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
 import 'package:http/http.dart' as http;
-import 'package:YemPover_app/main.dart' as app;
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/main.dart' as app;
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
 
 class NotificationService1 {
   static final fln.FlutterLocalNotificationsPlugin
@@ -32,15 +32,33 @@ class NotificationService1 {
   Future<void> init() async {
     if (_isInitialized) return;
 
+    AuthorizationStatus? authStatus;
     try {
-      await _firebaseMessaging.requestPermission(
+      final settings = await _firebaseMessaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
         provisional: false,
       );
+      authStatus = settings.authorizationStatus;
+      debugPrint('🔔 Notification permission status: $authStatus');
     } catch (e) {
       debugPrint('FCM permission request failed: $e');
+    }
+
+    if (Platform.isIOS) {
+      try {
+        await _firebaseMessaging.setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+
+        final apnsToken = await _firebaseMessaging.getAPNSToken();
+        debugPrint('🍎 APNs token available: ${apnsToken != null}');
+      } catch (e) {
+        debugPrint('Failed to configure iOS foreground/APNs state: $e');
+      }
     }
 
     try {
@@ -48,6 +66,9 @@ class NotificationService1 {
         const Duration(seconds: 8),
       );
       debugPrint('🔥 FCM TOKEN: $token');
+      if (Platform.isIOS && (authStatus == null || authStatus == AuthorizationStatus.denied)) {
+        debugPrint('⚠️ iOS push permission is denied, remote notifications will not be shown.');
+      }
       if (token != null && token.isNotEmpty) {
         await _registerTokenWithBackend(token);
       }
@@ -454,7 +475,7 @@ class NotificationService1 {
   Future<void> showLoginSuccessNotification() async {
     await _showLocalNotification(
       '🔐 Login Successful!',
-      'Welcome back to YemPover! You have successfully logged in.',
+      'Welcome back to BarterX! You have successfully logged in.',
     );
   }
 

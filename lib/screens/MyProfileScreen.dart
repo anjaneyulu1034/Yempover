@@ -1,12 +1,12 @@
-import 'package:YemPover_app/models/get_my_profile_response.dart';
-import 'package:YemPover_app/models/get_current_subscription_plan_response.dart';
-import 'package:YemPover_app/screens/EditProfileScreen.dart';
-import 'package:YemPover_app/services/profile_service.dart';
-import 'package:YemPover_app/services/profile_session_manager.dart';
-import 'package:YemPover_app/services/subscription_plan_service.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
-import 'package:YemPover_app/utils/loading_widget.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/models/get_my_profile_response.dart';
+import 'package:yempover_app/models/get_current_subscription_plan_response.dart';
+import 'package:yempover_app/screens/EditProfileScreen.dart';
+import 'package:yempover_app/services/profile_service.dart';
+import 'package:yempover_app/services/profile_session_manager.dart';
+import 'package:yempover_app/services/subscription_plan_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/loading_widget.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
 
 class MyProfileScreen extends StatefulWidget {

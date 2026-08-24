@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/models/api_response.dart';
-import 'package:YemPover_app/models/my_post_model.dart';
-import 'package:YemPover_app/services/token_service.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/api_response.dart';
+import 'package:yempover_app/models/my_post_model.dart';
+import 'package:yempover_app/services/token_service.dart';
 
 class MyPostsService {
   final http.Client _client = http.Client();
@@ -66,6 +66,13 @@ class MyPostsService {
         throw Exception('Session expired. Please login again.');
       } else if (response.statusCode == 404) {
         throw Exception('Post not found');
+      } else if (response.statusCode == 410) {
+        // Deal completed elsewhere / listing gone — a friendly state, not a
+        // real error. Distinguishable message so the screen can show its
+        // "No longer available" state instead of a generic error toast.
+        throw Exception('This item is no longer available');
+      } else if (response.statusCode == 403) {
+        throw Exception('Post not available');
       } else {
         throw Exception('Failed to load post: ${response.statusCode}');
       }

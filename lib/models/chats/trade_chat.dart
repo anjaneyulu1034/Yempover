@@ -1,4 +1,14 @@
-﻿import 'package:intl/intl.dart';
+import 'package:intl/intl.dart';
+
+// Server timestamps arrive as UTC ISO-8601 strings. DateTime.parse keeps
+// them tagged as UTC, and every display call site in this app formats the
+// DateTime's own field values directly (no .toLocal()) — so without
+// converting here, every chat/offer timestamp renders in UTC clock time
+// instead of the device's local time, off by the local UTC offset.
+// Converting once at parse time fixes every display site app-wide.
+DateTime _parseLocal(String value) => DateTime.parse(value).toLocal();
+DateTime? _tryParseLocal(String? value) =>
+    value == null ? null : DateTime.tryParse(value)?.toLocal();
 
 // ==================== ENUMS ====================
 
@@ -142,6 +152,54 @@ extension MessageTypeExtension on MessageType {
   }
 }
 
+// Deal PIN verification enums — mirror DealVerificationMode /
+// Deal status from the backend exactly (see
+// GET /trade-chat/{chatId}/deal/verification). No PIN, no photos: a deal is
+// either awaiting mutual "Deal Completed" consent, or completed.
+enum DealStatus { AWAITING_HANDOVER, COMPLETED }
+
+extension DealStatusExtension on DealStatus {
+  String get value {
+    switch (this) {
+      case DealStatus.AWAITING_HANDOVER:
+        return 'AWAITING_HANDOVER';
+      case DealStatus.COMPLETED:
+        return 'COMPLETED';
+    }
+  }
+
+  static DealStatus fromString(String status) {
+    switch (status) {
+      case 'COMPLETED':
+        return DealStatus.COMPLETED;
+      default:
+        return DealStatus.AWAITING_HANDOVER;
+    }
+  }
+}
+
+enum DealRole { INITIATOR, RESPONDER }
+
+extension DealRoleExtension on DealRole {
+  String get value {
+    switch (this) {
+      case DealRole.INITIATOR:
+        return 'INITIATOR';
+      case DealRole.RESPONDER:
+        return 'RESPONDER';
+    }
+  }
+
+  static DealRole fromString(String role) {
+    switch (role) {
+      case 'RESPONDER':
+        return DealRole.RESPONDER;
+      default:
+        return DealRole.INITIATOR;
+    }
+  }
+}
+
 // ==================== BASE MODELS ====================
 
 // User Info Model (for chat participants)
@@ -192,6 +250,7 @@ class ProductInfo {
   final List<String> images;
   final double? price;
   final String status;
+  final String barterStatus;
 
   ProductInfo({
     required this.id,
@@ -199,6 +258,7 @@ class ProductInfo {
     required this.images,
     this.price,
     required this.status,
+    this.barterStatus = 'NO_BARTER',
   });
 
   factory ProductInfo.fromJson(Map<String, dynamic> json) {
@@ -210,6 +270,7 @@ class ProductInfo {
           ? double.tryParse(json['price'].toString())
           : null,
       status: json['status'] ?? '',
+      barterStatus: json['barterStatus'] ?? 'NO_BARTER',
     );
   }
 
@@ -220,12 +281,67 @@ class ProductInfo {
       'images': images,
       'price': price,
       'status': status,
+      'barterStatus': barterStatus,
     };
   }
 
   String get firstImage => images.isNotEmpty ? images.first : '';
-  String get formattedPrice =>
-      price != null && price! > 0 ? '\$${price!.toStringAsFixed(2)}' : 'Free';
+  String get formattedPrice {
+    if (price == null || price! <= 0) return 'Free';
+    if (price! == price!.roundToDouble()) return price!.toInt().toString();
+    return price!.toStringAsFixed(2);
+  }
+
+  bool get allowsPrice => price != null && price! > 0;
+  bool get allowsBarter =>
+      barterStatus == 'OPEN_FOR_BARTER' || status == 'FOR_BARTER';
+}
+
+// The actual product being OFFERED in a barter (as opposed to ProductInfo,
+// which is the listing being bartered FOR). Resolved server-side from an
+// offer's barterProductIds — see TradeOffer.barterProducts.
+class BarterProductInfo {
+  final String id;
+  final String title;
+  final List<String> images;
+  final double? price;
+  final String status;
+  final String? postedById;
+
+  BarterProductInfo({
+    required this.id,
+    required this.title,
+    required this.images,
+    this.price,
+    required this.status,
+    this.postedById,
+  });
+
+  factory BarterProductInfo.fromJson(Map<String, dynamic> json) {
+    return BarterProductInfo(
+      id: json['id'] ?? '',
+      title: json['title'] ?? '',
+      images: (json['images'] as List? ?? []).map((e) => e.toString()).toList(),
+      price: json['price'] != null
+          ? double.tryParse(json['price'].toString())
+          : null,
+      status: json['status'] ?? '',
+      postedById: json['postedById'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'images': images,
+      'price': price,
+      'status': status,
+      'postedById': postedById,
+    };
+  }
+
+  String get firstImage => images.isNotEmpty ? images.first : '';
 }
 
 // Service Info Model
@@ -233,13 +349,17 @@ class ServiceInfo {
   final String id;
   final String title;
   final List<String> images;
+  final double? price;
   final String status;
+  final String barterStatus;
 
   ServiceInfo({
     required this.id,
     required this.title,
     required this.images,
+    this.price,
     required this.status,
+    this.barterStatus = 'NO_BARTER',
   });
 
   factory ServiceInfo.fromJson(Map<String, dynamic> json) {
@@ -247,15 +367,76 @@ class ServiceInfo {
       id: json['id'] ?? '',
       title: json['title'] ?? '',
       images: (json['images'] as List? ?? []).map((e) => e.toString()).toList(),
+      price: json['price'] != null
+          ? double.tryParse(json['price'].toString())
+          : null,
       status: json['status'] ?? '',
+      barterStatus: json['barterStatus'] ?? 'NO_BARTER',
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {'id': id, 'title': title, 'images': images, 'status': status};
+    return {
+      'id': id,
+      'title': title,
+      'images': images,
+      'price': price,
+      'status': status,
+      'barterStatus': barterStatus,
+    };
   }
 
   String get firstImage => images.isNotEmpty ? images.first : '';
+
+  bool get allowsPrice => price != null && price! > 0;
+  bool get allowsBarter =>
+      barterStatus == 'OPEN_FOR_BARTER' || status == 'FOR_BARTER';
+}
+
+// The product/service the whole negotiation is anchored to — present on
+// every offer/counter-offer, including coins-only counters with no barter
+// items of their own. Distinct from BarterProductInfo, which is the item(s)
+// actually offered in exchange.
+class OfferListing {
+  final String postType; // 'product' | 'service'
+  final String? productId;
+  final String? serviceId;
+  final String title;
+  final String? image;
+  final double? price;
+
+  OfferListing({
+    required this.postType,
+    this.productId,
+    this.serviceId,
+    required this.title,
+    this.image,
+    this.price,
+  });
+
+  factory OfferListing.fromJson(Map<String, dynamic> json) {
+    return OfferListing(
+      postType: json['postType'] ?? '',
+      productId: json['productId'] as String?,
+      serviceId: json['serviceId'] as String?,
+      title: json['title'] ?? '',
+      image: json['image'] as String?,
+      price: json['price'] != null
+          ? double.tryParse(json['price'].toString())
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'postType': postType,
+      'productId': productId,
+      'serviceId': serviceId,
+      'title': title,
+      'image': image,
+      'price': price,
+    };
+  }
 }
 
 // ==================== CHAT MESSAGE MODEL ====================
@@ -272,6 +453,11 @@ class ChatMessage {
   final DateTime? readAt;
   final DateTime createdAt;
   final String? offerId;
+  // Structured discriminator for SYSTEM messages — lets the client render a
+  // distinct styled card per lifecycle event instead of plain text. Null for
+  // TEXT/IMAGE/OFFER messages, and for older SYSTEM messages predating this.
+  final String? eventType;
+  final Map<String, dynamic>? eventData;
 
   ChatMessage({
     required this.id,
@@ -285,6 +471,8 @@ class ChatMessage {
     this.readAt,
     required this.createdAt,
     this.offerId,
+    this.eventType,
+    this.eventData,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -299,11 +487,15 @@ class ChatMessage {
         json['messageType'] ?? 'TEXT',
       ),
       isRead: json['isRead'] ?? false,
-      readAt: json['readAt'] != null ? DateTime.parse(json['readAt']) : null,
-      createdAt: DateTime.parse(
+      readAt: _tryParseLocal(json['readAt']),
+      createdAt: _parseLocal(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
       ),
       offerId: json['offerId'],
+      eventType: json['eventType'] as String?,
+      eventData: json['eventData'] is Map
+          ? Map<String, dynamic>.from(json['eventData'] as Map)
+          : null,
     );
   }
 
@@ -320,6 +512,8 @@ class ChatMessage {
       'readAt': readAt?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'offerId': offerId,
+      'eventType': eventType,
+      'eventData': eventData,
     };
   }
 
@@ -356,10 +550,32 @@ class TradeOffer {
   final String? barterItemDescription;
   final List<String> barterItemImages;
   final List<String> barterWishCategories;
+  // Real Product ids (owned by madeBy) offered in exchange — lets the
+  // client look up the offered item's actual listed price and deep-link to
+  // its post detail, the same way the chat's own product/service already does.
+  final List<String> barterProductIds;
+  // The actually-OFFERED products, resolved server-side from
+  // barterProductIds — distinct from chat.product (the listing being
+  // bartered FOR). Render these for the offer preview instead of
+  // barterItemTitle/barterItemImages so the chat never shows the listing
+  // product as if it were the offered item. Empty for free-text-only offers.
+  final List<BarterProductInfo> barterProducts;
+  // Combined coin value of every product in barterProducts.
+  final double barterProductsTotalValue;
+  // barterProductsTotalValue + the coin top-up (price) for a Barter + Coins
+  // offer — the grand total value of the offer.
+  final double offerTotalValue;
   final int counterOfferCount;
   final DateTime createdAt;
   final DateTime? acceptedAt;
   final DateTime? rejectedAt;
+  // A "no coins involved" request — item-for-item, or asking/giving for
+  // free. Never carries a price, and (per product decision) can't be
+  // countered — only accepted or rejected.
+  final bool isZeroCoin;
+  // The listing this offer/counter is anchored to — see OfferListing. Null
+  // only for offers fetched before the backend started sending this field.
+  final OfferListing? listing;
 
   TradeOffer({
     required this.id,
@@ -374,10 +590,16 @@ class TradeOffer {
     this.barterItemDescription,
     required this.barterItemImages,
     required this.barterWishCategories,
+    this.barterProductIds = const [],
+    this.barterProducts = const [],
+    this.barterProductsTotalValue = 0,
+    this.offerTotalValue = 0,
     required this.counterOfferCount,
     required this.createdAt,
     this.acceptedAt,
     this.rejectedAt,
+    this.isZeroCoin = false,
+    this.listing,
   });
 
   factory TradeOffer.fromJson(Map<String, dynamic> json) {
@@ -402,16 +624,84 @@ class TradeOffer {
       barterWishCategories: (json['barterWishCategories'] as List? ?? [])
           .map((e) => e.toString())
           .toList(),
+      barterProductIds: (json['barterProductIds'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
+      barterProducts: (json['barterProducts'] as List? ?? [])
+          .whereType<Map>()
+          .map((p) => BarterProductInfo.fromJson(Map<String, dynamic>.from(p)))
+          .toList(),
+      barterProductsTotalValue:
+          double.tryParse(json['barterProductsTotalValue']?.toString() ?? '') ??
+              0,
+      offerTotalValue:
+          double.tryParse(json['offerTotalValue']?.toString() ?? '') ?? 0,
       counterOfferCount: json['counterOfferCount'] ?? 0,
-      createdAt: DateTime.parse(
+      createdAt: _parseLocal(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
       ),
-      acceptedAt: json['acceptedAt'] != null
-          ? DateTime.parse(json['acceptedAt'])
+      acceptedAt: _tryParseLocal(json['acceptedAt']),
+      rejectedAt: _tryParseLocal(json['rejectedAt']),
+      isZeroCoin: json['isZeroCoin'] == true,
+      listing: json['listing'] is Map
+          ? OfferListing.fromJson(Map<String, dynamic>.from(json['listing'] as Map))
           : null,
-      rejectedAt: json['rejectedAt'] != null
-          ? DateTime.parse(json['rejectedAt'])
-          : null,
+    );
+  }
+
+  // Preserves every field not explicitly overridden — see TradeChat.copyWith
+  // for why: patching just offerStatus/acceptedAt/rejectedAt via the plain
+  // TradeOffer(...) constructor silently resets any field the call site
+  // forgets to list (isZeroCoin included) back to its default.
+  TradeOffer copyWith({
+    String? id,
+    String? tradeChatId,
+    String? madeById,
+    UserInfo? madeBy,
+    OfferType? offerType,
+    OfferStatus? offerStatus,
+    double? price,
+    String? currency,
+    String? barterItemTitle,
+    String? barterItemDescription,
+    List<String>? barterItemImages,
+    List<String>? barterWishCategories,
+    List<String>? barterProductIds,
+    List<BarterProductInfo>? barterProducts,
+    double? barterProductsTotalValue,
+    double? offerTotalValue,
+    int? counterOfferCount,
+    DateTime? createdAt,
+    DateTime? acceptedAt,
+    DateTime? rejectedAt,
+    bool? isZeroCoin,
+    OfferListing? listing,
+  }) {
+    return TradeOffer(
+      id: id ?? this.id,
+      tradeChatId: tradeChatId ?? this.tradeChatId,
+      madeById: madeById ?? this.madeById,
+      madeBy: madeBy ?? this.madeBy,
+      offerType: offerType ?? this.offerType,
+      offerStatus: offerStatus ?? this.offerStatus,
+      price: price ?? this.price,
+      currency: currency ?? this.currency,
+      barterItemTitle: barterItemTitle ?? this.barterItemTitle,
+      barterItemDescription:
+          barterItemDescription ?? this.barterItemDescription,
+      barterItemImages: barterItemImages ?? this.barterItemImages,
+      barterWishCategories: barterWishCategories ?? this.barterWishCategories,
+      barterProductIds: barterProductIds ?? this.barterProductIds,
+      barterProducts: barterProducts ?? this.barterProducts,
+      barterProductsTotalValue:
+          barterProductsTotalValue ?? this.barterProductsTotalValue,
+      offerTotalValue: offerTotalValue ?? this.offerTotalValue,
+      counterOfferCount: counterOfferCount ?? this.counterOfferCount,
+      createdAt: createdAt ?? this.createdAt,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
+      rejectedAt: rejectedAt ?? this.rejectedAt,
+      isZeroCoin: isZeroCoin ?? this.isZeroCoin,
+      listing: listing ?? this.listing,
     );
   }
 
@@ -429,10 +719,16 @@ class TradeOffer {
       'barterItemDescription': barterItemDescription,
       'barterItemImages': barterItemImages,
       'barterWishCategories': barterWishCategories,
+      'barterProductIds': barterProductIds,
+      'barterProducts': barterProducts.map((p) => p.toJson()).toList(),
+      'barterProductsTotalValue': barterProductsTotalValue,
+      'offerTotalValue': offerTotalValue,
       'counterOfferCount': counterOfferCount,
       'createdAt': createdAt.toIso8601String(),
       'acceptedAt': acceptedAt?.toIso8601String(),
       'rejectedAt': rejectedAt?.toIso8601String(),
+      'isZeroCoin': isZeroCoin,
+      'listing': listing?.toJson(),
     };
   }
 
@@ -448,11 +744,25 @@ class TradeOffer {
   bool get isBothOffer => offerType == OfferType.BOTH;
   bool get isServiceOffer => offerType == OfferType.SERVICE;
 
+  // Plain number, no $/USD — whole numbers with no decimals (130), up to 2
+  // decimals only when fractional (135.5), "coin" singular for exactly 1.
+  static String _coinsLabel(double value) {
+    final formatted = value == value.roundToDouble()
+        ? value.toInt().toString()
+        : value.toStringAsFixed(2);
+    final isSingular = value == 1 || value == -1;
+    return '$formatted ${isSingular ? 'coin' : 'coins'}';
+  }
+
   String get offerSummary {
     if (isPriceOffer && price != null) {
-      return 'Price: ${currency ?? '\$'} ${price!.toStringAsFixed(2)}';
+      return 'Price: ${_coinsLabel(price!)}';
     } else if (isBarterOffer || isBothOffer) {
-      return 'Barter: ${barterItemTitle ?? 'Item'}';
+      final itemSummary = 'Barter: ${barterItemTitle ?? 'Item'}';
+      if (isBothOffer && price != null && price! > 0) {
+        return '$itemSummary + ${_coinsLabel(price!)}';
+      }
+      return itemSummary;
     } else if (isServiceOffer) {
       return 'Service Offer';
     }
@@ -478,16 +788,12 @@ class DealCompletionInfo {
   factory DealCompletionInfo.fromJson(Map<String, dynamic> json) {
     return DealCompletionInfo(
       initiatorCompleted: json['initiatorCompleted'] == true,
-      initiatorCompletedAt: json['initiatorCompletedAt'] != null
-          ? DateTime.tryParse(json['initiatorCompletedAt'].toString())
-          : null,
+      initiatorCompletedAt:
+          _tryParseLocal(json['initiatorCompletedAt']?.toString()),
       responderCompleted: json['responderCompleted'] == true,
-      responderCompletedAt: json['responderCompletedAt'] != null
-          ? DateTime.tryParse(json['responderCompletedAt'].toString())
-          : null,
-      dealCompletedAt: json['dealCompletedAt'] != null
-          ? DateTime.tryParse(json['dealCompletedAt'].toString())
-          : null,
+      responderCompletedAt:
+          _tryParseLocal(json['responderCompletedAt']?.toString()),
+      dealCompletedAt: _tryParseLocal(json['dealCompletedAt']?.toString()),
     );
   }
 
@@ -505,6 +811,282 @@ class DealCompletionInfo {
     if (userId == initiatorId) return initiatorCompleted;
     if (userId == responderId) return responderCompleted;
     return false;
+  }
+}
+
+// ==================== DEAL PIN VERIFICATION MODELS ====================
+
+// Tolerant numeric parse — escrow amounts come from a Prisma Decimal field,
+// which some backend responses pass through raw (serializing as a JSON
+// string, e.g. "50.0000") while others explicitly convert to a number
+// first. Handles either shape instead of assuming a native JSON number.
+num? _parseFlexibleNum(dynamic value) {
+  if (value == null) return null;
+  if (value is num) return value;
+  return num.tryParse(value.toString());
+}
+
+// Coin payment state for the deal's price leg, from the current user's view.
+// Coins are now secured automatically in the background (when the payer
+// confirms satisfied, or enters the Start PIN for a service) — there is no
+// separate "fund" action for the UI to offer; `message` is reassurance copy
+// to display, not a call to action.
+class DealPayment {
+  final bool required;
+  final num? amount;
+  final bool iAmPayer;
+  final bool iAmPayee;
+  final bool secured;
+  final bool released;
+  final String? message;
+
+  DealPayment({
+    required this.required,
+    this.amount,
+    required this.iAmPayer,
+    required this.iAmPayee,
+    required this.secured,
+    required this.released,
+    this.message,
+  });
+
+  factory DealPayment.fromJson(Map<String, dynamic> json) {
+    return DealPayment(
+      required: json['required'] == true,
+      amount: _parseFlexibleNum(json['amount']),
+      iAmPayer: json['iAmPayer'] == true,
+      iAmPayee: json['iAmPayee'] == true,
+      secured: json['secured'] == true,
+      released: json['released'] == true,
+      message: json['message'] as String?,
+    );
+  }
+}
+
+// Mutual completion progress for the deal — drives the "Deal Completed"
+// button. Both users must tap it (canComplete flips false for a user once
+// they have); either user's "Deal Not Completed" cancels at any time.
+class DealCompletion {
+  final bool iCompleted;
+  final bool otherCompleted;
+  final bool bothCompleted;
+  final DateTime? completedAt;
+  final bool canComplete;
+
+  DealCompletion({
+    required this.iCompleted,
+    required this.otherCompleted,
+    required this.bothCompleted,
+    this.completedAt,
+    required this.canComplete,
+  });
+
+  factory DealCompletion.fromJson(Map<String, dynamic> json) {
+    return DealCompletion(
+      iCompleted: json['iCompleted'] == true,
+      otherCompleted: json['otherCompleted'] == true,
+      bothCompleted: json['bothCompleted'] == true,
+      completedAt: _tryParseLocal(json['completedAt']?.toString()),
+      canComplete: json['canComplete'] == true,
+    );
+  }
+}
+
+// The per-user deal summary — GET /trade-chat/{chatId}/deal/verification.
+// PIN-free, photo-free: single source of truth for the Deal panel, which is
+// just an exchange-mode header, a background payment info banner, and the
+// mutual "Deal Completed" / "Deal Not Completed" buttons.
+class DealVerification {
+  final String chatId;
+  final String scenario;
+  // Friendly exchange-mode descriptor fixed at the post-agreement point
+  // (e.g. mode "BARTER_PLUS_COINS", label "Barter + Coins") — show
+  // exchangeModeLabel as the deal header.
+  final String? exchangeMode;
+  final String? exchangeModeLabel;
+  final DealStatus status;
+  final bool completed;
+  final DealRole role;
+  final DealPayment payment;
+  final DealCompletion completion;
+
+  DealVerification({
+    required this.chatId,
+    required this.scenario,
+    this.exchangeMode,
+    this.exchangeModeLabel,
+    required this.status,
+    required this.completed,
+    required this.role,
+    required this.payment,
+    required this.completion,
+  });
+
+  factory DealVerification.fromJson(Map<String, dynamic> json) {
+    return DealVerification(
+      chatId: json['chatId'] ?? '',
+      scenario: json['scenario'] ?? '',
+      exchangeMode: json['exchangeMode'] as String?,
+      exchangeModeLabel: json['exchangeModeLabel'] as String?,
+      status: DealStatusExtension.fromString(
+        json['status'] ?? 'AWAITING_HANDOVER',
+      ),
+      completed: json['completed'] == true,
+      role: DealRoleExtension.fromString(json['role'] ?? 'INITIATOR'),
+      payment: DealPayment.fromJson(
+        Map<String, dynamic>.from(json['payment'] ?? {}),
+      ),
+      completion: DealCompletion.fromJson(
+        Map<String, dynamic>.from(json['completion'] ?? {}),
+      ),
+    );
+  }
+}
+
+// Lightweight, no-PIN snapshot embedded on every TradeChat (from the shared
+// chat list/detail endpoints) — just enough to know a deal exists and its
+// coarse status. Fetch DealVerification via
+// TradeChatService.getDealVerification() for the actual panel content.
+class DealVerificationSummary {
+  final String scenario;
+  final DealStatus status;
+  final String? payerId;
+  final String? payeeId;
+  final num? escrowAmount;
+  final bool escrowFunded;
+  final bool escrowReleased;
+  final DateTime? completedAt;
+
+  DealVerificationSummary({
+    required this.scenario,
+    required this.status,
+    this.payerId,
+    this.payeeId,
+    this.escrowAmount,
+    required this.escrowFunded,
+    required this.escrowReleased,
+    this.completedAt,
+  });
+
+  factory DealVerificationSummary.fromJson(Map<String, dynamic> json) {
+    return DealVerificationSummary(
+      scenario: json['scenario'] ?? '',
+      status: DealStatusExtension.fromString(
+        json['status'] ?? 'AWAITING_HANDOVER',
+      ),
+      payerId: json['payerId'] as String?,
+      payeeId: json['payeeId'] as String?,
+      escrowAmount: _parseFlexibleNum(json['escrowAmount']),
+      escrowFunded: json['escrowFunded'] == true,
+      escrowReleased: json['escrowReleased'] == true,
+      completedAt: _tryParseLocal(json['completedAt']?.toString()),
+    );
+  }
+
+  bool get isCompleted => status == DealStatus.COMPLETED;
+}
+
+// Result of POST /trade-chat/{chatId}/deal/close.
+class DealCloseResult {
+  final bool success;
+  final String message;
+
+  DealCloseResult({required this.success, required this.message});
+
+  factory DealCloseResult.fromJson(Map<String, dynamic> json) {
+    return DealCloseResult(
+      success: json['success'] == true,
+      message: json['message'] ?? '',
+    );
+  }
+}
+
+// ==================== EXCHANGE MODE SELECTION ====================
+// GET /trade-chat/exchange-modes?productId=xxx|serviceId=xxx — options for
+// the "How do you want to exchange?" offer sheet, including cross-mode
+// requests (e.g. requesting a barter on a pure-price listing). Render
+// entirely off `options`; `nativeMode` is just the listing's own default,
+// not a restriction on what can be requested.
+
+// One selectable exchange-mode card.
+class ExchangeModeOption {
+  final String mode; // PURE_COINS | PURE_BARTER | BARTER_PLUS_COINS | SERVICE_FOR_BARTER
+  final String offerType; // PRICE | BARTER | BOTH — send this to the offer endpoint
+  final String label;
+  final bool requiresPrice;
+  final bool requiresProductSelection;
+  final String? productSelectionSource; // "MY_PRODUCTS" | null
+  final bool isCrossMode;
+  final String note;
+
+  ExchangeModeOption({
+    required this.mode,
+    required this.offerType,
+    required this.label,
+    required this.requiresPrice,
+    required this.requiresProductSelection,
+    this.productSelectionSource,
+    required this.isCrossMode,
+    required this.note,
+  });
+
+  factory ExchangeModeOption.fromJson(Map<String, dynamic> json) {
+    return ExchangeModeOption(
+      mode: json['mode'] ?? '',
+      offerType: json['offerType'] ?? 'PRICE',
+      label: json['label'] ?? '',
+      requiresPrice: json['requiresPrice'] == true,
+      requiresProductSelection: json['requiresProductSelection'] == true,
+      productSelectionSource: json['productSelectionSource'] as String?,
+      isCrossMode: json['isCrossMode'] == true,
+      note: json['note'] ?? '',
+    );
+  }
+}
+
+class ExchangeModeOptions {
+  final String target; // "product" | "service"
+  final String? productId;
+  final String? serviceId;
+  final String nativeMode; // PURE_PRICE | PURE_BARTER | BARTER_OR_PRICE
+  final double? listingPrice;
+  final String currency;
+  final bool canRequest;
+  final bool isOwner;
+  final bool available;
+  final List<ExchangeModeOption> options;
+
+  ExchangeModeOptions({
+    required this.target,
+    this.productId,
+    this.serviceId,
+    required this.nativeMode,
+    this.listingPrice,
+    required this.currency,
+    required this.canRequest,
+    required this.isOwner,
+    required this.available,
+    required this.options,
+  });
+
+  factory ExchangeModeOptions.fromJson(Map<String, dynamic> json) {
+    return ExchangeModeOptions(
+      target: json['target'] ?? 'product',
+      productId: json['productId'] as String?,
+      serviceId: json['serviceId'] as String?,
+      nativeMode: json['nativeMode'] ?? 'PURE_PRICE',
+      listingPrice: json['listingPrice'] != null
+          ? double.tryParse(json['listingPrice'].toString())
+          : null,
+      currency: json['currency'] ?? 'USD',
+      canRequest: json['canRequest'] == true,
+      isOwner: json['isOwner'] == true,
+      available: json['available'] == true,
+      options: (json['options'] as List? ?? [])
+          .whereType<Map>()
+          .map((o) => ExchangeModeOption.fromJson(Map<String, dynamic>.from(o)))
+          .toList(),
+    );
   }
 }
 
@@ -527,6 +1109,59 @@ class TradeChat {
   final DealCompletionInfo? dealCompletion;
   final List<ChatMessage> messages;
   final List<TradeOffer> offers;
+  // Server-computed snapshot as of this fetch: whether the other party is
+  // currently connected, and how many of their messages are unread. Null
+  // when the backend response didn't include them (older cached data) —
+  // callers should treat null as "unknown", not "offline"/"zero".
+  final bool? otherUserOnline;
+  // The other participant's id — sent on both getChatDetail and every list
+  // endpoint (all/inbox/outbox) alongside otherUserOnline. Prefer this over
+  // getOtherUserInfo() when only the id is needed (e.g. list rows).
+  final String? otherUserId;
+  final int? unreadCount;
+  // PIN-free Deal PIN verification snapshot — null until an offer has been
+  // accepted (or on chats predating this feature). Presence of this alone
+  // is what decides whether ChatDetailScreen shows the Deal panel; the
+  // actual PIN/entry content comes from a separate
+  // TradeChatService.getDealVerification() call, never from here.
+  final DealVerificationSummary? dealVerification;
+  // Server-computed offer-eligibility for the requesting user (getChatDetail
+  // only — list endpoints don't send these yet). Defaults preserve
+  // pre-feature behavior until the first getChatDetail fetch lands.
+  final bool canMakeOffer;
+  final bool myPendingOffer;
+  // getChatDetail only: true once the listing itself is gone because a deal
+  // completed in a *different* chat on the same item — distinct from
+  // canMakeOffer being false for this chat's own reasons (pending/accepted).
+  final bool listingUnavailable;
+  // getChatDetail only: true when the current user is the listing owner
+  // (responder) — server-authoritative version of what the client used to
+  // derive itself from responderId. The owner only accepts/rejects/counters;
+  // they never start a fresh offer, so canMakeOffer is already false for
+  // them, but this flag lets other owner-only UI decisions (e.g. skipping
+  // the buyer's wallet check) key off it directly.
+  final bool isOwner;
+  // getChatDetail only: true while ANY offer (either party) is PENDING —
+  // i.e. a negotiation is currently in progress. canMakeOffer already
+  // factors this in, but exposed separately for UI that wants to explain
+  // *why* offering again isn't available right now.
+  final bool hasPendingOffer;
+  // getChatDetail only: true when either side has blocked the other.
+  // canMakeOffer already factors this in, but the client needs this
+  // separately to hide the composer/gallery/accept/reject/counter/deal
+  // actions entirely (not just the offer button) while blocked.
+  final bool isBlocked;
+  // getChatDetail only: product ids already committed to the live pending
+  // offer (sourced from the newest PENDING offer's barterProductIds). The
+  // counter-offer product picker should exclude these so a product already
+  // being bartered can't be selected again. Empty when there's no pending
+  // offer.
+  final List<String> activeBarterProductIds;
+  // List endpoints only (getChatDetail doesn't send these): server-derived
+  // status chip for the chat row — PENDING | ACTIVE | COMPLETED |
+  // NOT_COMPLETED, with badgeLabel as ready-to-render display copy.
+  final String? badge;
+  final String? badgeLabel;
 
   TradeChat({
     required this.id,
@@ -545,6 +1180,19 @@ class TradeChat {
     this.dealCompletion,
     required this.messages,
     required this.offers,
+    this.otherUserOnline,
+    this.otherUserId,
+    this.unreadCount,
+    this.dealVerification,
+    this.canMakeOffer = true,
+    this.myPendingOffer = false,
+    this.isOwner = false,
+    this.hasPendingOffer = false,
+    this.isBlocked = false,
+    this.activeBarterProductIds = const [],
+    this.listingUnavailable = false,
+    this.badge,
+    this.badgeLabel,
   });
 
   factory TradeChat.fromJson(Map<String, dynamic> json) {
@@ -555,13 +1203,11 @@ class TradeChat {
       productId: json['productId'],
       serviceId: json['serviceId'],
       status: ChatStatusExtension.fromString(json['status'] ?? 'ACTIVE'),
-      lastMessageAt: json['lastMessageAt'] != null
-          ? DateTime.parse(json['lastMessageAt'])
-          : null,
-      createdAt: DateTime.parse(
+      lastMessageAt: _tryParseLocal(json['lastMessageAt']),
+      createdAt: _parseLocal(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
       ),
-      updatedAt: DateTime.parse(
+      updatedAt: _parseLocal(
         json['updatedAt'] ?? DateTime.now().toIso8601String(),
       ),
       initiator: UserInfo.fromJson(json['initiator'] ?? {}),
@@ -581,6 +1227,100 @@ class TradeChat {
       offers: (json['offers'] as List? ?? [])
           .map((offer) => TradeOffer.fromJson(offer))
           .toList(),
+      otherUserOnline: json['otherUserOnline'] as bool?,
+      otherUserId: json['otherUserId'] as String?,
+      unreadCount: json['unreadCount'] is int
+          ? json['unreadCount'] as int
+          : int.tryParse('${json['unreadCount'] ?? ''}'),
+      dealVerification: json['dealVerification'] != null
+          ? DealVerificationSummary.fromJson(
+              Map<String, dynamic>.from(json['dealVerification']),
+            )
+          : null,
+      canMakeOffer: json.containsKey('canMakeOffer')
+          ? json['canMakeOffer'] == true
+          : true,
+      myPendingOffer: json['myPendingOffer'] == true,
+      listingUnavailable: json['listingUnavailable'] == true,
+      isOwner: json['isOwner'] == true,
+      hasPendingOffer: json['hasPendingOffer'] == true,
+      isBlocked: json['isBlocked'] == true,
+      activeBarterProductIds: (json['activeBarterProductIds'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
+      badge: json['badge'] as String?,
+      badgeLabel: json['badgeLabel'] as String?,
+    );
+  }
+
+  // Preserves every field not explicitly overridden — used when a socket
+  // handler needs to patch just one or two fields (e.g. append a message,
+  // bump lastMessageAt) without silently resetting every other
+  // server-computed flag (canMakeOffer, isOwner, isBlocked, otherUserOnline,
+  // ...) back to its constructor default the way rebuilding via the plain
+  // TradeChat(...) constructor field-by-field does if a field is missed.
+  TradeChat copyWith({
+    String? id,
+    String? initiatorId,
+    String? responderId,
+    String? productId,
+    String? serviceId,
+    ChatStatus? status,
+    DateTime? lastMessageAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    UserInfo? initiator,
+    UserInfo? responder,
+    ProductInfo? product,
+    ServiceInfo? service,
+    DealCompletionInfo? dealCompletion,
+    List<ChatMessage>? messages,
+    List<TradeOffer>? offers,
+    bool? otherUserOnline,
+    String? otherUserId,
+    int? unreadCount,
+    DealVerificationSummary? dealVerification,
+    bool? canMakeOffer,
+    bool? myPendingOffer,
+    bool? isOwner,
+    bool? hasPendingOffer,
+    bool? isBlocked,
+    List<String>? activeBarterProductIds,
+    bool? listingUnavailable,
+    String? badge,
+    String? badgeLabel,
+  }) {
+    return TradeChat(
+      id: id ?? this.id,
+      initiatorId: initiatorId ?? this.initiatorId,
+      responderId: responderId ?? this.responderId,
+      productId: productId ?? this.productId,
+      serviceId: serviceId ?? this.serviceId,
+      status: status ?? this.status,
+      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      initiator: initiator ?? this.initiator,
+      responder: responder ?? this.responder,
+      product: product ?? this.product,
+      service: service ?? this.service,
+      dealCompletion: dealCompletion ?? this.dealCompletion,
+      messages: messages ?? this.messages,
+      offers: offers ?? this.offers,
+      otherUserOnline: otherUserOnline ?? this.otherUserOnline,
+      otherUserId: otherUserId ?? this.otherUserId,
+      unreadCount: unreadCount ?? this.unreadCount,
+      dealVerification: dealVerification ?? this.dealVerification,
+      canMakeOffer: canMakeOffer ?? this.canMakeOffer,
+      myPendingOffer: myPendingOffer ?? this.myPendingOffer,
+      isOwner: isOwner ?? this.isOwner,
+      hasPendingOffer: hasPendingOffer ?? this.hasPendingOffer,
+      isBlocked: isBlocked ?? this.isBlocked,
+      activeBarterProductIds:
+          activeBarterProductIds ?? this.activeBarterProductIds,
+      listingUnavailable: listingUnavailable ?? this.listingUnavailable,
+      badge: badge ?? this.badge,
+      badgeLabel: badgeLabel ?? this.badgeLabel,
     );
   }
 
@@ -606,11 +1346,22 @@ class TradeChat {
   }
 
   // Helper getters
-  bool get isActive => status == ChatStatus.ACTIVE;
-  bool get isCompleted => status == ChatStatus.COMPLETED;
+  bool get isActive =>
+      status == ChatStatus.ACTIVE || status == ChatStatus.ACCEPTED;
+  // Only truly complete once both sides have given completion consent
+  // (dealCompletedAt is set by the backend at that point) — a single user
+  // completing their side must not flip this, or the chat looks "done" and
+  // disappears for the other user before they've had a chance to respond.
+  bool get isCompleted =>
+      status == ChatStatus.COMPLETED ||
+      (dealCompletion != null && dealCompletion!.dealCompletedAt != null);
   bool get isCancelled => status == ChatStatus.CANCELLED;
   bool get isArchived => status == ChatStatus.ARCHIVED;
-  bool get isInactive => status == ChatStatus.INACTIVE;
+  bool get isInactive => status == ChatStatus.INACTIVE && !isCompleted;
+  // Whether the new Deal PIN flow applies to this chat — it exists once an
+  // offer has been accepted. Chats without it fall back to the legacy
+  // "Deal Ready to Complete" banner (see ChatDetailScreen).
+  bool get hasDealVerification => dealVerification != null;
 
   String get postTitle {
     if (product != null) return product!.title;
@@ -670,8 +1421,11 @@ class TradeChat {
     return currentUserId == responderId;
   }
 
-  // Get unread count for a user
+  // Get unread count for a user. Prefers the server-computed snapshot
+  // (accurate even when `messages` wasn't hydrated on this fetch); falls
+  // back to counting locally-loaded messages when the server didn't send one.
   int getUnreadCount(String userId) {
+    if (unreadCount != null) return unreadCount!;
     return messages
         .where((msg) => !msg.isRead && msg.sentById != userId)
         .length;

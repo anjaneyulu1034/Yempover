@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/utils/post_availability_utils.dart';
 
 // Post Types
 enum PostType { product, service }
@@ -12,6 +13,8 @@ enum PostStatus {
   DELETED,
   ARCHIVED,
   SOLD,
+  BARTERED,
+  EXPIRED,
 }
 
 enum BarterStatus { NO_BARTER, OPEN_FOR_BARTER }
@@ -171,6 +174,14 @@ class Post {
   final bool canClubItems;
   bool isFavorite;
   bool isHidden;
+  // Server-computed viewer context (post detail endpoint only — list
+  // endpoints don't send these). Defaults preserve pre-feature behavior
+  // (offer button shown) until the detail fetch completes.
+  final bool isOwner;
+  final bool canMakeOffer;
+  final ExistingOffer? existingOffer;
+  // Distinct-offerer count (Point 4) — owner-only, null for everyone else.
+  final int? offerCount;
 
   Post({
     required this.id,
@@ -202,6 +213,10 @@ class Post {
     this.canClubItems = false,
     this.isFavorite = false,
     this.isHidden = false,
+    this.isOwner = false,
+    this.canMakeOffer = true,
+    this.existingOffer,
+    this.offerCount,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -266,6 +281,18 @@ class Post {
         'isClubbable',
         'canBeClubbed',
       ], defaultValue: false),
+      isOwner: json['isOwner'] == true,
+      canMakeOffer: json.containsKey('canMakeOffer')
+          ? json['canMakeOffer'] == true
+          : true,
+      existingOffer: json['existingOffer'] != null
+          ? ExistingOffer.fromJson(
+              Map<String, dynamic>.from(json['existingOffer']),
+            )
+          : null,
+      offerCount: json['offerCount'] is int
+          ? json['offerCount'] as int
+          : int.tryParse('${json['offerCount'] ?? ''}'),
     );
   }
 
@@ -342,7 +369,7 @@ class Post {
   }
 
   static PostStatus _parsePostStatus(String status) {
-    switch (status) {
+    switch (status.trim().toUpperCase()) {
       case 'FOR_SALE':
         return PostStatus.FOR_SALE;
       case 'FOR_BARTER':
@@ -351,6 +378,16 @@ class Post {
         return PostStatus.PROVIDE_SERVICE;
       case 'LOOKING_FOR_SERVICE':
         return PostStatus.LOOKING_FOR_SERVICE;
+      case 'DELETED':
+        return PostStatus.DELETED;
+      case 'ARCHIVED':
+        return PostStatus.ARCHIVED;
+      case 'SOLD':
+        return PostStatus.SOLD;
+      case 'BARTERED':
+        return PostStatus.BARTERED;
+      case 'EXPIRED':
+        return PostStatus.EXPIRED;
       default:
         return PostStatus.FOR_SALE;
     }
@@ -394,8 +431,11 @@ class Post {
     }
   }
 
-  String get formattedPrice =>
-      price > 0 ? '\$${price.toStringAsFixed(2)}' : 'Free';
+  String get formattedPrice {
+    if (price <= 0) return 'Free';
+    if (price == price.roundToDouble()) return price.toInt().toString();
+    return price.toStringAsFixed(2);
+  }
 
   List<String> get processedImages {
     if (images.isEmpty) {
@@ -463,6 +503,59 @@ class Post {
 
   bool get isForBarter => barterStatus == BarterStatus.OPEN_FOR_BARTER;
   bool get isForSale => status == PostStatus.FOR_SALE && price > 0;
+
+  bool get isExpiredOrUnavailable => PostAvailabilityUtils.isUnavailable(
+    hasExpired: hasExpired,
+    validFrom: validFrom,
+    validUntil: validUntil,
+    remainingTime: remainingTime,
+    status: status.name,
+    isListed: isListed,
+  );
+}
+
+// The viewer's own prior offer/chat on a listing (post detail endpoint only).
+// Presence of this means "hide Make an Offer, route into this chat instead"
+// — never create a second chat when this is non-null.
+class ExistingOffer {
+  final String chatId;
+  final String chatStatus;
+  final String? offerId;
+  final String? offerType; // BARTER | PRICE | BOTH
+  final String? offerStatus; // PENDING | ACCEPTED | REJECTED | COUNTERED
+  final double? amount;
+  final String? currency;
+  final String? barterItemTitle;
+  final String displayText;
+
+  ExistingOffer({
+    required this.chatId,
+    required this.chatStatus,
+    this.offerId,
+    this.offerType,
+    this.offerStatus,
+    this.amount,
+    this.currency,
+    this.barterItemTitle,
+    required this.displayText,
+  });
+
+  factory ExistingOffer.fromJson(Map<String, dynamic> json) {
+    return ExistingOffer(
+      chatId: json['chatId'] ?? '',
+      chatStatus: json['chatStatus'] ?? '',
+      offerId: json['offerId'] as String?,
+      offerType: json['offerType'] as String?,
+      offerStatus: json['offerStatus'] as String?,
+      amount: json['amount'] != null
+          ? double.tryParse(json['amount'].toString())
+          : null,
+      currency: json['currency'] as String?,
+      barterItemTitle: json['barterItemTitle'] as String?,
+      displayText:
+          json['displayText'] ?? 'You have already made an offer on this item.',
+    );
+  }
 }
 
 // Posts Response Model
@@ -477,7 +570,10 @@ class PostsResponse {
     final paginationData = json['data']['pagination'];
 
     return PostsResponse(
-      posts: postsData.map((postJson) => Post.fromJson(postJson)).toList(),
+      posts: postsData
+          .map((postJson) => Post.fromJson(postJson))
+          .where((post) => !post.isExpiredOrUnavailable)
+          .toList(),
       pagination: Pagination.fromJson(paginationData),
     );
   }

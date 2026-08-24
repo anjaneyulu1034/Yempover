@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'dart:async';
-import 'package:YemPover_app/models/update_profile_image_request.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/models/update_profile_image_request.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:YemPover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/utils/subscription_gate.dart';
 import '../constants/api_constants.dart';
 import '../models/auth_models.dart';
 import 'token_service.dart';
@@ -31,18 +32,45 @@ class ApiService {
     Future<http.Response> Function(String? token) request,
   ) async {
     var token = await _tokenService.getToken();
-    var response = await request(token);
+    var response = await _requestWithConnectionRetry(() => request(token));
 
     if (response.statusCode == 401) {
       debugPrint('🔄 ApiService: Received 401, attempting token refresh...');
       final newToken = await _tokenService.refreshToken();
 
       if (newToken != null && newToken.isNotEmpty) {
-        response = await request(newToken);
+        response = await _requestWithConnectionRetry(() => request(newToken));
       }
     }
 
+    // Safety net: catches a subscription that lapses mid-session even when
+    // the token still claims ACTIVE. See SubscriptionGate for the primary,
+    // login-time check.
+    SubscriptionGate.checkResponse(response);
+
     return response;
+  }
+
+  // The shared http.Client is kept alive for the app's whole lifetime and
+  // reuses pooled connections. If the server closes an idle keep-alive
+  // connection (e.g. Node's default ~5s keepAliveTimeout) between requests,
+  // the client doesn't find out until it tries to reuse it — the next
+  // request dies mid-handshake with "Connection closed before full header
+  // was received" even though the network itself is fine. Retrying
+  // transparently opens a fresh connection and almost always succeeds, so
+  // do that once before surfacing a network error to the user.
+  Future<http.Response> _requestWithConnectionRetry(
+    Future<http.Response> Function() request,
+  ) async {
+    try {
+      return await request();
+    } on http.ClientException catch (e) {
+      debugPrint(
+        '🔄 ApiService: Connection error, retrying once: ${e.message}',
+      );
+      await Future.delayed(const Duration(milliseconds: 300));
+      return await request();
+    }
   }
 
   // ============= PUBLIC HTTP METHODS =============
@@ -675,6 +703,30 @@ class ApiService {
       debugPrint('🔴 ApiService: Error uploading profile image: $e');
       rethrow;
     }
+  }
+
+  /// PUT /api/users/:id — sets verificationPending: false after live photo.
+  Future<void> completeVerification({String? userId}) async {
+    final resolvedUserId = userId ?? await _tokenService.getUserId();
+    if (resolvedUserId == null || resolvedUserId.isEmpty) {
+      throw ApiException('User id not found');
+    }
+
+    final url = ApiConstants.updateUser(resolvedUserId);
+    debugPrint('✅ ApiService: completeVerification PUT $url');
+
+    final response = await put(
+      url,
+      body: {'verificationPending': false},
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final Map<String, dynamic> body = json.decode(response.body);
+      final message = body['message']?.toString() ?? ErrorMessages.unknownError;
+      throw ApiException(message, statusCode: response.statusCode);
+    }
+
+    debugPrint('✅ ApiService: completeVerification success');
   }
 
   /// Upload profile image with automatic mime type detection

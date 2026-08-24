@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../models/notification_model.dart';
 import '../utils/notification_helpers.dart';
+import '../widgets/coin_icon.dart';
 
 class NotificationTile extends StatelessWidget {
   final AppNotification notification;
@@ -65,21 +66,7 @@ class NotificationTile extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: accent,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        NotificationHelpers.getNotificationIcon(
-                          notification.type,
-                        ),
-                        size: 22,
-                        color: Colors.white,
-                      ),
-                    ),
+                    _buildLeadingAvatar(accent),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -106,6 +93,38 @@ class NotificationTile extends StatelessWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          if (notification.itemTitle != null) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    notification.itemTitle!,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF12243A),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (notification.itemPrice != null &&
+                                    notification.itemPrice! > 0) ...[
+                                  const SizedBox(width: 6),
+                                  coinInputPrefix(size: 12),
+                                  Text(
+                                    CoinFormat.amount(notification.itemPrice),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF12243A),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 8),
                           Text(
                             notification.getFormattedDate(),
@@ -145,6 +164,44 @@ class NotificationTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLeadingAvatar(Color accent) {
+    final imageUrl = (notification.actorAvatar?.isNotEmpty ?? false)
+        ? notification.actorAvatar
+        : notification.itemImage;
+
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          imageUrl,
+          width: 42,
+          height: 42,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) =>
+              _buildFallbackIcon(accent),
+        ),
+      );
+    }
+
+    return _buildFallbackIcon(accent);
+  }
+
+  Widget _buildFallbackIcon(Color accent) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: accent,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(
+        NotificationHelpers.getNotificationIcon(notification.type),
+        size: 22,
+        color: Colors.white,
       ),
     );
   }

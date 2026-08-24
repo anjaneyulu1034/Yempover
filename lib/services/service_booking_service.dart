@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -82,6 +82,8 @@ class ServiceBookingService {
     required String categoryId,
     required double price,
     required String location,
+    double? latitude,
+    double? longitude,
     List<String> images = const [],
     String? barterStatus,
     String? status,
@@ -100,6 +102,8 @@ class ServiceBookingService {
             'category': categoryId,
             'price': price,
             'location': location,
+            if (latitude != null) 'latitude': latitude,
+            if (longitude != null) 'longitude': longitude,
             'images': images,
             if (barterStatus != null && barterStatus.isNotEmpty)
               'barterStatus': barterStatus,

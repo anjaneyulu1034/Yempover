@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/trade_history_model.dart';
 import '../services/trade_history_service.dart';
 import 'TradeDetailScreen.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
 
 class TradeHistoryScreen extends StatefulWidget {
   const TradeHistoryScreen({super.key});
@@ -292,8 +293,13 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                   ),
                   const SizedBox(height: 4),
 
-                  // Trade Type and Price
-                  Row(
+                  // Trade Type and Price — Wrap (not Row) so a long exchange
+                  // label ("Barter + Coins") can drop to a second line
+                  // instead of overflowing on narrow screens.
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -313,10 +319,30 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      if (trade.exchangeSummary != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Text(
+                            trade.exchangeSummary!.label,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
                       if (price != null)
-                        Text(
-                          '\$${price.toStringAsFixed(2)}',
+                        CoinPriceLabel(
+                          text: CoinFormat.withLabel(price),
+                          iconSize: 16,
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,

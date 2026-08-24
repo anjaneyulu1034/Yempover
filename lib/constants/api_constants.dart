@@ -1,7 +1,10 @@
 import 'dart:ui';
 
 class ApiConstants {
-  static const String baseUrl = 'http://3.208.20.90:3000/api/mobile';
+  static const String serverApiUrl = 'http://3.208.20.90:3000/api';
+  static const String baseUrl = '$serverApiUrl/mobile';
+
+  static String updateUser(String userId) => '$serverApiUrl/users/$userId';
 
   // Auth Endpoints
   static const String register = '$baseUrl/auth/register';
@@ -31,11 +34,17 @@ class ApiConstants {
   static const String currentSubscription = '$baseUrl/me/subscription';
   static const String subscribe = '$baseUrl/me/subscribe';
 
-  // Coin endpoints
+  // Coin / wallet endpoints
   static const String coinPackages = '$baseUrl/coins/packages';
   static const String coinWallet = '$baseUrl/me/coins/wallet';
   static const String coinTransactions = '$baseUrl/me/coins/transactions';
   static const String coinPurchase = '$baseUrl/me/coins/purchase';
+  static const String wallet = '$baseUrl/wallet';
+  static const String walletAdd = '$baseUrl/wallet/add';
+  static const String walletPay = '$baseUrl/wallet/pay';
+  static const String walletTransactions = '$baseUrl/wallet/transactions';
+  static String walletTransactionDetail(String id) =>
+      '$walletTransactions/$id';
 
   // Trade Chat endpoints
   static const String tradeChats = '$baseUrl/trade-chat/all';
@@ -56,6 +65,14 @@ class ApiConstants {
       '$baseUrl/trade-chat/$id/block-user';
   static String tradeChatDealCompleted(String id) =>
       '$baseUrl/trade-chat/$id/deal-completed';
+
+  // Deal summary (no PIN, no photos) — drives the "Deal Completed" /
+  // "Deal Not Completed" panel after an offer is accepted.
+  static String tradeChatDealVerification(String id) =>
+      '$baseUrl/trade-chat/$id/deal/verification';
+  static String tradeChatDealClose(String id) =>
+      '$baseUrl/trade-chat/$id/deal/close';
+
   static const String tradeChatBlockedUsers =
       '$baseUrl/trade-chat/blocked-users';
   static String tradeChatUnblockUser(String blockedUserId) =>
@@ -64,6 +81,10 @@ class ApiConstants {
   // Inbox/Outbox endpoints
   static const String tradeChatInbox = '$baseUrl/trade-chat/inbox';
   static const String tradeChatOutbox = '$baseUrl/trade-chat/outbox';
+  static const String tradeChatUnreadCount =
+      '$baseUrl/trade-chat/unread-count';
+  static const String tradeChatExchangeModes =
+      '$baseUrl/trade-chat/exchange-modes';
 
   // Offer actions - FIXED ENDPOINTS
   static String acceptOffer(String chatId, String offerId) =>
@@ -89,6 +110,9 @@ class ApiConstants {
   static const String termsAndConditions = '$baseUrl/content/terms';
   static const String privacyPolicy = '$baseUrl/content/privacy';
 
+  // Help & Support / inquiries
+  static const String inquiries = '$baseUrl/inquiries';
+
   // Helper methods
   static String favoritesWithPagination(int page, int limit) =>
       '$favorites?page=$page&limit=$limit';
@@ -109,8 +133,8 @@ class ApiConstants {
 }
 
 class AppConstants {
-  static const String appName = 'YemPover';
-  static const String appTagline = 'Barter System';
+  static const String appName = 'BarterX';
+  static const String appTagline = 'Exchange Platform';
   static const int defaultPageSize = 10;
   static const double defaultRadius = 10.0;
   static const double minRadius = 1.0;

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/screens/Home_screen.dart';
-import 'package:YemPover_app/screens/OTPVerificationScreen.dart';
-import 'package:YemPover_app/screens/SignupScreen.dart';
-import 'package:YemPover_app/services/api_service.dart';
-import 'package:YemPover_app/services/auth_service.dart';
-import 'package:YemPover_app/services/token_service.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/screens/Home_screen.dart';
+import 'package:yempover_app/screens/OTPVerificationScreen.dart';
+import 'package:yempover_app/screens/SignupScreen.dart';
+import 'package:yempover_app/services/api_service.dart';
+import 'package:yempover_app/services/auth_service.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/widgets/phone_number_field.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,6 +21,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final AuthService _authService = AuthService();
   final TokenService _tokenService = TokenService();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final GlobalKey<PhoneNumberFieldState> _phoneFieldKey =
+      GlobalKey<PhoneNumberFieldState>();
 
   @override
   void initState() {
@@ -34,25 +37,6 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  String? _validatePhone(String? value) {
-    debugPrint(
-      'Ã°Å¸Å¸Â£ LoginScreen: _validatePhone called with value: "$value"',
-    );
-    if (value == null || value.isEmpty) {
-      return ErrorMessages.emptyField;
-    }
-    final sanitizedValue = value.trim().replaceAll(RegExp(r'\s+'), '');
-    final digitsOnly = sanitizedValue.replaceAll(RegExp(r'\D'), '');
-
-    if (digitsOnly.length < 10) {
-      return 'Phone number must be at least 10 digits';
-    }
-
-    if (!ValidationRegex.phoneRegex.hasMatch(sanitizedValue)) {
-      return ErrorMessages.invalidPhoneNumber;
-    }
-    return null;
-  }
 
   void _loginAsGuest() {
     debugPrint('Ã°Å¸Å¸Â£ LoginScreen: _loginAsGuest() called');
@@ -113,10 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final phoneNumber = _phoneController.text.trim().replaceAll(
-      RegExp(r'\s+'),
-      '',
-    );
+    final phoneNumber = _phoneFieldKey.currentState!.fullPhoneNumber;
 
     debugPrint('Ã°Å¸Å¸Â¢ LoginScreen: Form validation passed');
     debugPrint('Ã°Å¸â€œÂ± LoginScreen: Phone number: $phoneNumber');
@@ -187,6 +168,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     // Get screen size for responsive calculations
     final keyboardSpace = MediaQuery.of(context).viewInsets.bottom;
+    final textScale = MediaQuery.of(context).textScaler.scale(1.0);
+    final loginButtonHeight = (56 * textScale.clamp(1.0, 1.25)).toDouble();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -226,7 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Padding(
                             padding: const EdgeInsets.all(10),
                             child: Image.asset(
-                              'assets/YemPover_applogo.png',
+                              'assets/BarterX_applogo.png',
                               fit: BoxFit.contain,
                             ),
                           ),
@@ -273,33 +256,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 32),
 
-                        // Phone Field
-                        TextFormField(
+                        PhoneNumberField(
+                          key: _phoneFieldKey,
                           controller: _phoneController,
-                          keyboardType: TextInputType.phone,
-                          decoration: InputDecoration(
-                            hintText:
-                                'Enter your phone number (e.g., +1234567890)',
-                            filled: true,
-                            fillColor: Colors.grey.shade100,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 18,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            errorBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: Colors.red),
-                            ),
-                            prefixIcon: const Icon(
-                              Icons.phone,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          validator: _validatePhone,
+                          hint: 'Enter phone number',
                         ),
 
                         const SizedBox(height: 24),
@@ -307,13 +267,19 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Login Button
                         SizedBox(
                           width: double.infinity,
-                          height: 56,
+                          height: loginButtonHeight,
                           child: _isLoading
                               ? ElevatedButton(
                                   onPressed: null,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppConstants.primaryColor
                                         .withValues(alpha: 0.7),
+                                    minimumSize: Size.fromHeight(
+                                      loginButtonHeight,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(28),
                                     ),
@@ -331,6 +297,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                   onPressed: _handleLogin,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppConstants.primaryColor,
+                                    minimumSize: Size.fromHeight(
+                                      loginButtonHeight,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(28),
                                     ),
@@ -339,9 +311,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                     'Login',
                                     style: TextStyle(
                                       fontSize: 18,
+                                      height: 1.2,
                                       fontWeight: FontWeight.w600,
                                       color: Colors.white,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                         ),
@@ -386,6 +361,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   color: Colors.grey,
                                   fontSize: 14,
                                 ),
+
                               ),
                               const SizedBox(height: 12),
                               SizedBox(

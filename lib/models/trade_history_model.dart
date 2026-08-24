@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'chats/trade_chat.dart' show BarterProductInfo;
 
 Map<String, dynamic> _asMap(dynamic value) {
   if (value is Map<String, dynamic>) return value;
@@ -176,9 +177,20 @@ class Trades {
           .whereType<Map>()
           .map((e) => TradeItem.fromJson(Map<String, dynamic>.from(e)))
           .toList(),
+      // The backend already separates barter exchanges into their own
+      // bucket (Transaction.type === 'BARTER'); tag each item explicitly
+      // here rather than trying to re-derive "is this a barter trade" from
+      // Product.barterStatus once items are flattened into one list — that
+      // field only ever says whether a product is *open* for barter, not
+      // whether a given completed trade was a barter or a cash sale.
       barterExchanges: _asList(json['barterExchanges'])
           .whereType<Map>()
-          .map((e) => TradeItem.fromJson(Map<String, dynamic>.from(e)))
+          .map(
+            (e) => TradeItem.fromJson(
+              Map<String, dynamic>.from(e),
+              isBarterExchange: true,
+            ),
+          )
           .toList(),
     );
   }
@@ -209,6 +221,52 @@ class Trades {
   }
 }
 
+// How a completed trade's value actually changed hands — a cleaner
+// classification than the old Sold/Purchased/Barter split, which only says
+// which bucket the backend sorted the trade into, not whether coins, barter
+// items, or both were involved.
+class ExchangeSummary {
+  final String type; // COINS | BARTER | BARTER_PLUS_COINS
+  final String label; // Coins | Barter | Barter + Coins
+  final double? actualPrice;
+  final double? coins;
+  final double? priceDifference;
+  final bool? viewerIsInitiator;
+
+  ExchangeSummary({
+    required this.type,
+    required this.label,
+    this.actualPrice,
+    this.coins,
+    this.priceDifference,
+    this.viewerIsInitiator,
+  });
+
+  factory ExchangeSummary.fromJson(Map<String, dynamic> json) {
+    return ExchangeSummary(
+      type: _asString(json['type']),
+      label: _asString(json['label']),
+      actualPrice: _asNullableDouble(json['actualPrice']),
+      coins: _asNullableDouble(json['coins']),
+      priceDifference: _asNullableDouble(json['priceDifference']),
+      viewerIsInitiator: json['viewerIsInitiator'] is bool
+          ? json['viewerIsInitiator'] as bool
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'type': type,
+      'label': label,
+      'actualPrice': actualPrice,
+      'coins': coins,
+      'priceDifference': priceDifference,
+      'viewerIsInitiator': viewerIsInitiator,
+    };
+  }
+}
+
 class TradeItem {
   final String id;
   final DateTime completedDate;
@@ -218,6 +276,25 @@ class TradeItem {
   final String? initiatorRemarks;
   final String participantRemarks;
   final Product product;
+  final bool isBarterExchange;
+  // Snapshot of the actual item swapped on a barter/both offer — distinct
+  // from `product`, which is only the listing the chat was opened on. Null
+  // for pure sale deals, or for trades completed before this was tracked.
+  final String? barterItemTitle;
+  final String? barterItemDescription;
+  final List<String> barterItemImages;
+  // Same order as barterItemImages — pairs each image with the product it
+  // came from so it can deep-link to that product's detail page.
+  final List<String> barterProductIds;
+  // The actually-swapped items, resolved server-side — same shape as a
+  // trade-chat offer's barterProducts (id, title, images, price, status,
+  // postedById). Empty for pure sale deals or trades that predate this.
+  final List<BarterProductInfo> barterProducts;
+  final bool? isMyBarterItem;
+  // How this trade's value actually changed hands (Coins/Barter/Barter +
+  // Coins) plus the actual/selling/difference price block. Null for trades
+  // completed before this was tracked.
+  final ExchangeSummary? exchangeSummary;
 
   TradeItem({
     required this.id,
@@ -228,9 +305,20 @@ class TradeItem {
     this.initiatorRemarks,
     required this.participantRemarks,
     required this.product,
+    this.isBarterExchange = false,
+    this.barterItemTitle,
+    this.barterItemDescription,
+    this.barterItemImages = const [],
+    this.barterProductIds = const [],
+    this.barterProducts = const [],
+    this.isMyBarterItem,
+    this.exchangeSummary,
   });
 
-  factory TradeItem.fromJson(Map<String, dynamic> json) {
+  factory TradeItem.fromJson(
+    Map<String, dynamic> json, {
+    bool isBarterExchange = false,
+  }) {
     return TradeItem(
       id: _asString(json['id']),
       completedDate: _asDateTime(json['completedDate']),
@@ -240,6 +328,27 @@ class TradeItem {
       initiatorRemarks: json['initiatorRemarks']?.toString(),
       participantRemarks: _asString(json['participantRemarks']),
       product: Product.fromJson(_asMap(json['product'])),
+      isBarterExchange: isBarterExchange,
+      barterItemTitle: json['barterItemTitle']?.toString(),
+      barterItemDescription: json['barterItemDescription']?.toString(),
+      barterItemImages: _asList(
+        json['barterItemImages'],
+      ).map((e) => e.toString()).toList(),
+      barterProductIds: _asList(
+        json['barterProductIds'],
+      ).map((e) => e.toString()).toList(),
+      barterProducts: _asList(json['barterProducts'])
+          .whereType<Map>()
+          .map((p) => BarterProductInfo.fromJson(Map<String, dynamic>.from(p)))
+          .toList(),
+      isMyBarterItem: json['isMyBarterItem'] is bool
+          ? json['isMyBarterItem'] as bool
+          : null,
+      exchangeSummary: json['exchangeSummary'] is Map
+          ? ExchangeSummary.fromJson(
+              Map<String, dynamic>.from(json['exchangeSummary'] as Map),
+            )
+          : null,
     );
   }
 
@@ -253,11 +362,25 @@ class TradeItem {
       'initiatorRemarks': initiatorRemarks,
       'participantRemarks': participantRemarks,
       'product': product.toJson(),
+      'isBarterExchange': isBarterExchange,
+      'barterItemTitle': barterItemTitle,
+      'barterItemDescription': barterItemDescription,
+      'barterItemImages': barterItemImages,
+      'barterProductIds': barterProductIds,
+      'barterProducts': barterProducts.map((p) => p.toJson()).toList(),
+      'isMyBarterItem': isMyBarterItem,
+      'exchangeSummary': exchangeSummary?.toJson(),
     };
   }
 
+  // True once the backend has recorded a distinct swapped item for this
+  // trade (added after the fix — older completed trades won't have this).
+  bool get hasBarterItemSnapshot =>
+      barterItemTitle != null && barterItemTitle!.trim().isNotEmpty;
+
   // Determine trade type based on who posted the product
   String getTradeType(String currentUserId) {
+    if (isBarter) return 'Barter';
     if (product.postedById == currentUserId) {
       return 'Sold';
     } else {
@@ -266,7 +389,7 @@ class TradeItem {
   }
 
   // Check if it's a barter trade
-  bool get isBarter => product.barterStatus == 'BARTER';
+  bool get isBarter => isBarterExchange;
 
   // Get display price
   double? get displayPrice => sellingPrice ?? product.price;

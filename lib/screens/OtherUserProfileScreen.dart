@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/models/ProductPost.dart';
+import 'package:yempover_app/models/ProductPost.dart';
 
 class OtherUserProfileScreen extends StatefulWidget {
   final String userId;
@@ -48,7 +48,7 @@ class _OtherUserProfileScreenState extends State<OtherUserProfileScreen> {
       category: 'Furniture',
       title: 'Sofa',
       distance: '2.1 Km',
-      returnType: '\$299.99 or Electronics',
+      returnType: '299 coins or Electronics',
       barterStatus: 'Open for barter',
       postType: 'Bartering a product',
       tradeType: 'Barter',
@@ -61,7 +61,7 @@ class _OtherUserProfileScreenState extends State<OtherUserProfileScreen> {
         'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=500&q=80',
       ],
       views: 89,
-      price: '\$299.99',
+      price: '299 coins',
       description: 'Comfortable velvet sofa',
       transportationOption: 'Transport available',
       isVerified: true,
@@ -435,8 +435,15 @@ class _OtherUserProfileScreenState extends State<OtherUserProfileScreen> {
               : 'Are you sure you want to block this user? You will no longer see their posts or be able to interact with them.',
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(context),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF334155),
+              side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
@@ -458,7 +465,12 @@ class _OtherUserProfileScreenState extends State<OtherUserProfileScreen> {
               );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: _isBlocked ? Colors.green : Colors.red,
+              backgroundColor:
+                  _isBlocked ? const Color(0xFF16A34A) : const Color(0xFF2E5BFF),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: Text(_isBlocked ? 'Unblock' : 'Block'),
           ),

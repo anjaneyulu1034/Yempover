@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 
 class PaymentScreen extends StatefulWidget {
   final String plan;
@@ -94,15 +96,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
             // Card Number
             TextField(
               controller: _cardNumberController,
-              decoration: InputDecoration(
-                labelText: 'Card Number',
-                hintText: '1234 5678 9012 3456',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(19),
+              ],
+              decoration: AppInputDecoration.build(
+                label: 'Card Number',
+                hint: '1234 5678 9012 3456',
                 prefixIcon: const Icon(Icons.credit_card),
               ),
-              keyboardType: TextInputType.number,
             ),
 
             const SizedBox(height: 16),
@@ -113,12 +116,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 Expanded(
                   child: TextField(
                     controller: _expiryDateController,
-                    decoration: InputDecoration(
-                      labelText: 'Expiry Date',
-                      hintText: 'MM/YY',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                    decoration: AppInputDecoration.build(
+                      label: 'Expiry Date',
+                      hint: 'MM/YY',
                       prefixIcon: const Icon(Icons.calendar_today),
                     ),
                   ),
@@ -129,15 +129,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 Expanded(
                   child: TextField(
                     controller: _cvvController,
-                    decoration: InputDecoration(
-                      labelText: 'CVV',
-                      hintText: '123',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                    decoration: AppInputDecoration.build(
+                      label: 'CVV',
+                      hint: '123',
                       prefixIcon: const Icon(Icons.lock),
                     ),
                     keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(4),
+                    ],
                     obscureText: true,
                   ),
                 ),
@@ -149,12 +150,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
             // Card Holder Name
             TextField(
               controller: _cardHolderController,
-              decoration: InputDecoration(
-                labelText: 'Card Holder Name',
-                hintText: 'John Doe',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+              decoration: AppInputDecoration.build(
+                label: 'Card Holder Name',
+                hint: 'John Doe',
                 prefixIcon: const Icon(Icons.person),
               ),
             ),

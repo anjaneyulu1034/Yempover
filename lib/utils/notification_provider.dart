@@ -233,4 +233,15 @@ class NotificationProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
   }
+
+  void reset() {
+    _notifications = [];
+    _preferences = null;
+    _pagination = null;
+    _unreadCount = 0;
+    _isLoading = false;
+    _error = null;
+    _currentIsReadFilter = null;
+    notifyListeners();
+  }
 }

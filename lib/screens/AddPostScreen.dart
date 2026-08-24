@@ -1,20 +1,23 @@
 // ignore: file_names
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:YemPover_app/models/my_post_model.dart';
+import 'package:yempover_app/models/my_post_model.dart';
 import 'dart:io';
-import 'package:YemPover_app/services/category_service.dart';
-import 'package:YemPover_app/services/add_post_service.dart';
-import 'package:YemPover_app/models/add_post_model.dart';
-import 'package:YemPover_app/screens/service/ServiceAvailabilityScreen.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/services/location_service.dart';
-import 'package:YemPover_app/services/service_booking_service.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/services/category_service.dart';
+import 'package:yempover_app/services/add_post_service.dart';
+import 'package:yempover_app/models/add_post_model.dart';
+import 'package:yempover_app/screens/service/ServiceAvailabilityScreen.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/services/location_service.dart';
+import 'package:yempover_app/services/service_booking_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/utils/validators.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 
 class AddPostScreen extends StatefulWidget {
   final Function()? onPostAdded;
@@ -34,6 +37,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
     'Hours',
     'Days',
     'Months',
+    'Years',
     'No expiry',
   ];
 
@@ -96,6 +100,152 @@ class _AddPostScreenState extends State<AddPostScreen> {
   bool get _isImageRequiredForPost =>
       _selectedOption == 1 &&
       (_postType == 'Product' || _postType == 'Service');
+
+  static const Color _primary = Color(0xFF2E5BFF);
+  static const Color _primaryLight = Color(0xFFEFF4FF);
+  static const Color _surfaceBg = Color(0xFFF8F9FF);
+  static const Color _borderColor = Color(0xFFDDE6FF);
+  static const Color _labelColor = Color(0xFF374151);
+  static const double _fieldRadius = 12;
+
+  Widget _modalDragHandle() {
+    return Center(
+      child: Container(
+        width: 40,
+        height: 4,
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _fieldDecoration({
+    String? hintText,
+    String? labelText,
+    String? errorText,
+    Widget? prefixIcon,
+    BoxConstraints? prefixIconConstraints,
+    String? prefixText,
+    bool alignLabelWithHint = false,
+  }) {
+    final label = labelText ?? hintText ?? 'Field';
+    return AppInputDecoration.build(
+      label: label,
+      hint: labelText != null ? hintText : null,
+      errorText: errorText,
+      prefixIcon: prefixIcon,
+      prefixIconConstraints: prefixIconConstraints,
+      prefixText: prefixText,
+      fillColor: Colors.white,
+      alignLabelWithHint: alignLabelWithHint,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    );
+  }
+
+  Widget _fieldLabel(
+    String label, {
+    bool required = false,
+    IconData? icon,
+    bool useCoinIcon = false,
+  }) {
+    return Row(
+      children: [
+        if (useCoinIcon) ...[
+          const CoinIcon(size: 18, iconSize: 11),
+          const SizedBox(width: 6),
+        ] else if (icon != null) ...[
+          Icon(icon, size: 18, color: _primary),
+          const SizedBox(width: 6),
+        ],
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: _labelColor,
+          ),
+        ),
+        if (required)
+          const Text(
+            ' *',
+            style: TextStyle(
+              color: Colors.red,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _sectionCard({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: _primary.withValues(alpha: 0.07),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildPostTypeSelector() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: _primaryLight,
+        borderRadius: BorderRadius.circular(_fieldRadius),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Row(
+        children: ['Product', 'Service'].map((type) {
+          final selected = _postType == type;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => _onCreatePostTypeChanged(type),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: selected ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: selected
+                      ? [
+                          BoxShadow(
+                            color: _primary.withValues(alpha: 0.12),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Text(
+                  type,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    color: selected ? _primary : _labelColor,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -231,7 +381,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
     } catch (e) {
       setState(() {
         _isLoadingCategories = false;
-        _categoryError = e.toString().replaceAll('Exception: ', '');
+        _categoryError = ErrorMessageUtils.sanitize(e);
       });
       _showErrorSnackBar('Failed to load categories: ${e.toString()}');
     }
@@ -416,19 +566,35 @@ class _AddPostScreenState extends State<AddPostScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
               child: Text(
-                'Choose Image Source',
+                'Add Photo',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
+                  color: _labelColor,
                 ),
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.camera_alt, color: Colors.blue),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _primaryLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.camera_alt, color: _primary),
+              ),
               title: const Text('Take Photo'),
               onTap: () {
                 Navigator.pop(context);
@@ -436,15 +602,22 @@ class _AddPostScreenState extends State<AddPostScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library, color: Colors.blue),
-              title: const Text('Choose from Gallery (max 5 total)'),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _primaryLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.photo_library, color: _primary),
+              ),
+              title: const Text('Choose from Gallery'),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(ImageSource.gallery);
               },
             ),
-            Container(
-              margin: const EdgeInsets.only(top: 8, bottom: 16),
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 20),
               child: TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text(
@@ -467,36 +640,20 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
   // Image upload section
   Widget _buildImageUploadSection() {
+    final hasError =
+        _isImageRequiredForPost &&
+        _showImageValidationError &&
+        _selectedImages.isEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              'Upload Photos',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color:
-                    _isImageRequiredForPost &&
-                        _showImageValidationError &&
-                        _selectedImages.isEmpty
-                    ? Colors.red
-                    : Colors.black,
-              ),
-            ),
-            if (_isImageRequiredForPost)
-              Text(
-                ' *',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.red,
-                ),
-              ),
-          ],
+        _fieldLabel(
+          'Upload Photos',
+          required: _isImageRequiredForPost,
+          icon: Icons.photo_library_outlined,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
 
         // Selected Images Grid
         if (_selectedImages.isNotEmpty)
@@ -515,7 +672,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 children: [
                   Container(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(_fieldRadius),
+                      border: Border.all(color: _borderColor),
                       image: DecorationImage(
                         image: FileImage(_selectedImages[index]),
                         fit: BoxFit.cover,
@@ -523,19 +681,19 @@ class _AddPostScreenState extends State<AddPostScreen> {
                     ),
                   ),
                   Positioned(
-                    top: 4,
-                    right: 4,
+                    top: 6,
+                    right: 6,
                     child: GestureDetector(
                       onTap: () => _removeImage(index),
                       child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
                           Icons.close,
-                          size: 16,
+                          size: 14,
                           color: Colors.white,
                         ),
                       ),
@@ -546,58 +704,64 @@ class _AddPostScreenState extends State<AddPostScreen> {
             },
           ),
 
-        if (_selectedImages.isNotEmpty) const SizedBox(height: 8),
+        if (_selectedImages.isNotEmpty) const SizedBox(height: 10),
 
-        // Upload Button
         GestureDetector(
           onTap: _showImageSourceDialog,
           child: Container(
             width: double.infinity,
-            constraints: const BoxConstraints(minHeight: 120),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            constraints: const BoxConstraints(minHeight: 130),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
+              color: hasError ? Colors.red.shade50 : _primaryLight,
               border: Border.all(
-                color:
-                    _isImageRequiredForPost &&
-                        _showImageValidationError &&
-                        _selectedImages.isEmpty
-                    ? Colors.red
-                    : Colors.grey.shade300,
-                width:
-                    _isImageRequiredForPost &&
-                        _showImageValidationError &&
-                        _selectedImages.isEmpty
-                    ? 2
-                    : 1.5,
+                color: hasError ? Colors.red : _primary.withValues(alpha: 0.35),
+                width: hasError ? 2 : 1.5,
               ),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(_fieldRadius),
             ),
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.cloud_upload, size: 40, color: Colors.grey),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Upload your Images',
-                    style: TextStyle(color: Colors.grey),
-                    textAlign: TextAlign.center,
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: _primary.withValues(alpha: 0.15),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.add_photo_alternate_outlined,
+                      size: 32,
+                      color: hasError ? Colors.red : _primary,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Tap to add photos',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: hasError ? Colors.red : _labelColor,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Tap to upload (max $_maxAllowedImages)',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                    textAlign: TextAlign.center,
+                    'Up to $_maxAllowedImages images',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
-                  if (_isImageRequiredForPost) const SizedBox(height: 8),
-                  if (_isImageRequiredForPost &&
-                      _showImageValidationError &&
-                      _selectedImages.isEmpty)
+                  if (hasError) ...[
+                    const SizedBox(height: 8),
                     Text(
-                      '*At least $_minRequiredProductImages image required',
-                      style: const TextStyle(fontSize: 11, color: Colors.red),
-                      textAlign: TextAlign.center,
+                      'At least $_minRequiredProductImages image required',
+                      style: const TextStyle(fontSize: 12, color: Colors.red),
                     ),
+                  ],
                 ],
               ),
             ),
@@ -612,11 +776,11 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        _fieldLabel(
           'Upload Photos (Optional)',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          icon: Icons.photo_library_outlined,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
 
         // Selected Images Grid
         if (_selectedImages.isNotEmpty)
@@ -635,7 +799,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 children: [
                   Container(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(_fieldRadius),
+                      border: Border.all(color: _borderColor),
                       image: DecorationImage(
                         image: FileImage(_selectedImages[index]),
                         fit: BoxFit.cover,
@@ -643,19 +808,19 @@ class _AddPostScreenState extends State<AddPostScreen> {
                     ),
                   ),
                   Positioned(
-                    top: 4,
-                    right: 4,
+                    top: 6,
+                    right: 6,
                     child: GestureDetector(
                       onTap: () => _removeImage(index),
                       child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
                           Icons.close,
-                          size: 16,
+                          size: 14,
                           color: Colors.white,
                         ),
                       ),
@@ -666,32 +831,39 @@ class _AddPostScreenState extends State<AddPostScreen> {
             },
           ),
 
-        if (_selectedImages.isNotEmpty) const SizedBox(height: 8),
+        if (_selectedImages.isNotEmpty) const SizedBox(height: 10),
 
-        // Upload Button
         GestureDetector(
           onTap: _showImageSourceDialog,
           child: Container(
-            height: 120,
+            height: 130,
             width: double.infinity,
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
+              color: _primaryLight,
+              border: Border.all(color: _primary.withValues(alpha: 0.35)),
+              borderRadius: BorderRadius.circular(_fieldRadius),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.cloud_upload, size: 40, color: Colors.grey),
+                Icon(
+                  Icons.add_photo_alternate_outlined,
+                  size: 36,
+                  color: _primary.withValues(alpha: 0.8),
+                ),
                 const SizedBox(height: 8),
                 const Text(
                   'Add reference images (optional)',
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: _labelColor,
+                  ),
                 ),
                 if (_selectedImages.isEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'Tap to upload (max $_maxAllowedImages)',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    'Up to $_maxAllowedImages images',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ],
               ],
@@ -702,28 +874,24 @@ class _AddPostScreenState extends State<AddPostScreen> {
     );
   }
 
+  Map<String, dynamic>? _categoryById(
+    List<Map<String, dynamic>> categories,
+    String? id,
+  ) {
+    if (id == null) return null;
+    for (final category in categories) {
+      if (category['id'] == id) return category;
+    }
+    return null;
+  }
+
   // Category Selection - Two level dropdown
   Widget _buildCategorySelection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Text(
-              'Category',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
+        _fieldLabel('Category', required: true, icon: Icons.category_outlined),
+        const SizedBox(height: 10),
 
         // Main Category Dropdown
         if (_isLoadingCategories)
@@ -784,28 +952,11 @@ class _AddPostScreenState extends State<AddPostScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Main Category Dropdown
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: DropdownButtonFormField<Map<String, dynamic>>(
-                  initialValue: _selectedMainCategoryId != null
-                      ? _mainCategories.firstWhere(
-                          (cat) => cat['id'] == _selectedMainCategoryId,
-                          orElse: () => _mainCategories.first,
-                        )
-                      : null,
-                  decoration: InputDecoration(
+              DropdownButtonFormField<Map<String, dynamic>>(
+                  isExpanded: true,
+                  value: _categoryById(_mainCategories, _selectedMainCategoryId),
+                  decoration: _fieldDecoration(
                     hintText: 'Select main category',
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
                   ),
                   dropdownColor: Colors.white,
                   icon: const Icon(Icons.arrow_drop_down),
@@ -830,7 +981,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
                     }
                   },
                 ),
-              ),
 
               if (_mainCategoryValidationError != null)
                 Padding(
@@ -845,11 +995,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
               // Sub Category Dropdown (shown only after main category is selected)
               if (_selectedMainCategoryId != null) ...[
-                const Text(
-                  'Sub Category',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 8),
+                _fieldLabel('Sub Category', required: true),
+                const SizedBox(height: 10),
 
                 if (_isLoadingSubCategories)
                   const Center(
@@ -873,28 +1020,11 @@ class _AddPostScreenState extends State<AddPostScreen> {
                     ),
                   )
                 else
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: DropdownButtonFormField<Map<String, dynamic>>(
-                      initialValue: _selectedSubCategoryId != null
-                          ? _subCategories.firstWhere(
-                              (cat) => cat['id'] == _selectedSubCategoryId,
-                              orElse: () => _subCategories.first,
-                            )
-                          : null,
-                      decoration: InputDecoration(
+                  DropdownButtonFormField<Map<String, dynamic>>(
+                      isExpanded: true,
+                      value: _categoryById(_subCategories, _selectedSubCategoryId),
+                      decoration: _fieldDecoration(
                         hintText: 'Select sub category',
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
                       ),
                       dropdownColor: Colors.white,
                       icon: const Icon(Icons.arrow_drop_down),
@@ -923,7 +1053,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
                         }
                       },
                     ),
-                  ),
 
                 if (_subCategoryValidationError != null)
                   Padding(
@@ -945,29 +1074,19 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              _postType == 'Product'
-                  ? 'Enter Product Location'
-                  : 'Enter Service Location',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
-              ),
-            ),
-          ],
+        _fieldLabel(
+          _postType == 'Product'
+              ? 'Product Location'
+              : 'Service Location',
+          required: true,
+          icon: Icons.location_on_outlined,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _borderColor, width: 1.2),
+            borderRadius: BorderRadius.circular(_fieldRadius),
+            color: Colors.white,
           ),
           child: GooglePlaceAutoCompleteTextField(
             textEditingController: _locationController,
@@ -978,27 +1097,31 @@ class _AddPostScreenState extends State<AddPostScreen> {
             countries: const ['us', 'in', 'ca', 'gb', 'au'],
             isLatLngRequired: true,
             inputDecoration: InputDecoration(
-              hintText: 'Type location (min 4 characters) or use GPS icon',
+              hintText: 'Search address (min 4 chars) or use GPS',
+              hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
               border: InputBorder.none,
               errorText: _locationValidationError,
-              prefixIcon: const Icon(Icons.location_on, color: Colors.blue),
+              prefixIcon: const Icon(Icons.place_outlined, color: _primary),
               suffixIcon: _isGettingLocation
                   ? const Padding(
                       padding: EdgeInsets.all(12),
                       child: SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _primary,
+                        ),
                       ),
                     )
                   : IconButton(
-                      icon: const Icon(Icons.my_location, color: Colors.blue),
+                      icon: const Icon(Icons.my_location, color: _primary),
                       onPressed: _getCurrentLocation,
                       tooltip: 'Get current location',
                     ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
-                vertical: 12,
+                vertical: 14,
               ),
             ),
             getPlaceDetailWithLatLng: (Prediction prediction) {
@@ -1147,6 +1270,30 @@ class _AddPostScreenState extends State<AddPostScreen> {
     });
   }
 
+  int _maxExpiryValueFor(String unit) {
+    switch (unit) {
+      case 'Minutes':
+        return 60;
+      case 'Hours':
+        return 24;
+      case 'Days':
+        return 99;
+      case 'Months':
+        return 999;
+      case 'Years':
+        return 9999;
+      default:
+        return 9999;
+    }
+  }
+
+  /// Minutes/Hours/Days are whole-number units (no decimal precision).
+  /// Months/Years allow a single decimal digit (e.g. "6.5" months).
+  bool get _isIntegerOnlyExpiryUnit =>
+      _selectedExpiryUnit == 'Minutes' ||
+      _selectedExpiryUnit == 'Hours' ||
+      _selectedExpiryUnit == 'Days';
+
   DateTime? _computeExpiryDate() {
     if (_selectedExpiryUnit == 'No expiry') {
       return null;
@@ -1158,27 +1305,58 @@ class _AddPostScreenState extends State<AddPostScreen> {
     }
 
     final now = DateTime.now();
-    final value = int.tryParse(rawValue);
+    final value = double.tryParse(rawValue);
     if (value == null || value <= 0) {
       return null;
     }
 
     switch (_selectedExpiryUnit) {
       case 'Minutes':
-        return now.add(Duration(minutes: value));
+        return now.add(Duration(minutes: value.round()));
       case 'Hours':
-        return now.add(Duration(hours: value));
+        return now.add(Duration(hours: value.round()));
       case 'Days':
-        return now.add(Duration(days: value));
-      case 'Months':
-        return DateTime(
-          now.year,
-          now.month + value,
-          now.day,
-          now.hour,
-          now.minute,
-          now.second,
+        return now.add(
+          Duration(seconds: (value * Duration.secondsPerDay).round()),
         );
+      case 'Months':
+        {
+          final wholeMonths = value.truncate();
+          final fraction = value - wholeMonths;
+          var date = DateTime(
+            now.year,
+            now.month + wholeMonths,
+            now.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          if (fraction > 0) {
+            date = date.add(
+              Duration(seconds: (fraction * 30 * Duration.secondsPerDay).round()),
+            );
+          }
+          return date;
+        }
+      case 'Years':
+        {
+          final wholeYears = value.truncate();
+          final fraction = value - wholeYears;
+          var date = DateTime(
+            now.year + wholeYears,
+            now.month,
+            now.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          if (fraction > 0) {
+            date = date.add(
+              Duration(seconds: (fraction * 365 * Duration.secondsPerDay).round()),
+            );
+          }
+          return date;
+        }
       default:
         return null;
     }
@@ -1188,40 +1366,15 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Timeline Post Expiry',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        _fieldLabel(
+          'Post Expiry',
+          icon: Icons.schedule_outlined,
         ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: Colors.grey.shade400, width: 1.2),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: DropdownButtonFormField<String>(
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
             initialValue: _selectedExpiryUnit,
             dropdownColor: Colors.white,
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-            ),
+            decoration: _fieldDecoration(),
             items: _expiryUnits
                 .map(
                   (unit) =>
@@ -1234,13 +1387,17 @@ class _AddPostScreenState extends State<AddPostScreen> {
               }
             },
           ),
-        ),
         if (_selectedExpiryUnit != 'No expiry') ...[
           const SizedBox(height: 10),
           TextField(
             controller: _expiryValueController,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            keyboardType: _isIntegerOnlyExpiryUnit
+                ? TextInputType.number
+                : const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: Validators.boundedCounterFormatters(
+              max: _maxExpiryValueFor(_selectedExpiryUnit),
+              allowDecimal: !_isIntegerOnlyExpiryUnit,
+            ),
             onChanged: (_) {
               if (_expiryValidationError != null) {
                 setState(() {
@@ -1248,30 +1405,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
                 });
               }
             },
-            decoration: InputDecoration(
+            decoration: _fieldDecoration(
               hintText: _selectedExpiryUnit == 'Minutes'
                   ? 'Enter minutes'
                   : _selectedExpiryUnit == 'Hours'
                   ? 'Enter hours'
                   : _selectedExpiryUnit == 'Days'
                   ? 'Enter days'
-                  : 'Enter months',
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(
-                  color: Color(0xFF2E5BFF),
-                  width: 1.5,
-                ),
-              ),
+                  : _selectedExpiryUnit == 'Months'
+                  ? 'Enter months'
+                  : 'Enter years',
               errorText: _expiryValidationError,
             ),
           ),
@@ -1285,30 +1428,17 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              _selectedOption == 1 ? 'Price' : 'Will Pay Amount',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
-              ),
-            ),
-          ],
+        _fieldLabel(
+          _selectedOption == 1 ? 'Price (coins)' : 'Will Pay Amount (coins)',
+          required: true,
+          useCoinIcon: true,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         TextField(
           controller: _selectedOption == 1
               ? _priceController
               : _willPayAmountController,
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-          ],
+          inputFormatters: Validators.amountInputFormatters(),
           onChanged: (_) {
             if (_priceValidationError != null) {
               setState(() {
@@ -1316,30 +1446,15 @@ class _AddPostScreenState extends State<AddPostScreen> {
               });
             }
           },
-          decoration: InputDecoration(
+          decoration: _fieldDecoration(
             hintText: _selectedOption == 1
                 ? _postType == 'Product'
                       ? 'Enter product price'
                       : 'Enter service price'
                 : 'Enter amount you are willing to pay',
-            prefixText: '\$ ',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: Color(0xFF2E5BFF),
-                width: 1.5,
-              ),
-            ),
+            prefixIcon: coinInputPrefix(),
+            prefixIconConstraints: coinPrefixIconConstraints,
             errorText: _priceValidationError,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
           ),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
         ),
@@ -1351,28 +1466,11 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Barter Status',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 8),
+        _fieldLabel('Barter Status', icon: Icons.swap_horiz),
+        const SizedBox(height: 10),
         DropdownButtonFormField<bool>(
           value: _barterAllowed,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-            ),
-            focusedBorder: const OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(8)),
-              borderSide: BorderSide(color: Color(0xFF2E5BFF), width: 2),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 10,
-            ),
-          ),
+          decoration: _fieldDecoration(),
           items: const [
             DropdownMenuItem<bool>(value: false, child: Text('Not Allowed')),
             DropdownMenuItem<bool>(value: true, child: Text('Allowed')),
@@ -1392,18 +1490,18 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Clubbing Option',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 8),
+        _fieldLabel('Clubbing Option', icon: Icons.layers_outlined),
+        const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(10),
+            color: _primaryLight,
+            border: Border.all(color: _borderColor),
+            borderRadius: BorderRadius.circular(_fieldRadius),
           ),
           child: SwitchListTile(
             value: _canBeClubbed,
+            activeThumbColor: Colors.white,
+            activeTrackColor: _primary,
             onChanged: (value) {
               setState(() {
                 _canBeClubbed = value;
@@ -1411,11 +1509,17 @@ class _AddPostScreenState extends State<AddPostScreen> {
             },
             title: const Text(
               'Can be clubbed with other seller items',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _labelColor,
+              ),
             ),
-            subtitle: const Text(
-              'If enabled, buyers can add your other items to a bundle offer.',
-              style: TextStyle(fontSize: 12),
+            subtitle: Text(
+              _canBeClubbed
+                  ? 'This item can be combined with your other items in a single exchange.'
+                  : 'This item can only be offered on its own.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12),
           ),
@@ -1425,93 +1529,93 @@ class _AddPostScreenState extends State<AddPostScreen> {
   }
 
   @override
-  @override
   Widget build(BuildContext context) {
+    final sheetHeight = MediaQuery.sizeOf(context).height * 0.92;
+
     return SafeArea(
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        resizeToAvoidBottomInset: true,
-        body: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Add Post',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Scrollable Content
-              Expanded(
-                child: SingleChildScrollView(
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: EdgeInsets.only(left: 16, right: 16, bottom: 24),
+      child: SizedBox(
+        height: sheetHeight,
+        child: Scaffold(
+          backgroundColor: _surfaceBg,
+          resizeToAvoidBottomInset: true,
+          body: Container(
+            decoration: const BoxDecoration(
+              color: _surfaceBg,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 8, 4),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Select Your Post Type',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      _modalDragHandle(),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Add Post',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF111827),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _selectedOption == 1
+                                      ? 'List a product or service'
+                                      : 'Looking for a service',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              side: const BorderSide(color: _borderColor),
+                            ),
+                            icon: const Icon(Icons.close, size: 20),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-
-                      _buildOptionCard(
-                        1,
-                        'Add your post in Marketplace (Product or Service).',
-                      ),
-                      // const SizedBox(height: 12),
-                      // _buildOptionCard(
-                      //   2,
-                      //   'Looking for a service in Marketplace.',
-                      // ),
-                      const SizedBox(height: 24),
-
-                      if (_selectedOption == 1) _buildStep1(),
-                      if (_selectedOption == 2) _buildLookingForStep1(),
                     ],
                   ),
                 ),
-              ),
 
-              // Bottom Buttons (SAFE FIX)
-              SafeArea(
-                top: false,
-                child: Container(
-                  padding: EdgeInsets.only(
-                    left: 16,
-                    right: 16,
-                    top: 16,
-                    bottom: 16 + MediaQuery.of(context).viewPadding.bottom,
+                Expanded(
+                  child: SingleChildScrollView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_selectedOption == 1) _buildStep1(),
+                        if (_selectedOption == 2) _buildLookingForStep1(),
+                      ],
+                    ),
                   ),
+                ),
+
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                   decoration: BoxDecoration(
                     color: Colors.white,
+                    border: const Border(top: BorderSide(color: _borderColor)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withValues(alpha: 0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, -3),
+                        color: _primary.withValues(alpha: 0.08),
+                        blurRadius: 12,
+                        offset: const Offset(0, -4),
                       ),
                     ],
                   ),
@@ -1521,7 +1625,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
                         child: OutlinedButton(
                           onPressed: () => Navigator.pop(context),
                           style: OutlinedButton.styleFrom(
-                            backgroundColor: const Color(0xFFEFF4FF),
+                            backgroundColor: _primaryLight,
                             foregroundColor: const Color(0xFF1F3D7A),
                             side: const BorderSide(
                               color: Color(0xFF9AB4FF),
@@ -1543,7 +1647,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
                         child: ElevatedButton(
                           onPressed: _isSubmitting ? null : _validateAndSubmit,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2E5BFF),
+                            backgroundColor: _primary,
+                            elevation: 0,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -1560,15 +1665,18 @@ class _AddPostScreenState extends State<AddPostScreen> {
                                 )
                               : const Text(
                                   'Post',
-                                  style: TextStyle(color: Colors.white),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1597,27 +1705,6 @@ class _AddPostScreenState extends State<AddPostScreen> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: _selectedOption == option
-                        ? const Color(0xFF2E5BFF)
-                        : Colors.grey,
-                    width: 2,
-                  ),
-                ),
-                child: _selectedOption == option
-                    ? const Icon(
-                        Icons.circle,
-                        size: 12,
-                        color: Color(0xFF2E5BFF),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 16),
               Expanded(
                 child: Text(description, style: const TextStyle(fontSize: 14)),
               ),
@@ -1632,189 +1719,88 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Create a New Post',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 24),
-
-        const Text(
-          'Post Type',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-
-        const SizedBox(height: 10),
-        DropdownButtonFormField<String>(
-          initialValue: _postType,
-          items: const [
-            DropdownMenuItem(value: 'Product', child: Text('Product')),
-            DropdownMenuItem(value: 'Service', child: Text('Service')),
-          ],
-          onChanged: (value) {
-            if (value == null) return;
-            _onCreatePostTypeChanged(value);
-          },
-          decoration: InputDecoration(
-            hintText: 'Select post type',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-            ),
-            focusedBorder: const OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(8)),
-              borderSide: BorderSide(color: Color(0xFF2E5BFF), width: 2),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 10,
-            ),
+        _sectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldLabel('Post Type', icon: Icons.sell_outlined),
+              const SizedBox(height: 10),
+              _buildPostTypeSelector(),
+              const SizedBox(height: 20),
+              _fieldLabel('Title', required: true, icon: Icons.title),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _titleController,
+                onChanged: (_) {
+                  if (_titleValidationError != null) {
+                    setState(() => _titleValidationError = null);
+                  }
+                },
+                decoration: _fieldDecoration(
+                  hintText: _postType == 'Product'
+                      ? 'Enter product title'
+                      : 'Enter service title',
+                  errorText: _titleValidationError,
+                ),
+              ),
+            ],
           ),
         ),
-
-        const SizedBox(height: 24),
-
-        // Title
-        Row(
-          children: [
-            const Text(
-              'Title',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
+        const SizedBox(height: 16),
+        _sectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildCategorySelection(),
+              const SizedBox(height: 20),
+              _fieldLabel('Description', required: true, icon: Icons.notes),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _descriptionController,
+                maxLines: 4,
+                onChanged: (_) {
+                  if (_descriptionValidationError != null) {
+                    setState(() => _descriptionValidationError = null);
+                  }
+                },
+                decoration: _fieldDecoration(
+                  hintText: _postType == 'Product'
+                      ? 'Describe your product'
+                      : 'Describe your service',
+                  errorText: _descriptionValidationError,
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _titleController,
-          onChanged: (_) {
-            if (_titleValidationError != null) {
-              setState(() {
-                _titleValidationError = null;
-              });
-            }
-          },
-          decoration: InputDecoration(
-            hintText: _postType == 'Product'
-                ? 'Enter product title'
-                : 'Enter service title',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: Color(0xFF2E5BFF),
-                width: 1.5,
-              ),
-            ),
-            errorText: _titleValidationError,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
+            ],
           ),
         ),
-
-        const SizedBox(height: 24),
-
-        // Category - Two level selection
-        _buildCategorySelection(),
-
-        const SizedBox(height: 24),
-
-        // Description
-        Row(
-          children: [
-            const Text(
-              'Description',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _descriptionController,
-          maxLines: 4,
-          onChanged: (_) {
-            if (_descriptionValidationError != null) {
-              setState(() {
-                _descriptionValidationError = null;
-              });
-            }
-          },
-          decoration: InputDecoration(
-            hintText: _postType == 'Product'
-                ? 'Describe your product'
-                : 'Describe your service',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: Color(0xFF2E5BFF),
-                width: 1.5,
-              ),
-            ),
-            errorText: _descriptionValidationError,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
+        const SizedBox(height: 16),
+        _sectionCard(child: _buildImageUploadSection()),
+        const SizedBox(height: 16),
+        _sectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildLocationField(),
+              const SizedBox(height: 20),
+              _buildTimelineExpirySection(),
+            ],
           ),
         ),
-
-        const SizedBox(height: 24),
-
-        // Upload Photos
-        _buildImageUploadSection(),
-
-        if (_selectedOption == 1) ...[
-          const SizedBox(height: 24),
-
-          // Location with current location feature
-          _buildLocationField(),
-        ],
-
-        if (_selectedOption == 1) ...[
-          const SizedBox(height: 24),
-          _buildTimelineExpirySection(),
-        ],
-
-        const SizedBox(height: 24),
-
-        // Price
-        _buildPriceField(),
-
-        const SizedBox(height: 24),
-
-        // Barter status
-        _buildBarterStatusField(),
-
-        if (_selectedOption == 1 && _postType == 'Product') ...[
-          const SizedBox(height: 24),
-          _buildClubbingOptionField(),
-        ],
+        const SizedBox(height: 16),
+        _sectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildPriceField(),
+              const SizedBox(height: 20),
+              _buildBarterStatusField(),
+              if (_postType == 'Product') ...[
+                const SizedBox(height: 20),
+                _buildClubbingOptionField(),
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1823,149 +1809,85 @@ class _AddPostScreenState extends State<AddPostScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Looking For',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 24),
-
-        const Text(
-          'Post Type: Service',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-
-        const SizedBox(height: 24),
-
-        // Title
-        Row(
-          children: [
-            const Text(
-              'Title',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: _primaryLight,
+            borderRadius: BorderRadius.circular(_fieldRadius),
+            border: Border.all(color: _borderColor),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.search, color: _primary, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Looking for a service',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: _labelColor,
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _titleController,
-          onChanged: (_) {
-            if (_titleValidationError != null) {
-              setState(() {
-                _titleValidationError = null;
-              });
-            }
-          },
-          decoration: InputDecoration(
-            hintText: 'What are you looking for?',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: Color(0xFF2E5BFF),
-                width: 1.5,
-              ),
-            ),
-            errorText: _titleValidationError,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
+            ],
           ),
         ),
-
-        const SizedBox(height: 24),
-
-        // Category - Two level selection
-        _buildCategorySelection(),
-
-        const SizedBox(height: 24),
-
-        // Description
-        Row(
-          children: [
-            const Text(
-              'Description',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const Text(
-              ' *',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.red,
+        const SizedBox(height: 16),
+        _sectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldLabel('Title', required: true, icon: Icons.title),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _titleController,
+                onChanged: (_) {
+                  if (_titleValidationError != null) {
+                    setState(() => _titleValidationError = null);
+                  }
+                },
+                decoration: _fieldDecoration(
+                  hintText: 'What are you looking for?',
+                  errorText: _titleValidationError,
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _descriptionController,
-          maxLines: 4,
-          onChanged: (_) {
-            if (_descriptionValidationError != null) {
-              setState(() {
-                _descriptionValidationError = null;
-              });
-            }
-          },
-          decoration: InputDecoration(
-            hintText: 'Describe what you are looking for',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade400, width: 1.2),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: Color(0xFF2E5BFF),
-                width: 1.5,
+              const SizedBox(height: 20),
+              _buildCategorySelection(),
+              const SizedBox(height: 20),
+              _fieldLabel('Description', required: true, icon: Icons.notes),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _descriptionController,
+                maxLines: 4,
+                onChanged: (_) {
+                  if (_descriptionValidationError != null) {
+                    setState(() => _descriptionValidationError = null);
+                  }
+                },
+                decoration: _fieldDecoration(
+                  hintText: 'Describe what you are looking for',
+                  errorText: _descriptionValidationError,
+                ),
               ),
-            ),
-            errorText: _descriptionValidationError,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
+            ],
           ),
         ),
-
-        const SizedBox(height: 24),
-
-        // Upload Photos
-        _buildLookingForImageUploadSection(),
-
-        const SizedBox(height: 24),
-
-        // Location
-        _buildLocationField(),
-
-        const SizedBox(height: 24),
-
-        // Will Pay Amount
-        _buildPriceField(),
-
-        const SizedBox(height: 24),
-
-        // Barter status
-        _buildBarterStatusField(),
-
-        const SizedBox(height: 24),
-
-        // Timeline expiry
-        _buildTimelineExpirySection(),
+        const SizedBox(height: 16),
+        _sectionCard(child: _buildLookingForImageUploadSection()),
+        const SizedBox(height: 16),
+        _sectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildLocationField(),
+              const SizedBox(height: 20),
+              _buildPriceField(),
+              const SizedBox(height: 20),
+              _buildBarterStatusField(),
+              const SizedBox(height: 20),
+              _buildTimelineExpirySection(),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -2053,7 +1975,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
     if (_selectedExpiryUnit != 'No expiry') {
       final rawExpiry = _expiryValueController.text.trim();
-      final expiryValue = int.tryParse(rawExpiry);
+      final expiryValue = double.tryParse(rawExpiry);
+      final maxExpiryValue = _maxExpiryValueFor(_selectedExpiryUnit);
       if (expiryValue == null || expiryValue <= 0) {
         setState(() {
           _expiryValidationError =
@@ -2061,6 +1984,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
         });
         _showError(
           'Please enter a valid ${_selectedExpiryUnit.toLowerCase()} value',
+        );
+        return;
+      }
+      if (expiryValue > maxExpiryValue) {
+        setState(() {
+          _expiryValidationError =
+              '$_selectedExpiryUnit must be between 1 and $maxExpiryValue';
+        });
+        _showError(
+          '$_selectedExpiryUnit must be between 1 and $maxExpiryValue',
         );
         return;
       }
@@ -2083,6 +2016,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
         _showError('Please enter a valid price');
         return;
       }
+      if (amountText.length > Validators.maxAmountLength) {
+        setState(() {
+          _priceValidationError = 'Price is too large';
+        });
+        _showError('Price is too large');
+        return;
+      }
     } else {
       if (amountText.isEmpty) {
         setState(() {
@@ -2099,6 +2039,13 @@ class _AddPostScreenState extends State<AddPostScreen> {
         _showError('Please enter a valid amount');
         return;
       }
+      if (amountText.length > Validators.maxAmountLength) {
+        setState(() {
+          _priceValidationError = 'Amount is too large';
+        });
+        _showError('Amount is too large');
+        return;
+      }
     }
 
     // Submit directly without step 2 dialog
@@ -2106,7 +2053,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
   }
 
   void _showError(String message) {
-    SnackbarUtils.showError(context, message);
+    if (!mounted) return;
+    SnackbarUtils.showValidation(context, message);
   }
 
   void _showSuccessSnackBar(String message) {
@@ -2115,22 +2063,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
-    final normalized = message.toLowerCase();
-    if (normalized.contains('maximum') && normalized.contains('photos')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.red.shade700,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-      return;
-    }
-
-    SnackbarUtils.showError(context, message);
+    SnackbarUtils.showValidation(context, message);
   }
 
   Future<void> _submitPost() async {
@@ -2202,6 +2135,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
             categoryId: _selectedSubCategoryId!,
             price: price,
             location: _locationController.text.trim(),
+            latitude: _selectedLatitude,
+            longitude: _selectedLongitude,
             images: imageUrls,
             barterStatus: _barterAllowed ? 'OPEN_FOR_BARTER' : 'NO_BARTER',
             status: 'PROVIDE_SERVICE',

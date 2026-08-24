@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/utils/wallet_offer_guard.dart';
+import 'package:yempover_app/utils/validators.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 
 class PurchaseOfferScreen extends StatefulWidget {
   final Post post;
@@ -18,9 +22,6 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
   final TextEditingController _descriptionController = TextEditingController();
   final TradeChatService _chatService = TradeChatService();
   bool _isLoading = false;
-
-  bool get _isFixedProductPrice =>
-      widget.post.type == PostType.product && widget.post.price > 0;
 
   @override
   void initState() {
@@ -47,15 +48,26 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
       return;
     }
 
-    final price = _isFixedProductPrice
-      ? widget.post.price
-      : double.tryParse(_priceController.text);
+    final price = double.tryParse(_priceController.text);
     if (price == null || price <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid price')),
       );
       return;
     }
+    if (_priceController.text.trim().length > Validators.maxAmountLength) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Price is too large')),
+      );
+      return;
+    }
+
+    final canAfford = await WalletOfferGuard.ensureCanAfford(
+      context,
+      requiredCoins: price,
+      itemName: widget.post.title,
+    );
+    if (!canAfford || !mounted) return;
 
     setState(() => _isLoading = true);
 
@@ -118,51 +130,58 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
       if (!mounted) return;
       setState(() => _isLoading = false);
 
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Icon(Icons.check_circle, color: Colors.green, size: 60),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Purchase Offer Submitted!',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Your purchase offer of \$${_priceController.text} for "${widget.post.title}" has been sent to ${widget.post.postedBy.firstName}.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'You can track the status in the Trade Chat section.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
-          ),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const TradeChatScreen(),
-                    ),
-                    (route) => false,
-                  );
-                },
-                child: const Text('Go to Trade Chat'),
-              ),
-            ),
-          ],
-        ),
+      // Temporarily hidden: success popup includes price/coins context, not needed now.
+      // showDialog(
+      //   context: context,
+      //   barrierDismissible: false,
+      //   builder: (context) => AlertDialog(
+      //     title: const Icon(Icons.check_circle, color: Colors.green, size: 60),
+      //     content: Column(
+      //       mainAxisSize: MainAxisSize.min,
+      //       children: [
+      //         const Text(
+      //           'Purchase Offer Submitted!',
+      //           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      //           textAlign: TextAlign.center,
+      //         ),
+      //         const SizedBox(height: 12),
+      //         Text(
+      //           'Your purchase offer of \$${_priceController.text} for "${widget.post.title}" has been sent to ${widget.post.postedBy.firstName}.',
+      //           textAlign: TextAlign.center,
+      //           style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+      //         ),
+      //         const SizedBox(height: 8),
+      //         const Text(
+      //           'You can track the status in the Trade Chat section.',
+      //           textAlign: TextAlign.center,
+      //           style: TextStyle(fontSize: 12, color: Colors.grey),
+      //         ),
+      //       ],
+      //     ),
+      //     actions: [
+      //       SizedBox(
+      //         width: double.infinity,
+      //         child: ElevatedButton(
+      //           onPressed: () {
+      //             Navigator.pushAndRemoveUntil(
+      //               context,
+      //               MaterialPageRoute(
+      //                 builder: (context) => const TradeChatScreen(),
+      //               ),
+      //               (route) => false,
+      //             );
+      //           },
+      //           child: const Text('Go to Trade Chat'),
+      //         ),
+      //       ),
+      //     ],
+      //   ),
+      // );
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const TradeChatScreen()),
+        (route) => false,
       );
     } catch (e) {
       if (!mounted) return;
@@ -279,7 +298,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
                             ),
                             if (widget.post.price > 0)
                               Text(
-                                'Original Price: \$${widget.post.price.toStringAsFixed(2)}',
+                                'Original Price: ${CoinFormat.withLabel(widget.post.price)}',
                                 style: const TextStyle(
                                   fontSize: 14,
                                   color: Colors.green,
@@ -303,39 +322,26 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
             const SizedBox(height: 24),
 
             // Price Input
-            Text(
-              _isFixedProductPrice ? 'Product Price (Fixed)' : 'Your Offer Price',
+            const Text(
+              'Your offer price',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 8),
-            if (_isFixedProductPrice)
+            if (widget.post.price > 0)
               Text(
-                'This product is purchased at the listed price.',
+                'Listed at ${CoinFormat.withLabel(widget.post.price)} — enter the amount you want to offer.',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
-            if (_isFixedProductPrice) const SizedBox(height: 8),
+            if (widget.post.price > 0) const SizedBox(height: 8),
             TextField(
               controller: _priceController,
-              keyboardType: TextInputType.number,
-              readOnly: _isFixedProductPrice,
-              decoration: InputDecoration(
-                hintText: _isFixedProductPrice
-                    ? 'Price is fixed'
-                    : 'Enter your offer price',
-                prefixText: '\$',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF2E5BFF)),
-                ),
-                contentPadding: const EdgeInsets.all(16),
-                filled: true,
-                fillColor: _isFixedProductPrice
-                    ? Colors.green.shade50
-                    : Colors.white,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: Validators.amountInputFormatters(),
+              decoration: AppInputDecoration.build(
+                label: 'Offer Price',
+                hint: 'Enter your offer in coins',
+                prefix: coinInputPrefix(),
+                fillColor: Colors.grey.shade50,
               ),
             ),
 
@@ -350,19 +356,10 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
             TextField(
               controller: _descriptionController,
               maxLines: 4,
-              decoration: InputDecoration(
-                hintText:
-                    'Add any notes or conditions for your purchase offer...',
-                hintStyle: const TextStyle(color: Colors.grey),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF2E5BFF)),
-                ),
-                contentPadding: const EdgeInsets.all(16),
+              decoration: AppInputDecoration.build(
+                label: 'Additional Notes',
+                hint: 'Add any notes or conditions for your purchase offer...',
+                alignLabelWithHint: true,
               ),
             ),
 

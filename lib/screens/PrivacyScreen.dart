@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/services/content_service.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/services/content_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/widgets/rich_content.dart';
 
 class PrivacyScreen extends StatefulWidget {
   const PrivacyScreen({super.key});
@@ -38,7 +40,10 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = ErrorMessageUtils.sanitize(
+          e,
+          fallback: 'Failed to load privacy policy',
+        );
       });
 
       if (!mounted) return;
@@ -148,19 +153,32 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                       border: Border.all(color: Colors.grey.shade200),
                     ),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Icon(Icons.update, size: 20, color: Colors.blue),
                         const SizedBox(width: 8),
-                        const Text(
-                          'Last updated: ',
-                          style: TextStyle(fontSize: 14, color: Colors.grey),
-                        ),
-                        Text(
-                          _getLastUpdatedDate(),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue,
+                        Expanded(
+                          child: Wrap(
+                            spacing: 4,
+                            runSpacing: 2,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              const Text(
+                                'Last updated:',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              Text(
+                                _getLastUpdatedDate(),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -185,9 +203,9 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                         ),
                       ],
                     ),
-                    child: Text(
-                      _content,
-                      style: const TextStyle(
+                    child: RichContent(
+                      html: _content,
+                      baseTextStyle: const TextStyle(
                         fontSize: 15,
                         height: 1.7,
                         color: Colors.black87,
@@ -249,7 +267,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                                   ),
                                   SizedBox(width: 4),
                                   Text(
-                                    'privacy@YemPover.com',
+                                    'privacy@yempover.com',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.blue,

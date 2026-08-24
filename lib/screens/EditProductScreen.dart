@@ -2,14 +2,19 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/api_constants.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
 import '../models/my_post_model.dart';
 import '../services/add_post_service.dart';
 import '../services/category_service.dart';
 import '../services/location_service.dart';
 import '../services/my_posts_service.dart';
+import '../utils/error_message_utils.dart';
+import '../utils/validators.dart';
+import 'service/ServiceAvailabilityScreen.dart';
 
 class EditProductScreen extends StatefulWidget {
   final MyPost post;
@@ -33,6 +38,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     'Hours',
     'Days',
     'Months',
+    'Years',
     'No expiry',
   ];
 
@@ -56,7 +62,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
   String? _selectedSubCategoryId;
   late String _postType;
   late bool _isListed;
+  late bool _canBeClubbed;
   late List<String> _images;
+  double? _selectedLatitude;
+  double? _selectedLongitude;
 
   List<Map<String, dynamic>> _mainCategories = [];
   List<Map<String, dynamic>> _subCategories = [];
@@ -94,6 +103,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
     _selectedCategoryId = widget.post.categoryId;
     _postType = widget.post.type;
     _isListed = widget.post.isListed;
+    _canBeClubbed = widget.post.isClubbable;
+    _selectedLatitude = widget.post.latitude;
+    _selectedLongitude = widget.post.longitude;
     _images = List.from(widget.post.images.take(_maxPostImages));
     _initializeTimelineFields();
     _validateStatus();
@@ -279,7 +291,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       if (!mounted) return;
       setState(() {
         _isLoadingCategories = false;
-        _categoryLoadError = e.toString().replaceAll('Exception: ', '');
+        _categoryLoadError = ErrorMessageUtils.sanitize(e);
       });
     }
   }
@@ -373,6 +385,30 @@ class _EditProductScreenState extends State<EditProductScreen> {
     });
   }
 
+  int _maxExpiryValueFor(String unit) {
+    switch (unit) {
+      case 'Minutes':
+        return 60;
+      case 'Hours':
+        return 24;
+      case 'Days':
+        return 99;
+      case 'Months':
+        return 999;
+      case 'Years':
+        return 9999;
+      default:
+        return 9999;
+    }
+  }
+
+  /// Minutes/Hours/Days are whole-number units (no decimal precision).
+  /// Months/Years allow a single decimal digit (e.g. "6.5" months).
+  bool get _isIntegerOnlyExpiryUnit =>
+      _selectedExpiryUnit == 'Minutes' ||
+      _selectedExpiryUnit == 'Hours' ||
+      _selectedExpiryUnit == 'Days';
+
   DateTime? _computeEditedExpiryDate() {
     if (_selectedExpiryUnit == _expiredExpiryUnit) {
       return widget.post.validUntil;
@@ -387,7 +423,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       return null;
     }
 
-    final value = int.tryParse(rawValue);
+    final value = double.tryParse(rawValue);
     if (value == null || value <= 0) {
       return null;
     }
@@ -395,20 +431,55 @@ class _EditProductScreenState extends State<EditProductScreen> {
     final now = DateTime.now();
     switch (_selectedExpiryUnit) {
       case 'Minutes':
-        return now.add(Duration(minutes: value));
+        return now.add(Duration(minutes: value.round()));
       case 'Hours':
-        return now.add(Duration(hours: value));
+        return now.add(Duration(hours: value.round()));
       case 'Days':
-        return now.add(Duration(days: value));
-      case 'Months':
-        return DateTime(
-          now.year,
-          now.month + value,
-          now.day,
-          now.hour,
-          now.minute,
-          now.second,
+        return now.add(
+          Duration(seconds: (value * Duration.secondsPerDay).round()),
         );
+      case 'Months':
+        {
+          final wholeMonths = value.truncate();
+          final fraction = value - wholeMonths;
+          var date = DateTime(
+            now.year,
+            now.month + wholeMonths,
+            now.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          if (fraction > 0) {
+            date = date.add(
+              Duration(
+                seconds: (fraction * 30 * Duration.secondsPerDay).round(),
+              ),
+            );
+          }
+          return date;
+        }
+      case 'Years':
+        {
+          final wholeYears = value.truncate();
+          final fraction = value - wholeYears;
+          var date = DateTime(
+            now.year + wholeYears,
+            now.month,
+            now.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          if (fraction > 0) {
+            date = date.add(
+              Duration(
+                seconds: (fraction * 365 * Duration.secondsPerDay).round(),
+              ),
+            );
+          }
+          return date;
+        }
       default:
         return null;
     }
@@ -423,7 +494,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       return true;
     }
 
-    final value = int.tryParse(_expiryValueController.text.trim());
+    final value = double.tryParse(_expiryValueController.text.trim());
     if (value == null || value <= 0) {
       setState(() {
         _expiryValidationError =
@@ -436,6 +507,19 @@ class _EditProductScreenState extends State<EditProductScreen> {
           ),
           backgroundColor: Colors.red,
         ),
+      );
+      return false;
+    }
+
+    final maxExpiryValue = _maxExpiryValueFor(_selectedExpiryUnit);
+    if (value > maxExpiryValue) {
+      final message =
+          '$_selectedExpiryUnit must be between 1 and $maxExpiryValue';
+      setState(() {
+        _expiryValidationError = message;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
       );
       return false;
     }
@@ -530,6 +614,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
         _locationController.text = (address != null && address.isNotEmpty)
             ? address
             : '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+        _selectedLatitude = position.latitude;
+        _selectedLongitude = position.longitude;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -588,6 +674,15 @@ class _EditProductScreenState extends State<EditProductScreen> {
     });
   }
 
+  Future<void> _openManageAvailability() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ServiceAvailabilityScreen(serviceId: widget.post.id),
+      ),
+    );
+  }
+
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -597,6 +692,21 @@ class _EditProductScreenState extends State<EditProductScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select a category'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Sub-category is mandatory whenever the selected category actually has
+    // sub-categories to choose from — the dropdown itself is only rendered
+    // in that case, so this mirrors the UI rather than blocking edits on
+    // categories that have none.
+    if (_subCategories.isNotEmpty &&
+        (_selectedSubCategoryId == null || _selectedSubCategoryId!.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a sub category'),
           backgroundColor: Colors.red,
         ),
       );
@@ -663,6 +773,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
         'barterStatus': _normalizeBarterStatus(_selectedBarterStatus),
         'categoryId': _selectedCategoryId,
         'isListed': _isListed,
+        if (_postType != 'service') ...{
+          'canBeClubbed': _canBeClubbed,
+          'isClubbable': _canBeClubbed,
+          'canClubItems': _canBeClubbed,
+        },
         'type': _postType, // IMPORTANT: Include the post type
         'validFrom': validFromIso,
         'validUntil': validUntilIso,
@@ -672,6 +787,12 @@ class _EditProductScreenState extends State<EditProductScreen> {
       requestData['price'] = double.parse(_priceController.text.trim());
 
       requestData['location'] = _locationController.text.trim();
+      if (_selectedLatitude != null) {
+        requestData['latitude'] = _selectedLatitude;
+      }
+      if (_selectedLongitude != null) {
+        requestData['longitude'] = _selectedLongitude;
+      }
 
       debugPrint('📦 Sending update request with type: $_postType');
       debugPrint('📦 Request data: $requestData');
@@ -705,12 +826,20 @@ class _EditProductScreenState extends State<EditProductScreen> {
       if (!mounted) return;
 
       final raw = e.toString().toLowerCase();
-      String message = 'Unable to save changes right now. Please try again.';
+      String message;
       if (raw.contains('please add at least one image') ||
           raw.contains('at least one image')) {
         message = 'Please add at least one image to continue.';
       } else if (raw.contains('maximum 5 images')) {
         message = 'You can upload a maximum of 5 images.';
+      } else {
+        // Surface the real reason (validation error, session expiry, network
+        // issue, etc.) instead of always showing the same generic message
+        // no matter what actually went wrong.
+        message = ErrorMessageUtils.sanitize(
+          e,
+          fallback: 'Unable to save changes right now. Please try again.',
+        );
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -727,6 +856,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final textScale = MediaQuery.of(context).textScaler.scale(1.0);
+    final saveButtonHeight = (50 * textScale.clamp(1.0, 1.25)).toDouble();
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: Colors.grey[100],
@@ -891,6 +1023,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                       if (_subCategories.isNotEmpty)
                         _buildDropdownField(
                           label: 'Sub Category',
+                          isRequired: true,
                           value: _selectedSubCategoryId,
                           items: _subCategories.map<DropdownMenuItem<String>>((
                             category,
@@ -938,8 +1071,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
                         label: 'Price',
                         controller: _priceController,
                         keyboardType: TextInputType.number,
-                        prefix: '\$ ',
+                        prefixIcon: coinInputPrefix(),
+                        prefixIconConstraints: coinPrefixIconConstraints,
                         isRequired: true,
+                        inputFormatters: Validators.amountInputFormatters(),
                         validator: (value) {
                           final priceText = value?.trim() ?? '';
                           if (priceText.isEmpty) {
@@ -953,6 +1088,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
                           if (parsedPrice <= 0) {
                             return 'Price must be greater than 0';
+                          }
+
+                          if (priceText.length > Validators.maxAmountLength) {
+                            return 'Price is too large';
                           }
 
                           return null;
@@ -1000,6 +1139,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
                           });
                         },
                       ),
+
+                      if (_postType == 'service') ...[
+                        const SizedBox(height: 16),
+                        _buildManageAvailabilitySection(),
+                      ],
 
                       const SizedBox(height: 16),
 
@@ -1086,17 +1230,78 @@ class _EditProductScreenState extends State<EditProductScreen> {
                         ),
                       ),
 
+                      // Clubbing only applies to products offered in a
+                      // barter — not services.
+                      if (_postType != 'service') ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Can be clubbed',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _canBeClubbed
+                                          ? 'This item can be combined with your other items in a single exchange.'
+                                          : 'This item can only be offered on its own.',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch(
+                                value: _canBeClubbed,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _canBeClubbed = value;
+                                  });
+                                },
+                                activeThumbColor: Colors.blue,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
                       const SizedBox(height: 30),
 
                       // Save Button
                       SizedBox(
                         width: double.infinity,
-                        height: 50,
+                        height: saveButtonHeight,
                         child: ElevatedButton(
                           onPressed: _isSaving ? null : _saveChanges,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             foregroundColor: Colors.white,
+                            minimumSize: Size.fromHeight(saveButtonHeight),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -1114,8 +1319,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
                                   'Save Changes',
                                   style: TextStyle(
                                     fontSize: 16,
+                                    height: 1.2,
                                     fontWeight: FontWeight.bold,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                         ),
                       ),
@@ -1302,6 +1510,53 @@ class _EditProductScreenState extends State<EditProductScreen> {
     );
   }
 
+  Widget _buildManageAvailabilitySection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Availability Slots',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Edit the weekly time slots customers can book for this service.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: _openManageAvailability,
+            icon: const Icon(Icons.schedule, size: 18),
+            label: const Text('Edit'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.deepPurple,
+              side: const BorderSide(color: Colors.deepPurple),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTimelineExpirySection() {
     final validUntil = widget.post.validUntil;
     final currentExpiryText = _getCurrentExpiryText(validUntil);
@@ -1379,8 +1634,13 @@ class _EditProductScreenState extends State<EditProductScreen> {
             const SizedBox(height: 10),
             TextFormField(
               controller: _expiryValueController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              keyboardType: _isIntegerOnlyExpiryUnit
+                  ? TextInputType.number
+                  : const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: Validators.boundedCounterFormatters(
+                max: _maxExpiryValueFor(_selectedExpiryUnit),
+                allowDecimal: !_isIntegerOnlyExpiryUnit,
+              ),
               onChanged: (_) {
                 if (_expiryValidationError != null) {
                   setState(() {
@@ -1388,26 +1648,22 @@ class _EditProductScreenState extends State<EditProductScreen> {
                   });
                 }
               },
-              decoration: InputDecoration(
-                hintText: _selectedExpiryUnit == 'Minutes'
-                    ? 'Enter minutes'
+              decoration: AppInputDecoration.build(
+                label: _selectedExpiryUnit == 'Minutes'
+                    ? 'Minutes'
                     : _selectedExpiryUnit == 'Hours'
-                    ? 'Enter hours'
+                    ? 'Hours'
                     : _selectedExpiryUnit == 'Days'
-                    ? 'Enter days'
-                    : 'Enter months',
+                    ? 'Days'
+                    : _selectedExpiryUnit == 'Months'
+                    ? 'Months'
+                    : 'Years',
+                hint: 'Enter value',
                 errorText: _expiryValidationError,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Colors.blue, width: 2),
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
                 ),
               ),
             ),
@@ -1423,9 +1679,12 @@ class _EditProductScreenState extends State<EditProductScreen> {
     int maxLines = 1,
     TextInputType? keyboardType,
     String? prefix,
+    Widget? prefixIcon,
+    BoxConstraints? prefixIconConstraints,
     Widget? suffixIcon,
     bool isRequired = false,
     String? Function(String?)? validator,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1443,50 +1702,19 @@ class _EditProductScreenState extends State<EditProductScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          RichText(
-            text: TextSpan(
-              children: [
-                TextSpan(
-                  text: label,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey,
-                  ),
-                ),
-                if (isRequired)
-                  const TextSpan(
-                    text: ' *',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.red,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
           TextFormField(
             controller: controller,
             maxLines: maxLines,
             keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
             validator: validator,
-            decoration: InputDecoration(
-              prefixText: prefix,
+            decoration: AppInputDecoration.build(
+              label: isRequired ? '$label *' : label,
+              prefixText: prefixIcon == null ? prefix : null,
+              prefixIcon: prefixIcon,
+              prefixIconConstraints: prefixIconConstraints,
               suffixIcon: suffixIcon,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.blue, width: 2),
-              ),
+              fillColor: Colors.white,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 12,

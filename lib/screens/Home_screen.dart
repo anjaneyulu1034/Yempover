@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
-import 'package:YemPover_app/utils/notification_provider.dart';
+import 'package:yempover_app/utils/notification_provider.dart';
+import 'package:yempover_app/utils/chat_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
@@ -8,23 +9,28 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
 import 'package:provider/provider.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/models/get_my_profile_response.dart';
-import 'package:YemPover_app/services/api_service.dart';
-import 'package:YemPover_app/screens/PostDetailScreen.dart';
-import 'package:YemPover_app/screens/tradechatscreen/TradeChatScreen.dart';
-import 'package:YemPover_app/screens/TradeBoothScreen.dart';
-import 'package:YemPover_app/screens/HamburgerMenuScreen.dart';
-import 'package:YemPover_app/screens/MyProfileScreen.dart';
-import 'package:YemPover_app/screens/NotificationsScreen.dart';
-import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
-import 'package:YemPover_app/services/my_profile_service.dart';
-import 'package:YemPover_app/services/profile_session_manager.dart';
-import 'package:YemPover_app/services/category_service.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/utils/error_message_utils.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/models/get_my_profile_response.dart';
+import 'package:yempover_app/services/api_service.dart';
+import 'package:yempover_app/screens/PostDetailScreen.dart';
+import 'package:yempover_app/screens/tradechatscreen/TradeChatScreen.dart';
+import 'package:yempover_app/screens/TradeBoothScreen.dart';
+import 'package:yempover_app/screens/HamburgerMenuScreen.dart';
+import 'package:yempover_app/screens/MyProfileScreen.dart';
+import 'package:yempover_app/screens/NotificationsScreen.dart';
+import 'package:yempover_app/screens/CoinsWalletScreen.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/widgets/safe_network_image.dart';
+import 'package:yempover_app/services/my_profile_service.dart';
+import 'package:yempover_app/services/profile_session_manager.dart';
+import 'package:yempover_app/services/category_service.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
 import '../services/post_action_service.dart';
+import 'package:yempover_app/utils/blocked_users_cache.dart';
+import 'package:yempover_app/utils/wallet_balance_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Extended Post class with the required properties
 class ExtendedPost {
@@ -44,8 +50,16 @@ class ExtendedPost {
     this.distance,
   });
 
-  bool get isForBarter => post.barterStatus == BarterStatus.OPEN_FOR_BARTER;
+  bool get isForBarter =>
+      post.barterStatus == BarterStatus.OPEN_FOR_BARTER ||
+      post.status == PostStatus.FOR_BARTER;
+
   bool get isForSale => post.status == PostStatus.FOR_SALE;
+
+  /// Sale-only listing (not open for barter).
+  bool get isNotBarterSale =>
+      !isForBarter &&
+      (post.type == PostType.service || post.status == PostStatus.FOR_SALE);
 
   String get title => post.title;
   String get description => post.description;
@@ -92,6 +106,17 @@ class HomeScreen extends StatefulWidget {
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeFilterPrefs {
+  static const savedKey = 'home_filters_saved';
+  static const tradeType = 'home_filter_trade_type';
+  static const postType = 'home_filter_post_type';
+  static const category = 'home_filter_category';
+  static const wishListCategory = 'home_filter_wishlist_category';
+  static const sortBy = 'home_filter_sort_by';
+  static const radiusEnabled = 'home_filter_radius_enabled';
+  static const radius = 'home_filter_radius';
 }
 
 class _HomeScreenState extends State<HomeScreen> {
@@ -143,18 +168,48 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, String>> _filterMainCategories = [];
   Map<String, List<Map<String, String>>> _filterSubCategories = {};
 
+  // Favorite state for the marketplace cards — fetched once as a set of
+  // post ids so each card can look itself up in O(1) instead of one API
+  // call per card.
+  Set<String> _favoritePostIds = {};
+  final Set<String> _favoriteTogglingIds = {};
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    BlockedUsersCache.instance.addListener(_onBlockedUsersChanged);
     _startExpiryTicker();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeData();
+      // App-level: connect the socket and start tracking the live wallet
+      // balance once, here, rather than each coin-showing screen doing its
+      // own fetch — Home is reached after every login/cold-start resume.
+      if (mounted) {
+        Provider.of<WalletBalanceProvider>(
+          context,
+          listen: false,
+        ).ensureLive();
+      }
+    });
+  }
+
+  void _onBlockedUsersChanged() {
+    if (!mounted) return;
+    setState(() {
+      _posts = BlockedUsersCache.instance.filterByOwner(
+        _posts,
+        (post) => post.post.postedBy.id.isNotEmpty
+            ? post.post.postedBy.id
+            : post.post.postedById,
+      );
+      _applyFilters();
     });
   }
 
   @override
   void dispose() {
+    BlockedUsersCache.instance.removeListener(_onBlockedUsersChanged);
     _expiryTicker?.cancel();
     _scrollController.dispose();
     _searchController.dispose();
@@ -171,8 +226,118 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _loadPersistedFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!(prefs.getBool(_HomeFilterPrefs.savedKey) ?? false)) return;
+    if (!mounted) return;
+
+    setState(() {
+      _selectedTradeType = _normalizePersistedTradeType(
+        prefs.getString(_HomeFilterPrefs.tradeType),
+      );
+      _selectedPostType = _normalizePersistedPostType(
+        prefs.getString(_HomeFilterPrefs.postType),
+      );
+      _selectedCategory = prefs.getString(_HomeFilterPrefs.category);
+      _selectedWishListCategory = prefs.getString(
+        _HomeFilterPrefs.wishListCategory,
+      );
+      _selectedSortBy =
+          prefs.getString(_HomeFilterPrefs.sortBy) ?? _selectedSortBy;
+      _isRadiusFilterEnabled =
+          prefs.getBool(_HomeFilterPrefs.radiusEnabled) ??
+          _isRadiusFilterEnabled;
+      _selectedRadius =
+          prefs.getDouble(_HomeFilterPrefs.radius) ?? _selectedRadius;
+    });
+  }
+
+  String? _normalizePersistedTradeType(String? value) {
+    if (value == null || value.isEmpty) return null;
+    if (value == 'For sale') return 'Not Barter';
+    const allowed = ['Barter', 'Not Barter'];
+    return allowed.contains(value) ? value : null;
+  }
+
+  String? _normalizePersistedPostType(String? value) {
+    if (value == null || value.isEmpty) return null;
+    return switch (value) {
+      'Product' || 'Service' => value,
+      'Looking for a product/service' => 'Service',
+      'Offering for barter' || 'Barter/selling a product/service' => 'Product',
+      _ => null,
+    };
+  }
+
+  Future<void> _savePersistedFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasAnyFilter =
+        _selectedTradeType != null ||
+        _selectedPostType != null ||
+        _selectedCategory != null ||
+        _selectedWishListCategory != null ||
+        _selectedSortBy != 'Nearest' ||
+        _isRadiusFilterEnabled ||
+        _searchQuery.isNotEmpty;
+
+    if (!hasAnyFilter) {
+      await _clearPersistedFilters();
+      return;
+    }
+
+    await prefs.setBool(_HomeFilterPrefs.savedKey, true);
+    await _writeOptionalString(
+      prefs,
+      _HomeFilterPrefs.tradeType,
+      _selectedTradeType,
+    );
+    await _writeOptionalString(
+      prefs,
+      _HomeFilterPrefs.postType,
+      _selectedPostType,
+    );
+    await _writeOptionalString(prefs, _HomeFilterPrefs.category, _selectedCategory);
+    await _writeOptionalString(
+      prefs,
+      _HomeFilterPrefs.wishListCategory,
+      _selectedWishListCategory,
+    );
+    await prefs.setString(_HomeFilterPrefs.sortBy, _selectedSortBy);
+    await prefs.setBool(
+      _HomeFilterPrefs.radiusEnabled,
+      _isRadiusFilterEnabled,
+    );
+    await prefs.setDouble(_HomeFilterPrefs.radius, _selectedRadius);
+  }
+
+  Future<void> _writeOptionalString(
+    SharedPreferences prefs,
+    String key,
+    String? value,
+  ) async {
+    if (value == null || value.isEmpty) {
+      await prefs.remove(key);
+    } else {
+      await prefs.setString(key, value);
+    }
+  }
+
+  Future<void> _clearPersistedFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_HomeFilterPrefs.savedKey);
+    await prefs.remove(_HomeFilterPrefs.tradeType);
+    await prefs.remove(_HomeFilterPrefs.postType);
+    await prefs.remove(_HomeFilterPrefs.category);
+    await prefs.remove(_HomeFilterPrefs.wishListCategory);
+    await prefs.remove(_HomeFilterPrefs.sortBy);
+    await prefs.remove(_HomeFilterPrefs.radiusEnabled);
+    await prefs.remove(_HomeFilterPrefs.radius);
+  }
+
   Future<void> _initializeData() async {
     try {
+      await _loadPersistedFilters();
+
       final isLoggedIn = await _tokenService.isLoggedIn();
       _isGuestUser = await _tokenService.isGuestUser();
 
@@ -197,10 +362,19 @@ class _HomeScreenState extends State<HomeScreen> {
           );
           _isLoadingProfile = false;
         });
+        if (mounted) {
+          Provider.of<NotificationProvider>(context, listen: false).reset();
+          Provider.of<ChatProvider>(context, listen: false).reset();
+          Provider.of<WalletBalanceProvider>(context, listen: false).reset();
+        }
         ProfileSessionManager.instance.clearSession();
       }
 
       await Future.wait([
+        if (!_isGuestUser)
+          BlockedUsersCache.instance.ensureLoaded().catchError((e) {
+            debugPrint('🔴 Blocked users load error: $e');
+          }),
         if (!_isGuestUser)
           _fetchMyProfile().catchError((e) {
             debugPrint('🔴 Profile fetch error: $e');
@@ -222,6 +396,14 @@ class _HomeScreenState extends State<HomeScreen> {
           _loadUnreadNotificationCount().catchError((e) {
             debugPrint('🔴 Notification error: $e');
           }),
+        if (!_isGuestUser)
+          _loadChatUnreadCount().catchError((e) {
+            debugPrint('🔴 Chat unread count error: $e');
+          }),
+        if (!_isGuestUser)
+          _loadFavoritePostIds().catchError((e) {
+            debugPrint('🔴 Favorites fetch error: $e');
+          }),
         _loadFilterCategories().catchError((e) {
           debugPrint('🔴 Filter category error: $e');
         }),
@@ -232,6 +414,92 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoadingPosts = false;
         _isLoadingProfile = false;
       });
+    }
+  }
+
+  Future<void> _loadFavoritePostIds() async {
+    try {
+      final response = await _postActionService.getFavorites(
+        page: 1,
+        limit: 200,
+      );
+      final ids = response.data.favorites
+          .map((favorite) => favorite.actualPostId)
+          .whereType<String>()
+          .toSet();
+      if (!mounted) return;
+      setState(() {
+        _favoritePostIds = ids;
+        for (final post in _posts) {
+          post.isFavorite = ids.contains(post.id);
+        }
+      });
+    } catch (e) {
+      debugPrint('🔴 Error loading favorite post ids: $e');
+    }
+  }
+
+  Future<void> _toggleFavorite(ExtendedPost extendedPost) async {
+    if (_favoriteTogglingIds.contains(extendedPost.id)) return;
+
+    final isLoggedIn = await _tokenService.isLoggedIn();
+    if (!isLoggedIn) {
+      if (mounted) SnackbarUtils.showLoginDialog(context);
+      return;
+    }
+
+    final previousState = extendedPost.isFavorite;
+    final isService = extendedPost.post.type == PostType.service;
+
+    setState(() {
+      _favoriteTogglingIds.add(extendedPost.id);
+      extendedPost.isFavorite = !previousState;
+      if (extendedPost.isFavorite) {
+        _favoritePostIds.add(extendedPost.id);
+      } else {
+        _favoritePostIds.remove(extendedPost.id);
+      }
+    });
+
+    try {
+      if (extendedPost.isFavorite) {
+        await _postActionService.addToFavorites(
+          postId: extendedPost.id,
+          isService: isService,
+        );
+      } else {
+        await _postActionService.removeFromFavorites(
+          postId: extendedPost.id,
+          isService: isService,
+        );
+      }
+      if (mounted) {
+        setState(() => _favoriteTogglingIds.remove(extendedPost.id));
+      }
+    } catch (e) {
+      final errorText = e.toString().toLowerCase();
+      if (!mounted) return;
+
+      // Keep the optimistic state if the backend says it's already in the
+      // state we just set — this is a benign race, not a real failure.
+      if (errorText.contains('already favorited') ||
+          errorText.contains('already in favorites') ||
+          errorText.contains('not in favorites') ||
+          errorText.contains('favorite not found')) {
+        setState(() => _favoriteTogglingIds.remove(extendedPost.id));
+        return;
+      }
+
+      setState(() {
+        _favoriteTogglingIds.remove(extendedPost.id);
+        extendedPost.isFavorite = previousState;
+        if (previousState) {
+          _favoritePostIds.add(extendedPost.id);
+        } else {
+          _favoritePostIds.remove(extendedPost.id);
+        }
+      });
+      SnackbarUtils.showError(context, e);
     }
   }
 
@@ -377,6 +645,15 @@ class _HomeScreenState extends State<HomeScreen> {
       await provider.loadUnreadCount();
     } catch (e) {
       debugPrint('🔴 Error loading unread count: $e');
+    }
+  }
+
+  Future<void> _loadChatUnreadCount() async {
+    try {
+      final provider = Provider.of<ChatProvider>(context, listen: false);
+      await provider.loadUnreadCount();
+    } catch (e) {
+      debugPrint('🔴 Error loading chat unread count: $e');
     }
   }
 
@@ -537,16 +814,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final int requestPage = loadMore ? _currentPage + 1 : 1;
 
-      String? status;
+      String? tradeType;
       if (_selectedTradeType == 'Barter') {
-        status = 'FOR_BARTER';
-      } else if (_selectedTradeType == 'Sales') {
-        status = 'FOR_SALE';
+        tradeType = 'barter';
+      } else if (_selectedTradeType == 'Not Barter') {
+        tradeType = 'sale';
       }
 
       String? backendPostType;
-      if (_selectedPostType == 'Looking for a product/service') {
-        backendPostType = 'looking_for';
+      if (_selectedPostType == 'Product') {
+        backendPostType = 'product';
+      } else if (_selectedPostType == 'Service') {
+        backendPostType = 'service';
       }
 
       double? latitude;
@@ -561,14 +840,16 @@ class _HomeScreenState extends State<HomeScreen> {
         limit: _limit,
         categoryId: _selectedWishListCategory ?? _selectedCategory,
         search: _searchQuery.isNotEmpty ? _searchQuery : null,
-        status: status,
+        tradeType: tradeType,
         postType: backendPostType,
         latitude: latitude,
         longitude: longitude,
         radius: _selectedRadius,
       );
 
-      final List<ExtendedPost> extendedPosts = response.posts.map((post) {
+      final List<ExtendedPost> extendedPosts = response.posts
+          .where((post) => !post.isExpiredOrUnavailable)
+          .map((post) {
         double? distance;
         if (_activeLatitude != null &&
             _activeLongitude != null &&
@@ -584,7 +865,11 @@ class _HomeScreenState extends State<HomeScreen> {
           distance = post.distance;
         }
 
-        return ExtendedPost(post: post, isFavorite: false, distance: distance);
+        return ExtendedPost(
+          post: post,
+          isFavorite: _favoritePostIds.contains(post.id),
+          distance: distance,
+        );
       }).toList();
 
       extendedPosts.sort((a, b) {
@@ -601,7 +886,14 @@ class _HomeScreenState extends State<HomeScreen> {
             .toList();
 
         setState(() {
-          _posts.addAll(uniquePosts);
+          _posts.addAll(
+            BlockedUsersCache.instance.filterByOwner(
+              uniquePosts,
+              (post) => post.post.postedBy.id.isNotEmpty
+                  ? post.post.postedBy.id
+                  : post.post.postedById,
+            ),
+          );
           _currentPage = requestPage;
           _applyFilters();
           _hasMore = response.pagination.page < response.pagination.pages;
@@ -610,7 +902,12 @@ class _HomeScreenState extends State<HomeScreen> {
         _updatePostDistancesFromGeocoding();
       } else {
         setState(() {
-          _posts = extendedPosts;
+          _posts = BlockedUsersCache.instance.filterByOwner(
+            extendedPosts,
+            (post) => post.post.postedBy.id.isNotEmpty
+                ? post.post.postedBy.id
+                : post.post.postedById,
+          );
           _currentPage = requestPage;
           _applyFilters();
           _hasMore = response.pagination.page < response.pagination.pages;
@@ -711,22 +1008,33 @@ class _HomeScreenState extends State<HomeScreen> {
   void _applyFilters() {
     setState(() {
       _filteredPosts = _posts.where((post) {
-        if (_selectedTradeType != null) {
-          if (_selectedTradeType == 'Barter' && !post.isForBarter) return false;
-          if (_selectedTradeType == 'Sales' && !post.isForSale) return false;
+        if (post.post.isExpiredOrUnavailable) {
+          return false;
         }
 
-        if (_selectedPostType != null) {
-          if (_selectedPostType == 'Looking for a product/service' &&
-              post.post.status != PostStatus.LOOKING_FOR_SERVICE) {
+        if (!_isGuestUser) {
+          final ownerId = post.post.postedBy.id.isNotEmpty
+              ? post.post.postedBy.id
+              : post.post.postedById;
+          if (BlockedUsersCache.instance.isBlocked(ownerId)) {
             return false;
           }
-          if (_selectedPostType == 'Barter/selling a product/service' &&
-              post.post.status != PostStatus.PROVIDE_SERVICE &&
-              !post.isForBarter &&
-              !post.isForSale) {
-            return false;
-          }
+        }
+
+        if (_selectedTradeType == 'Barter' && !post.isForBarter) {
+          return false;
+        }
+        if (_selectedTradeType == 'Not Barter' && !post.isNotBarterSale) {
+          return false;
+        }
+
+        if (_selectedPostType == 'Product' &&
+            post.post.type != PostType.product) {
+          return false;
+        }
+        if (_selectedPostType == 'Service' &&
+            post.post.type != PostType.service) {
+          return false;
         }
 
         if (_selectedCategory != null) {
@@ -807,8 +1115,17 @@ class _HomeScreenState extends State<HomeScreen> {
       _searchController.clear();
     });
 
+    await _clearPersistedFilters();
     await _fetchPosts();
   }
+
+  bool get _hasActiveFilters =>
+      _selectedTradeType != null ||
+      _selectedPostType != null ||
+      _selectedCategory != null ||
+      _selectedWishListCategory != null ||
+      _selectedSortBy != 'Nearest' ||
+      _isRadiusFilterEnabled;
 
   void _showLocationOptions() {
     showModalBottomSheet(
@@ -1122,6 +1439,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _isRadiusFilterEnabled = isRadiusFilterEnabled;
                 _selectedRadius = radius;
               });
+              unawaited(_savePersistedFilters());
               _fetchPosts();
               Navigator.pop(context);
             },
@@ -1261,6 +1579,24 @@ class _HomeScreenState extends State<HomeScreen> {
     return post.formattedPrice;
   }
 
+  /// Avoid duplicating barter status (e.g. "Open for barter" chip + "In Return: Open for barter").
+  bool _shouldShowInReturnChip(ExtendedPost post) {
+    final returnType = _getReturnType(post).trim();
+    if (returnType.isEmpty) return false;
+
+    final barterStatus = _getBarterStatus(post).trim();
+    if (barterStatus.isNotEmpty &&
+        returnType.toLowerCase() == barterStatus.toLowerCase()) {
+      return false;
+    }
+
+    if (post.isForBarter) {
+      return post.wishListCategory.trim().isNotEmpty;
+    }
+
+    return returnType != post.formattedPrice.trim();
+  }
+
   String _getTimelineLabel(ExtendedPost post) {
     final validUntil = post.validUntil;
     if (validUntil == null) {
@@ -1341,10 +1677,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showPleaseLoginMessage() {
     if (!mounted) return;
-    SnackbarUtils.showInfo(context, 'Please login to continue');
+    SnackbarUtils.showGuestLoginRequired(context);
   }
 
   void _navigateToHamburgerMenu() {
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const HamburgerMenuScreen()),
@@ -1380,7 +1719,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const TradeChatScreen()),
-    );
+    ).then((_) => _loadChatUnreadCount());
   }
 
   void _navigateToTradeBooth() async {
@@ -1394,7 +1733,9 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const TradeBoothScreen()),
-    );
+    ).then((_) {
+      if (mounted) _fetchPosts();
+    });
   }
 
   void _showNotificationScreen() async {
@@ -1484,7 +1825,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        'Are you sure you want to close YemPover now?',
+                        'Are you sure you want to close BarterX now?',
                         style: TextStyle(
                           fontSize: 15,
                           height: 1.35,
@@ -1792,7 +2133,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const Text(
-                    'Welcome to YemPover',
+                    'Welcome to BarterX',
                     style: TextStyle(
                       color: Color(0xFFE1EEFF),
                       fontSize: 13,
@@ -1805,6 +2146,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(width: 6),
             Consumer<NotificationProvider>(
               builder: (context, provider, child) {
+                final badgeCount = _isGuestUser ? 0 : provider.unreadCount;
                 return Stack(
                   children: [
                     Container(
@@ -1826,7 +2168,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: _showNotificationScreen,
                       ),
                     ),
-                    if (provider.unreadCount > 0)
+                    if (badgeCount > 0)
                       Positioned(
                         right: -2,
                         top: -2,
@@ -1849,9 +2191,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           child: Center(
                             child: Text(
-                              provider.unreadCount > 9
-                                  ? '9+'
-                                  : '${provider.unreadCount}',
+                              badgeCount > 9 ? '9+' : '$badgeCount',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 9,
@@ -1875,10 +2215,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 border: Border.all(color: Colors.white.withOpacity(0.26)),
               ),
               child: IconButton(
-                icon: const Icon(
-                  Icons.attach_money,
-                  color: Colors.white,
-                  size: 24,
+                icon: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    'assets/image.png',
+                    width: 34,
+                    height: 34,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                  ),
                 ),
                 onPressed: _showCoinsWalletScreen,
               ),
@@ -2032,10 +2377,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 12),
           Builder(
             builder: (context) {
-              final hasActiveFilters =
-                  _selectedTradeType != null ||
-                  _selectedPostType != null ||
-                  _selectedCategory != null;
+              final hasActiveFilters = _hasActiveFilters;
 
               return Container(
                 decoration: BoxDecoration(
@@ -2121,37 +2463,32 @@ class _HomeScreenState extends State<HomeScreen> {
                   child:
                       post.processedImages.isNotEmpty &&
                           post.processedImages.first.trim().isNotEmpty
-                      ? Image.network(
-                          post.processedImages.first,
+                      ? SafeNetworkImage(
+                          url: post.processedImages.first,
                           height: 220,
                           width: double.infinity,
                           fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              height: 220,
-                              color: Colors.grey.shade200,
-                              child: const Center(
-                                child: CircularProgressIndicator(
-                                  color: Colors.blue,
-                                ),
+                          placeholder: Container(
+                            height: 220,
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.blue,
                               ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              height: 220,
-                              width: double.infinity,
-                              color: Colors.grey.shade200,
-                              child: Center(
-                                child: Icon(
-                                  Icons.image_not_supported,
-                                  size: 64,
-                                  color: Colors.grey,
-                                ),
+                            ),
+                          ),
+                          errorWidget: Container(
+                            height: 220,
+                            width: double.infinity,
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: Icon(
+                                Icons.image_not_supported,
+                                size: 64,
+                                color: Colors.grey,
                               ),
-                            );
-                          },
+                            ),
+                          ),
                         )
                       : Container(
                           height: 220,
@@ -2200,44 +2537,116 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                // Hide button
+                // Favorite + Hide buttons
                 Positioned(
                   top: 16,
                   right: 16,
+                  child: Row(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          icon: Icon(
+                            post.isFavorite
+                                ? Icons.favorite
+                                : Icons.favorite_border,
+                            color: post.isFavorite ? Colors.red : Colors.grey,
+                            size: 22,
+                          ),
+                          onPressed: () => _toggleFavorite(post),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.visibility_off_outlined,
+                            color: Colors.grey,
+                            size: 22,
+                          ),
+                          onPressed: () => _confirmHidePost(post),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Distinct-viewer count (Point 5) — visible to all users.
+                Positioned(
+                  bottom: 12,
+                  right: 12,
                   child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+                      color: Colors.black.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.remove_red_eye,
+                          size: 13,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${post.viewCount}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
-                    ),
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.visibility_off_outlined,
-                        color: Colors.grey,
-                        size: 22,
-                      ),
-                      onPressed: () => _confirmHidePost(post),
                     ),
                   ),
                 ),
               ],
             ),
-            // Content Section
+            // Content Section (field order matches Trade Booth: title → chips → location → description → footer)
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Tags
+                  Text(
+                    post.title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -2350,98 +2759,76 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ),
                         ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
+                      if (post.post.price > 0)
+                        CoinPriceLabel(
+                          text: CoinFormat.withUnit(post.post.price),
+                          iconSize: 14,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.green.shade700,
+                          ),
                         ),
-                        decoration: BoxDecoration(
-                          color: _getTimelineChipBgColor(post),
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.timer_outlined,
-                              size: 14,
-                              color: _getTimelineChipFgColor(post),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _getTimelineLabel(post),
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: _getTimelineChipFgColor(post),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  // Title
-                  Text(
-                    post.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (post.post.price > 0) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.sell_outlined,
-                            size: 14,
-                            color: Colors.blue.shade700,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Price: ${post.formattedPrice}',
+                  if (post.location.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 16,
+                          color: Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            post.location,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Colors.blue.shade700,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                              color: Colors.grey.shade700,
                             ),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (post.description.trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      post.description,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                        height: 1.3,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                   const SizedBox(height: 8),
                   Row(
                     children: [
                       Icon(
-                        Icons.access_time,
+                        Icons.timer_outlined,
                         size: 14,
-                        color: Colors.grey.shade600,
+                        color: _getTimelineChipFgColor(post),
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        _formatDate(post.postedDate),
-                        style: TextStyle(
-                          color: Colors.grey.shade700,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                      Expanded(
+                        child: Text(
+                          _getTimelineLabel(post),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: _getTimelineChipFgColor(post),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 10),
                       if (post.formattedDistance.isNotEmpty) ...[
                         Icon(
                           Icons.near_me_outlined,
@@ -2453,35 +2840,24 @@ class _HomeScreenState extends State<HomeScreen> {
                           post.formattedDistance,
                           style: TextStyle(
                             color: Colors.grey.shade700,
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                       ],
-                      Icon(
-                        Icons.location_on_outlined,
-                        size: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          post.location,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.grey.shade700,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      Text(
+                        _formatDate(post.postedDate),
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 11,
                         ),
                       ),
                     ],
                   ),
-                  if (_getReturnType(post).trim() != post.formattedPrice) ...[
+                  if (_shouldShowInReturnChip(post)) ...[
                     const SizedBox(height: 10),
-                    // Return type (shown only when different from the main price)
+                    // Wish-list / return value when it adds info beyond chips above
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
@@ -2549,13 +2925,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   _navItem(Icons.home_filled, 'Marketplace', true),
                   const SizedBox(width: 40),
-                  Consumer<NotificationProvider>(
+                  Consumer<ChatProvider>(
                     builder: (context, provider, child) {
+                      final badgeCount = _isGuestUser ? 0 : provider.unreadCount;
                       return _navItem(
                         Icons.chat_bubble_outline,
                         'Chat',
                         false,
-                        badge: provider.unreadCount,
+                        badge: badgeCount,
                         iconAssetPath: 'assets/chat_icons.png',
                       );
                     },
@@ -2722,7 +3099,16 @@ class FilterScreen extends StatefulWidget {
   State<FilterScreen> createState() => _FilterScreenState();
 }
 
+enum _CategoryPickerField { none, main, sub }
+
 class _FilterScreenState extends State<FilterScreen> {
+  static const Color _accent = Color(0xFF2E5BFF);
+  static const Color _surface = Color(0xFFF7F9FF);
+  static const Color _border = Color(0xFFE6ECFF);
+  static const double _categoryListMaxHeight = 220;
+
+  _CategoryPickerField _openCategoryPicker = _CategoryPickerField.none;
+
   late String? _selectedTradeType;
   late String? _selectedPostType;
   late String? _selectedCategory;
@@ -2735,25 +3121,71 @@ class _FilterScreenState extends State<FilterScreen> {
     'Nearest',
     'Newest',
     'Oldest',
-    'Price: Low to High',
-    'Price: High to Low',
   ];
-  final List<String> _tradeTypes = ['Barter', 'Sales'];
+  final List<String> _tradeTypes = [
+    'Barter',
+    'Not Barter',
+  ];
   final List<String> _postTypes = [
-    'Looking for a product/service',
-    'Barter/selling a product/service',
+    'Product',
+    'Service',
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _selectedTradeType = widget.selectedTradeType;
-    _selectedPostType = widget.selectedPostType;
+  int get _activeFilterCount {
+    var count = 0;
+    if (_selectedTradeType != null) count++;
+    if (_selectedPostType != null) count++;
+    if (_selectedCategory != null) count++;
+    if (_selectedWishListCategory != null) count++;
+    if (_isRadiusFilterEnabled) count++;
+    if (_selectedSortBy != 'Nearest') count++;
+    return count;
+  }
+
+  String? _normalizeIncomingTradeType(String? value) {
+    if (value == null || value.isEmpty) return null;
+    if (value == 'For sale') return 'Not Barter';
+    return _tradeTypes.contains(value) ? value : null;
+  }
+
+  String? _normalizeIncomingPostType(String? value) {
+    if (value == null || value.isEmpty) return null;
+    return switch (value) {
+      'Product' || 'Service' => value,
+      'Looking for a product/service' => 'Service',
+      'Offering for barter' || 'Barter/selling a product/service' => 'Product',
+      _ => _postTypes.contains(value) ? value : null,
+    };
+  }
+
+  void _syncFromWidget() {
+    _selectedTradeType = _normalizeIncomingTradeType(widget.selectedTradeType);
+    _selectedPostType = _normalizeIncomingPostType(widget.selectedPostType);
     _selectedCategory = widget.selectedCategory;
     _selectedWishListCategory = widget.selectedWishListCategory;
     _selectedSortBy = widget.selectedSortBy;
     _isRadiusFilterEnabled = widget.isRadiusFilterEnabled;
     _selectedRadius = widget.selectedRadius;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFromWidget();
+  }
+
+  @override
+  void didUpdateWidget(covariant FilterScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedTradeType != widget.selectedTradeType ||
+        oldWidget.selectedPostType != widget.selectedPostType ||
+        oldWidget.selectedCategory != widget.selectedCategory ||
+        oldWidget.selectedWishListCategory != widget.selectedWishListCategory ||
+        oldWidget.selectedSortBy != widget.selectedSortBy ||
+        oldWidget.isRadiusFilterEnabled != widget.isRadiusFilterEnabled ||
+        oldWidget.selectedRadius != widget.selectedRadius) {
+      _syncFromWidget();
+    }
   }
 
   void _clearFilters() {
@@ -2765,63 +3197,106 @@ class _FilterScreenState extends State<FilterScreen> {
       _selectedSortBy = 'Nearest';
       _isRadiusFilterEnabled = false;
       _selectedRadius = 10.0;
+      _openCategoryPicker = _CategoryPickerField.none;
     });
     widget.onClear();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewPadding.bottom;
+
     return SafeArea(
       child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-        height: MediaQuery.of(context).size.height * 0.75,
+        height: MediaQuery.of(context).size.height * 0.82,
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Filters',
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      shape: BoxShape.circle,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Filters',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                        letterSpacing: -0.3,
+                      ),
                     ),
-                    child: Icon(Icons.close, color: Colors.grey.shade700),
                   ),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
+                  if (_activeFilterCount > 0)
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _accent.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '$_activeFilterCount active',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _accent,
+                        ),
+                      ),
+                    ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.close_rounded, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 20),
             Expanded(
               child: ListView(
-                padding: EdgeInsets.only(
-                  bottom: 120 + MediaQuery.of(context).viewPadding.bottom,
-                ),
+                padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + bottomInset),
                 children: [
                   _buildFilterSection(
-                    title: 'Sort By',
+                    icon: Icons.swap_horiz_rounded,
+                    title: 'Trade type',
+                    options: _tradeTypes,
+                    selectedValue: _selectedTradeType,
+                    onChanged: (value) {
+                      setState(() => _selectedTradeType = value);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  _buildFilterSection(
+                    icon: Icons.article_outlined,
+                    title: 'Post type',
+                    options: _postTypes,
+                    selectedValue: _selectedPostType,
+                    onChanged: (value) {
+                      setState(() => _selectedPostType = value);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  _buildCategoryDropdowns(),
+                  const SizedBox(height: 14),
+                  _buildRadiusFilter(),
+                  const SizedBox(height: 14),
+                  _buildFilterSection(
+                    icon: Icons.sort_rounded,
+                    title: 'Sort by',
                     options: _sortOptions,
                     selectedValue: _selectedSortBy,
                     onChanged: (value) {
@@ -2829,146 +3304,58 @@ class _FilterScreenState extends State<FilterScreen> {
                       setState(() => _selectedSortBy = value);
                     },
                   ),
-                  const SizedBox(height: 24),
-                  _buildFilterSection(
-                    title: 'Trade Type',
-                    options: _tradeTypes,
-                    selectedValue: _selectedTradeType,
-                    onChanged: (value) {
-                      setState(() => _selectedTradeType = value);
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  _buildFilterSection(
-                    title: 'Post Type',
-                    options: _postTypes,
-                    selectedValue: _selectedPostType,
-                    onChanged: (value) {
-                      setState(() => _selectedPostType = value);
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  _buildFilterSection(
-                    title: 'Category',
-                    options: widget.mainCategories
-                        .map((category) => category['name'] ?? '')
-                        .where((name) => name.isNotEmpty)
-                        .toList(),
-                    selectedValue: _selectedCategory,
-                    onChanged: (value) {
-                      final selected = widget.mainCategories.firstWhere(
-                        (category) => category['name'] == value,
-                        orElse: () => {},
-                      );
-                      setState(() {
-                        _selectedCategory = selected['id'];
-                        _selectedWishListCategory = null;
-                      });
-                    },
-                    optionLabelBuilder: (value) => value,
-                    optionSelectedByValue: (value) {
-                      final selected = widget.mainCategories.firstWhere(
-                        (category) => category['id'] == _selectedCategory,
-                        orElse: () => {},
-                      );
-                      return selected['name'] == value;
-                    },
-                  ),
-                  if (widget.isLoadingCategories)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 16, bottom: 20),
-                      child: Center(
-                        child: CircularProgressIndicator(color: Colors.blue),
-                      ),
-                    ),
-                  if (!widget.isLoadingCategories &&
-                      widget.mainCategories.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16, bottom: 20),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Unable to load categories',
-                              style: TextStyle(color: Colors.grey.shade600),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: widget.onRetryLoadCategories,
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.blue,
-                            ),
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (_selectedCategory != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 24),
-                      child: _buildFilterSection(
-                        title: 'Subcategory',
-                        options:
-                            (widget.subCategoriesByMain[_selectedCategory] ??
-                                    const <Map<String, String>>[])
-                                .map((subCategory) => subCategory['name'] ?? '')
-                                .where((name) => name.isNotEmpty)
-                                .toList(),
-                        selectedValue: _selectedWishListCategory,
-                        onChanged: (value) {
-                          final selectedSub =
-                              (widget.subCategoriesByMain[_selectedCategory] ??
-                                      const <Map<String, String>>[])
-                                  .firstWhere(
-                                    (subCategory) =>
-                                        subCategory['name'] == value,
-                                    orElse: () => {},
-                                  );
-                          setState(() {
-                            _selectedWishListCategory = selectedSub['id'];
-                          });
-                        },
-                        optionLabelBuilder: (value) => value,
-                        optionSelectedByValue: (value) {
-                          final selectedSub =
-                              (widget.subCategoriesByMain[_selectedCategory] ??
-                                      const <Map<String, String>>[])
-                                  .firstWhere(
-                                    (subCategory) =>
-                                        subCategory['id'] ==
-                                        _selectedWishListCategory,
-                                    orElse: () => {},
-                                  );
-                          return selectedSub['name'] == value;
-                        },
-                      ),
-                    ),
-                  const SizedBox(height: 24),
-                  _buildRadiusFilter(),
                 ],
               ),
             ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _clearFilters,
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          side: BorderSide(color: Colors.grey.shade300),
+            Container(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + bottomInset),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: _border)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 12,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _clearFilters,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Text('Clear All'),
+                        side: const BorderSide(color: _border),
+                        foregroundColor: const Color(0xFF374151),
+                      ),
+                      child: const Text(
+                        'Clear all',
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF2E5BFF), Color(0xFF4A7AFF)],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _accent.withOpacity(0.28),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
                       child: ElevatedButton(
                         onPressed: () {
                           widget.onApply(
@@ -2982,19 +3369,23 @@ class _FilterScreenState extends State<FilterScreen> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 15),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                          backgroundColor: Colors.blue,
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
                           foregroundColor: Colors.white,
                           elevation: 0,
                         ),
-                        child: const Text('Apply'),
+                        child: const Text(
+                          'Apply filters',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -3003,7 +3394,314 @@ class _FilterScreenState extends State<FilterScreen> {
     );
   }
 
+  Widget _buildFilterCard({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+      ),
+      child: child,
+    );
+  }
+
+  InputDecoration _dropdownDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _accent, width: 1.5),
+      ),
+    );
+  }
+
+  List<Map<String, String>> _validCategoryOptions(
+    List<Map<String, String>> options,
+  ) {
+    return options
+        .where(
+          (item) =>
+              (item['id'] ?? '').isNotEmpty && (item['name'] ?? '').isNotEmpty,
+        )
+        .toList();
+  }
+
+  String? _labelForCategoryId(
+    List<Map<String, String>> options,
+    String? id,
+  ) {
+    if (id == null) return null;
+    for (final item in options) {
+      if (item['id'] == id) return item['name'];
+    }
+    return null;
+  }
+
+  void _toggleCategoryPicker(_CategoryPickerField field) {
+    setState(() {
+      _openCategoryPicker =
+          _openCategoryPicker == field ? _CategoryPickerField.none : field;
+    });
+  }
+
+  Widget _buildInlineCategoryPicker({
+    required String hint,
+    required String? selectedId,
+    required List<Map<String, String>> options,
+    required _CategoryPickerField field,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final validOptions = _validCategoryOptions(options);
+    final isOpen = _openCategoryPicker == field;
+    final selectedLabel = _labelForCategoryId(validOptions, selectedId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: () => _toggleCategoryPicker(field),
+            borderRadius: BorderRadius.circular(12),
+            child: InputDecorator(
+              decoration: _dropdownDecoration(hint).copyWith(
+                suffixIcon: Icon(
+                  isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              child: Text(
+                selectedLabel ?? hint,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: selectedLabel != null
+                      ? const Color(0xFF111827)
+                      : Colors.grey.shade500,
+                  fontWeight: selectedLabel != null
+                      ? FontWeight.w500
+                      : FontWeight.normal,
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (isOpen) ...[
+          const SizedBox(height: 8),
+          Container(
+            constraints: const BoxConstraints(
+              maxHeight: _categoryListMaxHeight,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: validOptions.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Text(
+                      'No categories available',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: validOptions.length,
+                    separatorBuilder: (_, __) => Divider(
+                      height: 1,
+                      color: _border.withValues(alpha: 0.8),
+                    ),
+                    itemBuilder: (context, index) {
+                      final item = validOptions[index];
+                      final id = item['id']!;
+                      final name = item['name']!;
+                      final isSelected = selectedId == id;
+                      return ListTile(
+                        dense: true,
+                        title: Text(
+                          name,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isSelected
+                                ? _accent
+                                : const Color(0xFF111827),
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        ),
+                        trailing: isSelected
+                            ? const Icon(Icons.check, color: _accent, size: 20)
+                            : null,
+                        onTap: () {
+                          onChanged(id);
+                          setState(
+                            () => _openCategoryPicker =
+                                _CategoryPickerField.none,
+                          );
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCategoryDropdowns() {
+    if (widget.isLoadingCategories) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Center(
+          child: CircularProgressIndicator(
+            color: _accent,
+            strokeWidth: 2.5,
+          ),
+        ),
+      );
+    }
+
+    if (widget.mainCategories.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _border),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Unable to load categories',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: widget.onRetryLoadCategories,
+                style: TextButton.styleFrom(foregroundColor: _accent),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final subCategories = _selectedCategory != null
+        ? (widget.subCategoriesByMain[_selectedCategory!] ??
+            const <Map<String, String>>[])
+        : const <Map<String, String>>[];
+
+    return _buildFilterCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.category_outlined, size: 20, color: _accent),
+              const SizedBox(width: 8),
+              const Text(
+                'Category',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF111827),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildInlineCategoryPicker(
+            hint: 'Select category',
+            selectedId: _selectedCategory,
+            options: widget.mainCategories,
+            field: _CategoryPickerField.main,
+            onChanged: (value) {
+              setState(() {
+                _selectedCategory = value;
+                _selectedWishListCategory = null;
+                _openCategoryPicker = _CategoryPickerField.none;
+              });
+            },
+          ),
+          if (_selectedCategory != null) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                const Icon(
+                  Icons.subdirectory_arrow_right_rounded,
+                  size: 20,
+                  color: _accent,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Subcategory',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (subCategories.isEmpty)
+              Text(
+                'No subcategories available',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+              )
+            else
+              _buildInlineCategoryPicker(
+                hint: 'Select subcategory',
+                selectedId: _selectedWishListCategory,
+                options: subCategories,
+                field: _CategoryPickerField.sub,
+                onChanged: (value) {
+                  setState(() => _selectedWishListCategory = value);
+                },
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildFilterSection({
+    required IconData icon,
     required String title,
     required List<String> options,
     required String? selectedValue,
@@ -3011,144 +3709,186 @@ class _FilterScreenState extends State<FilterScreen> {
     String Function(String value)? optionLabelBuilder,
     bool Function(String value)? optionSelectedByValue,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: options.map((option) {
-            final isSelected =
-                optionSelectedByValue?.call(option) ?? selectedValue == option;
+    if (options.isEmpty) return const SizedBox.shrink();
 
-            return FilterChip(
-              label: Text(
-                optionLabelBuilder?.call(option) ?? option,
-                style: TextStyle(
-                  color: isSelected ? Colors.blue : Colors.grey.shade700,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+    return _buildFilterCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20, color: _accent),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF111827),
                 ),
               ),
-              selected: isSelected,
-              onSelected: (selected) {
-                onChanged(selected ? option : null);
-              },
-              selectedColor: Colors.blue.shade50,
-              checkmarkColor: Colors.blue,
-              backgroundColor: Colors.grey.shade50,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
-                side: BorderSide(
-                  color: isSelected ? Colors.blue : Colors.grey.shade200,
-                  width: isSelected ? 1.5 : 1,
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: options.map((option) {
+                  final isSelected =
+                      optionSelectedByValue?.call(option) ??
+                      selectedValue == option;
+                  final label = optionLabelBuilder?.call(option) ?? option;
+                  final isLongLabel = label.length > 22;
+
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: isLongLabel
+                          ? constraints.maxWidth
+                          : constraints.maxWidth,
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => onChanged(isSelected ? null : option),
+                        borderRadius: BorderRadius.circular(24),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? _accent.withOpacity(0.12)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: isSelected ? _accent : _border,
+                              width: isSelected ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isSelected) ...[
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  size: 16,
+                                  color: _accent,
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              Flexible(
+                                child: Text(
+                                  label,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                    color: isSelected
+                                        ? _accent
+                                        : const Color(0xFF4B5563),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildRadiusFilter() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Distance Radius',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Column(
+    return _buildFilterCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Enable radius filter',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  Switch(
-                    value: _isRadiusFilterEnabled,
-                    onChanged: (value) {
-                      setState(() => _isRadiusFilterEnabled = value);
-                    },
-                    activeColor: Colors.blue,
-                  ),
-                ],
+              const Icon(Icons.place_outlined, size: 20, color: _accent),
+              const SizedBox(width: 8),
+              const Text(
+                'Distance',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF111827),
+                ),
               ),
-              if (!_isRadiusFilterEnabled)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Showing all posts regardless of distance',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
-              if (_isRadiusFilterEnabled) ...[
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Within ${_selectedRadius.toStringAsFixed(0)} km',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${_selectedRadius.toStringAsFixed(0)} km',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blue.shade700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                Slider(
-                  value: _selectedRadius,
-                  min: 1,
-                  max: 50,
-                  divisions: 49,
-                  label: '${_selectedRadius.toStringAsFixed(0)} km',
-                  onChanged: (value) {
-                    setState(() => _selectedRadius = value);
-                  },
-                  activeColor: Colors.blue,
-                  inactiveColor: Colors.grey.shade300,
-                ),
-              ],
+              const Spacer(),
+              Switch.adaptive(
+                value: _isRadiusFilterEnabled,
+                activeColor: _accent,
+                onChanged: (value) {
+                  setState(() => _isRadiusFilterEnabled = value);
+                },
+              ),
             ],
           ),
-        ),
-      ],
+          Text(
+            _isRadiusFilterEnabled
+                ? 'Within ${_selectedRadius.toStringAsFixed(0)} km of your location'
+                : 'Show posts from any distance',
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+          ),
+          if (_isRadiusFilterEnabled) ...[
+            const SizedBox(height: 12),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: _accent,
+                inactiveTrackColor: _border,
+                thumbColor: _accent,
+                overlayColor: _accent.withOpacity(0.12),
+              ),
+              child: Slider(
+                value: _selectedRadius,
+                min: 1,
+                max: 50,
+                divisions: 49,
+                label: '${_selectedRadius.toStringAsFixed(0)} km',
+                onChanged: (value) {
+                  setState(() => _selectedRadius = value);
+                },
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('1 km', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _accent.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_selectedRadius.toStringAsFixed(0)} km',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _accent,
+                    ),
+                  ),
+                ),
+                Text('50 km', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

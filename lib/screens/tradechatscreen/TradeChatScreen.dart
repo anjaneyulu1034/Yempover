@@ -1,13 +1,19 @@
-import 'package:YemPover_app/screens/Home_screen.dart';
-import 'package:YemPover_app/services/socket_io/socket_service.dart';
+import 'dart:async';
+
+import 'package:yempover_app/screens/Home_screen.dart';
+import 'package:yempover_app/services/socket_io/socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:YemPover_app/models/chats/trade_chat.dart';
-import 'package:YemPover_app/screens/tradechatscreen/ChatDetailScreen.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/services/trade_chat_service/trade_chat_service.dart';
-import 'package:YemPover_app/utils/error_widget.dart';
-import 'package:YemPover_app/utils/loading_widget.dart';
+import 'package:provider/provider.dart';
+import 'package:yempover_app/models/chats/trade_chat.dart';
+import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/utils/blocked_users_cache.dart';
+import 'package:yempover_app/utils/chat_provider.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/error_widget.dart';
+import 'package:yempover_app/utils/loading_widget.dart';
 
 class TradeChatScreen extends StatefulWidget {
   const TradeChatScreen({super.key});
@@ -29,6 +35,10 @@ class _TradeChatScreenState extends State<TradeChatScreen>
   List<String> _userProducts = [];
   final Map<String, String> _lastMessagePreviewCache = {};
   final Set<String> _previewFetchInProgress = {};
+  // Live "is this user online right now" map, keyed by userId — the single
+  // source of truth for the green dot, kept in sync with ChatDetailScreen's
+  // own presence tracking via the same socket event.
+  final Map<String, bool> _onlineStatusByUserId = {};
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -46,6 +56,12 @@ class _TradeChatScreenState extends State<TradeChatScreen>
 
   String? _currentUserId;
   String? _selectedProductFilter;
+
+  // Server-side search (post title + other user's name) across all three
+  // tabs — debounced so we don't re-fetch on every keystroke.
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -69,9 +85,12 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     _socketService.off('offer_created', _handleOfferCreated);
     _socketService.off('deal_completed', _handleChatStatusChanged);
     _socketService.off('deal_cancelled', _handleChatStatusChanged);
+    _socketService.off('user_presence', _handleUserPresence);
 
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
+    _searchDebounce?.cancel();
+    _searchController.dispose();
     _chatService.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -137,6 +156,47 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     _socketService.on('offer_created', _handleOfferCreated);
     _socketService.on('deal_completed', _handleChatStatusChanged);
     _socketService.on('deal_cancelled', _handleChatStatusChanged);
+    _socketService.on('user_presence', _handleUserPresence);
+  }
+
+  // Same event ChatDetailScreen listens to — keeps the list's green dot and
+  // the open chat's "Active"/"Inactive" label driven by one real signal
+  // instead of two different, inconsistent ones.
+  void _handleUserPresence(dynamic data) {
+    if (!mounted || data == null) return;
+    try {
+      final userId = data['userId']?.toString();
+      if (userId == null || userId.isEmpty) return;
+      var isOnline = data['isOnline'] == true;
+
+      // The live global user_online/offline broadcast isn't block-aware
+      // server-side — never light up the dot for someone this user has
+      // blocked (Point 6: "ignore if blocked user").
+      if (isOnline && BlockedUsersCache.instance.isBlocked(userId)) {
+        isOnline = false;
+      }
+
+      setState(() {
+        _onlineStatusByUserId[userId] = isOnline;
+      });
+    } catch (e) {
+      debugPrint('Error handling user presence in chat list: $e');
+    }
+  }
+
+  // Seeds the live presence map from each chat's REST-provided snapshot, so
+  // the dot is accurate immediately on load instead of waiting for a
+  // connect/disconnect event to happen to fire after this screen mounts.
+  void _seedOnlineStatusFromChats(List<TradeChat> chats) {
+    if (_currentUserId == null) return;
+    final updates = <String, bool>{};
+    for (final chat in chats) {
+      final otherUser = chat.getOtherUserInfo(_currentUserId!);
+      if (otherUser.id.isEmpty || chat.otherUserOnline == null) continue;
+      updates[otherUser.id] = chat.otherUserOnline!;
+    }
+    if (updates.isEmpty) return;
+    setState(() => _onlineStatusByUserId.addAll(updates));
   }
 
   void _handleChatUpdated(dynamic data) {
@@ -181,9 +241,17 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       final chatId = data?['chatId']?.toString();
       if (chatId == null || chatId.isEmpty) return;
       _refreshSingleChat(chatId);
+      _refreshGlobalUnreadCount();
     } catch (e) {
       debugPrint('Error handling new message in list screen: $e');
     }
+  }
+
+  // Keeps the bottom-nav Chat badge in sync with this screen's own view of
+  // unread messages, without this screen owning that global count itself.
+  void _refreshGlobalUnreadCount() {
+    if (!mounted) return;
+    Provider.of<ChatProvider>(context, listen: false).loadUnreadCount();
   }
 
   void _joinLoadedChatRooms(List<TradeChat> chats) {
@@ -252,6 +320,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       }
     });
 
+    _seedOnlineStatusFromChats([updatedChat]);
     _hydrateMessagePreviews([updatedChat]);
   }
 
@@ -259,11 +328,12 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     chats.sort((a, b) => b.lastInteraction.compareTo(a.lastInteraction));
   }
 
+  // Only an explicit archive should remove a chat from the list. Hiding on
+  // COMPLETED/INACTIVE/CANCELLED here used to make the chat vanish for the
+  // other user as soon as one side acted, before they'd had a chance to
+  // respond (e.g. give their own deal-completion consent).
   bool _shouldHideChat(TradeChat chat) {
-    return chat.status == ChatStatus.COMPLETED ||
-        chat.status == ChatStatus.INACTIVE ||
-        chat.status == ChatStatus.CANCELLED ||
-        chat.status == ChatStatus.ARCHIVED;
+    return chat.status == ChatStatus.ARCHIVED;
   }
 
   String _buildMessagePreview(List<ChatMessage> messages) {
@@ -421,6 +491,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       final response = await _chatService.getAllChats(
         page: _allChatsCurrentPage,
         limit: 20,
+        search: _searchQuery.isEmpty ? null : _searchQuery,
       );
 
       debugPrint('✅ TradeChatScreen: Received all chats response');
@@ -453,11 +524,12 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       });
 
       _joinLoadedChatRooms(visibleChats);
+      _seedOnlineStatusFromChats(visibleChats);
       _hydrateMessagePreviews(visibleChats);
     } catch (e) {
       debugPrint('❌ TradeChatScreen: Error loading all chats: $e');
       setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = ErrorMessageUtils.sanitize(e);
         _isLoading = false;
         _isLoadingMoreAllChats = false;
       });
@@ -481,6 +553,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
         productId: _selectedProductFilter != 'All Products'
             ? _selectedProductFilter
             : null,
+        search: _searchQuery.isEmpty ? null : _searchQuery,
       );
 
       debugPrint('✅ TradeChatScreen: Received inbox chats response');
@@ -513,6 +586,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       });
 
       _joinLoadedChatRooms(visibleChats);
+      _seedOnlineStatusFromChats(visibleChats);
       _hydrateMessagePreviews(visibleChats);
     } catch (e) {
       debugPrint('❌ TradeChatScreen: Error loading inbox chats: $e');
@@ -536,6 +610,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       final response = await _chatService.getOutboxChats(
         page: _outboxCurrentPage,
         limit: 20,
+        search: _searchQuery.isEmpty ? null : _searchQuery,
       );
 
       debugPrint('✅ TradeChatScreen: Received outbox chats response');
@@ -567,6 +642,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       });
 
       _joinLoadedChatRooms(visibleChats);
+      _seedOnlineStatusFromChats(visibleChats);
       _hydrateMessagePreviews(visibleChats);
     } catch (e) {
       debugPrint('❌ TradeChatScreen: Error loading outbox chats: $e');
@@ -708,7 +784,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
           onChatUpdated: _updateChat,
         ),
       ),
-    );
+    ).then((_) => _refreshGlobalUnreadCount());
   }
 
   void _updateChat(TradeChat updatedChat) {
@@ -734,9 +810,8 @@ class _TradeChatScreenState extends State<TradeChatScreen>
     }
 
     final otherUser = chat.getOtherUserInfo(_currentUserId!);
-    final unreadCount = chat.messages
-        .where((msg) => !msg.isRead && msg.sentById != _currentUserId)
-        .length;
+    final unreadCount = chat.getUnreadCount(_currentUserId!);
+    final isOtherUserOnline = _onlineStatusByUserId[otherUser.id] ?? false;
 
     return InkWell(
       onTap: () => _openChatDetail(chat),
@@ -767,7 +842,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
                       ? Text(otherUser.firstName[0].toUpperCase())
                       : null,
                 ),
-                if (chat.isActive)
+                if (isOtherUserOnline)
                   Positioned(
                     right: 0,
                     bottom: 0,
@@ -864,36 +939,7 @@ class _TradeChatScreenState extends State<TradeChatScreen>
                         ),
                       ),
                       const SizedBox(width: 8),
-                      if (chat.status == ChatStatus.COMPLETED)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade100,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Text(
-                            'Completed',
-                            style: TextStyle(color: Colors.green, fontSize: 10),
-                          ),
-                        ),
-                      if (chat.status == ChatStatus.CANCELLED)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Text(
-                            'Cancelled',
-                            style: TextStyle(color: Colors.grey, fontSize: 10),
-                          ),
-                        ),
+                      _buildDealStatusBadge(chat),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -952,6 +998,57 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       default:
         return Colors.grey;
     }
+  }
+
+  // Single, mutually-exclusive deal-status badge per chat card, driven by
+  // the server-computed `badge`/`badgeLabel` (PENDING/ACTIVE/COMPLETED/
+  // NOT_COMPLETED) — priority COMPLETED > ACTIVE > NOT_COMPLETED > PENDING.
+  // Falls back to the equivalent client-side flags for any older cached
+  // chat object that predates these fields.
+  Widget _buildDealStatusBadge(TradeChat chat) {
+    final badge = chat.badge ??
+        (chat.isCompleted
+            ? 'COMPLETED'
+            : chat.hasDealVerification
+                ? 'ACTIVE'
+                : chat.isInactive
+                    ? 'NOT_COMPLETED'
+                    : chat.isActive
+                        ? 'PENDING'
+                        : null);
+    final label = chat.badgeLabel ?? badge;
+    if (badge == null || label == null) return const SizedBox.shrink();
+
+    switch (badge) {
+      case 'COMPLETED':
+        return _statusBadge(label, Colors.green.shade100, Colors.green.shade800);
+      case 'ACTIVE':
+        return _statusBadge(label, Colors.blue.shade50, Colors.blue.shade700);
+      case 'NOT_COMPLETED':
+        return _statusBadge(label, Colors.red.shade50, Colors.red.shade700);
+      case 'PENDING':
+        return _statusBadge(label, Colors.orange.shade50, Colors.orange.shade800);
+      default:
+        return _statusBadge(label, Colors.grey.shade100, Colors.grey.shade700);
+    }
+  }
+
+  Widget _statusBadge(String label, Color background, Color foreground) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: foreground,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
   }
 
   @override
@@ -1021,17 +1118,77 @@ class _TradeChatScreenState extends State<TradeChatScreen>
           indicatorSize: TabBarIndicatorSize.tab,
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Column(
         children: [
-          _buildRefreshWrapper(
-            _buildChatList(_allChats, isLoadingMore: _isLoadingMoreAllChats),
-          ),
-          _buildRefreshWrapper(_buildInboxList()),
-          _buildRefreshWrapper(
-            _buildChatList(_outboxChats, isLoadingMore: _isLoadingMoreOutbox),
+          _buildSearchBar(),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildRefreshWrapper(
+                  _buildChatList(_allChats, isLoadingMore: _isLoadingMoreAllChats),
+                ),
+                _buildRefreshWrapper(_buildInboxList()),
+                _buildRefreshWrapper(
+                  _buildChatList(_outboxChats, isLoadingMore: _isLoadingMoreOutbox),
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() => _searchQuery = value);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      _loadAllChats(refresh: true);
+      _loadInboxChats(refresh: true);
+      _loadOutboxChats(refresh: true);
+    });
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.grey.shade300),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: TextField(
+          controller: _searchController,
+          onChanged: _onSearchChanged,
+          decoration: InputDecoration(
+            hintText: 'Search posts...',
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+            prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    icon: Icon(Icons.close, color: Colors.grey.shade500),
+                    onPressed: () {
+                      _searchController.clear();
+                      _onSearchChanged('');
+                    },
+                  )
+                : null,
+          ),
+        ),
       ),
     );
   }
@@ -1061,21 +1218,27 @@ class _TradeChatScreenState extends State<TradeChatScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Icons.chat_bubble_outline,
+                    _searchQuery.isNotEmpty
+                        ? Icons.search_off
+                        : Icons.chat_bubble_outline,
                     size: 64,
                     color: Colors.grey.shade400,
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No chats yet',
+                    _searchQuery.isNotEmpty
+                        ? 'No posts match "$_searchQuery"'
+                        : 'No chats yet',
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'When you start a conversation,\n it will appear here',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-                  ),
+                  if (_searchQuery.isEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'When you start a conversation,\n it will appear here',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1114,7 +1277,9 @@ class _TradeChatScreenState extends State<TradeChatScreen>
   }
 
   Widget _buildInboxList() {
-    if (_inboxChats.isEmpty) {
+    final chats = _inboxChats;
+
+    if (chats.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
@@ -1124,18 +1289,26 @@ class _TradeChatScreenState extends State<TradeChatScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
+                  Icon(
+                    _searchQuery.isNotEmpty ? Icons.search_off : Icons.inbox,
+                    size: 64,
+                    color: Colors.grey.shade400,
+                  ),
                   const SizedBox(height: 16),
                   Text(
-                    'No incoming offers',
+                    _searchQuery.isNotEmpty
+                        ? 'No posts match "$_searchQuery"'
+                        : 'No incoming offers',
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 18),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'When someone makes an offer on your items,\n they will appear here',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-                  ),
+                  if (_searchQuery.isEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'When someone makes an offer on your items,\n they will appear here',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1156,9 +1329,9 @@ class _TradeChatScreenState extends State<TradeChatScreen>
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 8),
-        itemCount: _inboxChats.length + (_isLoadingMoreInbox ? 1 : 0),
+        itemCount: chats.length + (_isLoadingMoreInbox ? 1 : 0),
         itemBuilder: (context, index) {
-          if (index == _inboxChats.length) {
+          if (index == chats.length) {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(16),
@@ -1166,9 +1339,10 @@ class _TradeChatScreenState extends State<TradeChatScreen>
               ),
             );
           }
-          return _buildChatItem(_inboxChats[index]);
+          return _buildChatItem(chats[index]);
         },
       ),
     );
   }
+
 }

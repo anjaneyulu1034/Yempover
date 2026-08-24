@@ -1,23 +1,34 @@
-import 'package:YemPover_app/screens/LoginScreen.dart';
+import 'package:yempover_app/screens/LoginScreen.dart';
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/models/ProductPostmain.dart';
-import 'package:YemPover_app/models/my_post_model.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/services/my_posts_service.dart';
-import 'package:YemPover_app/screens/OfferDescriptionScreen.dart';
-import 'package:YemPover_app/screens/AddPostScreen.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:flutter/services.dart';
+import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/models/my_post_model.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/services/my_posts_service.dart';
+import 'package:yempover_app/screens/OfferDescriptionScreen.dart';
+import 'package:yempover_app/widgets/coin_icon.dart';
+import 'package:yempover_app/screens/AddPostScreen.dart';
+import 'package:yempover_app/utils/barter_clubbing.dart';
+import 'package:yempover_app/utils/error_message_utils.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/utils/wallet_offer_guard.dart';
+import 'package:yempover_app/widgets/app_text_field.dart';
 
 class OfferDeckScreen extends StatefulWidget {
   final Post post;
   final String currentUserId;
   final OfferSubmissionMode offerMode;
+  // Explicit "no coins involved" request: the barter item becomes optional
+  // (the user may submit with none selected) and no price/value-matching
+  // rules apply.
+  final bool isZeroCoin;
 
   const OfferDeckScreen({
     super.key,
     required this.post,
     required this.currentUserId,
     required this.offerMode,
+    this.isZeroCoin = false,
   });
 
   @override
@@ -26,9 +37,11 @@ class OfferDeckScreen extends StatefulWidget {
 
 class _OfferDeckScreenState extends State<OfferDeckScreen> {
   final MyPostsService _postsService = MyPostsService();
+  final TextEditingController _quotedPriceController = TextEditingController();
 
   List<UserItem> _userItems = [];
   final List<UserItem> _selectedItems = [];
+  String? _quotedPriceError;
   bool _isLoading = false;
   String? _errorMessage;
   int _currentPage = 1;
@@ -36,21 +49,26 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   bool _isLoadingMore = false;
   final ScrollController _scrollController = ScrollController();
 
-  bool _isPostExpired(MyPost myPost) {
-    if (myPost.hasExpired) return true;
+  bool _isPostExpired(MyPost myPost) => myPost.isExpiredOrUnavailable;
 
-    final status = myPost.status.trim().toUpperCase();
-    if (status == 'EXPIRED') return true;
+  bool get _filtersToBarterPostsOnly =>
+      widget.offerMode == OfferSubmissionMode.barter ||
+      widget.offerMode == OfferSubmissionMode.both;
 
-    final validUntil = myPost.validUntil;
-    if (validUntil != null && !validUntil.isAfter(DateTime.now())) {
-      return true;
+  bool _isBarterEligiblePost(MyPost myPost) {
+    return myPost.isOpenForBarter ||
+        myPost.status.trim().toUpperCase() == 'FOR_BARTER';
+  }
+
+  String get _emptyItemsMessage {
+    if (widget.isZeroCoin) {
+      return 'Item is optional for a zero-coin request — post items open for '
+          'barter if you\'d like to offer one, or continue without one.';
     }
-
-    final remainingTime = (myPost.remainingTime ?? '').trim().toLowerCase();
-    if (remainingTime.contains('expired')) return true;
-
-    return false;
+    if (_filtersToBarterPostsOnly) {
+      return 'Post items open for barter to make this offer';
+    }
+    return 'Post items first to make an offer';
   }
 
   @override
@@ -68,6 +86,10 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         .where((myPost) => !_isPostExpired(myPost))
         .where(
           (myPost) =>
+              !_filtersToBarterPostsOnly || _isBarterEligiblePost(myPost),
+        )
+        .where(
+          (myPost) =>
               myPost.status.toUpperCase() != 'SOLD' &&
               myPost.status.toUpperCase() != 'ARCHIVED' &&
               myPost.status.toUpperCase() != 'DELETED',
@@ -81,6 +103,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
             category: myPost.category.name,
             price: myPost.price ?? 0.0,
             value: myPost.price ?? 0.0,
+            isClubbable: myPost.isClubbable,
           );
         })
         .toList();
@@ -166,8 +189,8 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     if (widget.post.price > 0) {
       chips.add(
         _buildMetaChip(
-          icon: Icons.attach_money,
-          label: widget.post.formattedPrice,
+          icon: Icons.monetization_on,
+          label: CoinFormat.withLabel(widget.post.price),
           fg: const Color(0xFF1565C0),
           bg: const Color(0xFFE3F2FD),
         ),
@@ -179,8 +202,48 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
   @override
   void dispose() {
+    _quotedPriceController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  bool get _requiresQuotedPrice => widget.offerMode == OfferSubmissionMode.both;
+
+  double get _selectedBarterItemsCoinTotal =>
+      _selectedItems.fold<double>(0, (sum, item) => sum + item.value);
+
+  /// Condition 1 (pure barter): the swapped items must be worth the same.
+  /// A mismatch here belongs in Condition 2 ("Barter + Price") instead, so a
+  /// pure barter offer is only allowed to proceed once values line up. A
+  /// zero-coin exchange is exempt — the parties have agreed to trade
+  /// without coins, at whatever values they agree.
+  double? get _pureBarterValueGap {
+    if (widget.isZeroCoin) return null;
+    if (widget.offerMode != OfferSubmissionMode.barter) return null;
+    final targetPrice = widget.post.price;
+    if (targetPrice <= 0) return null;
+    final gap = _selectedBarterItemsCoinTotal - targetPrice;
+    return gap.abs() < 0.01 ? null : gap;
+  }
+
+  String? _validateQuotedPrice(String value) {
+    if (!_requiresQuotedPrice) return null;
+
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return 'Quoted price is required for Both offer';
+    }
+
+    final parsed = double.tryParse(trimmed);
+    if (parsed == null || parsed < 0) {
+      return 'Enter a valid price';
+    }
+
+    if (trimmed.length > 9) {
+      return 'Price is too large';
+    }
+
+    return null;
   }
 
   void _onScroll() {
@@ -226,7 +289,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
       setState(() {
         _isLoading = false;
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = ErrorMessageUtils.sanitize(e);
       });
 
       if (_errorMessage!.contains('Session expired') ||
@@ -319,20 +382,45 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     SnackbarUtils.showError(context, message);
   }
 
+  void _revalidateQuotedPrice() {
+    if (!_requiresQuotedPrice) return;
+    _quotedPriceError = _validateQuotedPrice(_quotedPriceController.text);
+  }
+
+  /// Keeps the price field non-empty as the item selection changes, so
+  /// picking items doesn't leave the field blank. There's no required
+  /// minimum to quote — barter items alone are a valid "Both" offer, so this
+  /// only fills in "0" and never overwrites a value the user already typed.
+  void _syncQuotedPriceWithMinimum() {
+    if (!_requiresQuotedPrice) return;
+
+    if (_quotedPriceController.text.trim().isEmpty) {
+      _quotedPriceController.text = '0';
+    }
+  }
+
   void _toggleItemSelection(UserItem item) {
+    final result = applyClubbingSelection(
+      current: _selectedItems,
+      tapped: item,
+    );
     setState(() {
-      final existingIndex = _selectedItems.indexWhere((i) => i.id == item.id);
-      if (existingIndex != -1) {
-        _selectedItems.removeAt(existingIndex);
-      } else {
-        _selectedItems.add(item);
-      }
+      _selectedItems
+        ..clear()
+        ..addAll(result.items);
+      _syncQuotedPriceWithMinimum();
+      _revalidateQuotedPrice();
     });
+    if (result.hint != null) {
+      SnackbarUtils.showInfo(context, result.hint!);
+    }
   }
 
   void _removeSelectedItem(UserItem item) {
     setState(() {
       _selectedItems.removeWhere((i) => i.id == item.id);
+      _syncQuotedPriceWithMinimum();
+      _revalidateQuotedPrice();
     });
   }
 
@@ -375,11 +463,12 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Post items first to make an offer',
+                        _emptyItemsMessage,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade500,
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
@@ -455,8 +544,15 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     );
   }
 
-  void _navigateToDescriptionScreen() {
-    if ((widget.offerMode == OfferSubmissionMode.barter ||
+  Future<void> _navigateToDescriptionScreen() async {
+    final quotedPriceError = _validateQuotedPrice(_quotedPriceController.text);
+
+    setState(() {
+      _quotedPriceError = quotedPriceError;
+    });
+
+    if (!widget.isZeroCoin &&
+        (widget.offerMode == OfferSubmissionMode.barter ||
             widget.offerMode == OfferSubmissionMode.both) &&
         _selectedItems.isEmpty) {
       SnackbarUtils.showInfo(
@@ -464,6 +560,54 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         'Please select at least one item to continue.',
       );
       return;
+    }
+
+    final barterValueGap = _pureBarterValueGap;
+    if (barterValueGap != null) {
+      final message = barterValueGap > 0
+          ? 'Your items are worth ${CoinFormat.withUnit(barterValueGap)} '
+                'more than this listing. Use "Barter + Price" to offer the '
+                'difference, or adjust your selected items.'
+          : 'Your items are worth ${CoinFormat.withUnit(barterValueGap.abs())} '
+                'less than this listing. Use "Barter + Price" to add '
+                'the difference, or adjust your selected items.';
+      SnackbarUtils.showInfo(context, message);
+      return;
+    }
+
+    if (quotedPriceError != null) {
+      SnackbarUtils.showInfo(context, quotedPriceError);
+      return;
+    }
+
+    // Barter + Coins doesn't require the item value to match the listing
+    // (that's the pure-barter rule above) — but if the selected item(s)
+    // alone are already worth more than the listing, on top of whatever
+    // coins are quoted, that's worth a heads-up in case it's a mistake
+    // rather than silently accepting it.
+    if (widget.offerMode == OfferSubmissionMode.both &&
+        _selectedItems.isNotEmpty &&
+        widget.post.price > 0 &&
+        _selectedBarterItemsCoinTotal > widget.post.price) {
+      final proceed = await _confirmItemsWorthMoreThanListing(
+        _selectedBarterItemsCoinTotal - widget.post.price,
+      );
+      if (!mounted || proceed != true) return;
+    }
+
+    if (widget.offerMode == OfferSubmissionMode.both) {
+      final quoted = double.tryParse(_quotedPriceController.text.trim());
+      if (quoted != null && quoted > 0) {
+        final canAfford = await WalletOfferGuard.ensureCanAfford(
+          context,
+          requiredCoins: quoted.round(),
+          itemName: widget.post.title,
+        );
+        if (!canAfford || !mounted) return;
+
+        await _showCoinDeductionNotice(quoted.round());
+        if (!mounted) return;
+      }
     }
 
     // Determine if the post is a service
@@ -485,7 +629,264 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
           currentUserId: widget.currentUserId,
           isService: isService, // Pass the correct type
           offerMode: widget.offerMode,
+          initialQuotedPrice: _quotedPriceController.text.trim(),
+          isZeroCoin: widget.isZeroCoin,
         ),
+      ),
+    );
+  }
+
+  Widget _valueCompareRow(
+    String label,
+    String amount, {
+    bool bold = false,
+    Color? color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13.5,
+              color: color ?? Colors.grey.shade700,
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CoinIcon(size: bold ? 16 : 14, iconSize: bold ? 10 : 9),
+              const SizedBox(width: 4),
+              Text(
+                amount,
+                style: TextStyle(
+                  fontSize: bold ? 14.5 : 13.5,
+                  color: color ?? Colors.black87,
+                  fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Barter + Coins doesn't require item value to match the listing, so this
+  /// isn't a hard block — just a confirmation in case picking an item worth
+  /// noticeably more than the listing was a mistake. Shows what's actually
+  /// selected plus a clear line-by-line breakdown rather than one dense
+  /// sentence of numbers.
+  Future<bool?> _confirmItemsWorthMoreThanListing(double excess) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.info_outline,
+                  color: Colors.orange.shade700,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Item worth more than the listing',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'That\'s okay if intended — here\'s the breakdown.',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 16),
+
+              // Selected items being offered
+              ..._selectedItems.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: item.imageUrl.isNotEmpty
+                            ? Image.network(
+                                item.imageUrl,
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      color: Colors.grey.shade200,
+                                      child: const Icon(Icons.image, size: 18),
+                                    ),
+                              )
+                            : Container(
+                                width: 40,
+                                height: 40,
+                                color: Colors.grey.shade200,
+                                child: const Icon(Icons.image, size: 18),
+                              ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          item.name,
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CoinIcon(size: 13, iconSize: 8),
+                          const SizedBox(width: 3),
+                          Text(
+                            CoinFormat.amount(item.value),
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+
+              // Calculation breakdown
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  children: [
+                    _valueCompareRow(
+                      'Your items',
+                      CoinFormat.amount(_selectedBarterItemsCoinTotal),
+                    ),
+                    _valueCompareRow(
+                      'Listing price',
+                      CoinFormat.amount(widget.post.price),
+                    ),
+                    const Divider(height: 16),
+                    _valueCompareRow(
+                      'Difference',
+                      '+${CoinFormat.amount(excess)}',
+                      bold: true,
+                      color: Colors.orange.shade800,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        side: BorderSide(color: Colors.grey.shade400),
+                        foregroundColor: Colors.black87,
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text('Continue'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Purely informational notice so the user knows upfront how many coins
+  /// this "Barter + Price" offer will cost them if the other party accepts it.
+  Future<void> _showCoinDeductionNotice(int coins) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Coins to be Deducted'),
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const CoinIcon(size: 22, iconSize: 14),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'If this offer is accepted, ${CoinFormat.amount(coins)} '
+                'coins will be deducted from your wallet.',
+                style: const TextStyle(fontSize: 14.5, height: 1.35),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Okay'),
+          ),
+        ],
       ),
     );
   }
@@ -501,83 +902,129 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         //   icon: const Icon(Icons.arrow_back, color: Colors.black),
         //  // onPressed: () => Navigator.pop(context),
         // ),
-        title: const Text(
-          "Offer Deck",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
+        title: Text(
+          widget.isZeroCoin ? "Zero-Coin Offer" : "Offer Deck",
+          style: const TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         centerTitle: true,
       ),
-      body: Column(
-        children: [
-          // -------- USER NAME ----------
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Colors.grey.shade200,
-                  backgroundImage: widget.post.postedBy.profileImage != null
-                      ? NetworkImage(widget.post.postedBy.profileImage!)
-                      : null,
-                  child: widget.post.postedBy.profileImage == null
-                      ? Text(
-                          widget.post.postedBy.firstName.isNotEmpty
-                              ? widget.post.postedBy.firstName[0]
-                              : "U",
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              if (widget.isZeroCoin)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.teal.shade200),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.check_box_outlined,
+                          color: Colors.teal.shade700,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Zero-coin transaction — no coins involved. '
+                            'Picking an item below is optional.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.teal.shade900,
+                            ),
                           ),
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  "${widget.post.postedBy.firstName} ${widget.post.postedBy.lastName}",
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 4),
-
-          // -------- TEXT ----------
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                "Add items to the deck make an offer",
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              // -------- USER NAME ----------
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Colors.grey.shade200,
+                      backgroundImage: widget.post.postedBy.profileImage != null
+                          ? NetworkImage(widget.post.postedBy.profileImage!)
+                          : null,
+                      child: widget.post.postedBy.profileImage == null
+                          ? Text(
+                              widget.post.postedBy.firstName.isNotEmpty
+                                  ? widget.post.postedBy.firstName[0]
+                                  : "U",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "${widget.post.postedBy.firstName} ${widget.post.postedBy.lastName}",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ),
 
-          const SizedBox(height: 10),
+              const SizedBox(height: 4),
 
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: _buildTargetPostMetaTags(),
-            ),
-          ),
+              // -------- TEXT ----------
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Add items to the deck make an offer",
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  ),
+                ),
+              ),
 
-          const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
-          // -------- OFFER DECK ROW ----------
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                // TARGET ITEM
-                Expanded(
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _buildTargetPostMetaTags(),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // -------- OFFER DECK ROW ----------
+              // Only the target listing goes here now — adding a new post
+              // to offer from is already covered by the "Add New" tile in
+              // the My Items row below, so the duplicate + card is gone.
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
                   child: Container(
+                    width: 160,
                     height: 140,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(14),
@@ -603,403 +1050,480 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-
-                // ADD CARD
-                Expanded(
-                  child: InkWell(
-                    onTap: _openAddPostAndRefresh,
-                    child: Container(
-                      height: 140,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.blue.shade200),
-                        color: Colors.white,
-                      ),
-                      child: Center(
-                        child: Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.add, size: 28),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                'Tap + to add new post',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
-            ),
-          ),
 
-          const SizedBox(height: 14),
+              const SizedBox(height: 14),
 
-          // -------- SWAP ICON ----------
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.blue.shade200, width: 2),
-              color: Colors.white,
-            ),
-            child: const Icon(Icons.swap_vert, color: Colors.blue),
-          ),
+              // -------- SWAP ICON ----------
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.blue.shade200, width: 2),
+                  color: Colors.white,
+                ),
+                child: const Icon(Icons.swap_vert, color: Colors.blue),
+              ),
 
-          const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-          // -------- SELECTED ITEMS (Horizontal deck) ----------
-          if (_selectedItems.isNotEmpty)
-            SizedBox(
-              height: 90,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _selectedItems.length,
-                itemBuilder: (context, index) {
-                  final item = _selectedItems[index];
-                  return Container(
-                    width: 80,
-                    margin: const EdgeInsets.only(right: 10),
-                    child: Stack(
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.blue.shade200),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: item.imageUrl.isNotEmpty
-                                ? Image.network(
-                                    item.imageUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
+              // -------- SELECTED ITEMS (Horizontal deck) ----------
+              if (_selectedItems.isNotEmpty)
+                SizedBox(
+                  height: 90,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _selectedItems.length,
+                    itemBuilder: (context, index) {
+                      final item = _selectedItems[index];
+                      return Container(
+                        width: 80,
+                        margin: const EdgeInsets.only(right: 10),
+                        child: Stack(
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.blue.shade200),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: item.imageUrl.isNotEmpty
+                                    ? Image.network(
+                                        item.imageUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                              return Container(
+                                                color: Colors.grey.shade200,
+                                                child: const Center(
+                                                  child: Icon(Icons.image),
+                                                ),
+                                              );
+                                            },
+                                      )
+                                    : Container(
                                         color: Colors.grey.shade200,
                                         child: const Center(
                                           child: Icon(Icons.image),
                                         ),
-                                      );
-                                    },
-                                  )
-                                : Container(
-                                    color: Colors.grey.shade200,
-                                    child: const Center(
-                                      child: Icon(Icons.image),
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 6,
-                          right: 6,
-                          child: GestureDetector(
-                            onTap: () => _removeSelectedItem(item),
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
+                                      ),
                               ),
-                              child: const Icon(Icons.close, size: 14),
                             ),
-                          ),
+                            Positioned(
+                              top: 6,
+                              right: 6,
+                              child: GestureDetector(
+                                onTap: () => _removeSelectedItem(item),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.close, size: 14),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-
-          const SizedBox(height: 16),
-
-          // -------- MY ITEMS TITLE ----------
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  "My Items",
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                      );
+                    },
                   ),
                 ),
-                Text(
-                  "Tap to select",
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                ),
-              ],
-            ),
-          ),
 
-          const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
-          // -------- MY ITEMS HORIZONTAL SCROLLING LIST ----------
-          _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _errorMessage != null
-              ? Center(
+              if (_requiresQuotedPrice) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.error_outline,
-                        size: 64,
-                        color: Colors.red.shade300,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _errorMessage!,
+                      const Text(
+                        'Quoted Price',
                         style: TextStyle(
                           fontSize: 16,
-                          color: Colors.grey.shade600,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _fetchMyPosts,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
-                        ),
-                        child: const Text('Try Again'),
-                      ),
-                    ],
-                  ),
-                )
-              : _userItems.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No items to offer',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        'Post items first to make an offer',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade500,
+                      TextField(
+                        controller: _quotedPriceController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(9),
+                        ],
+                        onChanged: (_) {
+                          setState(() {
+                            _quotedPriceError = _validateQuotedPrice(
+                              _quotedPriceController.text,
+                            );
+                          });
+                        },
+                        decoration: AppInputDecoration.build(
+                          label: 'Price Quote',
+                          hint: 'Enter your price quote',
+                          prefixIcon: coinInputPrefix(),
+                          prefixIconConstraints: coinPrefixIconConstraints,
+                          errorText: _quotedPriceError,
+                          fillColor: Colors.grey.shade50,
                         ),
                       ),
+                      if (_selectedItems.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
-                )
-              : SizedBox(
-                  height: 150,
-                  child: RefreshIndicator(
-                    onRefresh: _refreshPosts,
-                    color: const Color(0xFF2E5BFF),
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                    strokeWidth: 2.2,
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount:
-                          1 + _userItems.length + (_isLoadingMore ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index == 0) {
-                          return GestureDetector(
-                            onTap: _openAddPostAndRefresh,
-                            child: Container(
-                              width: 110,
-                              margin: const EdgeInsets.only(right: 12),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: Colors.blue.shade200,
-                                  width: 1.2,
-                                ),
-                                color: Colors.blue.shade50,
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  Icon(
-                                    Icons.add_circle_outline,
-                                    color: Colors.blue,
-                                    size: 28,
-                                  ),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    'Add New',
-                                    style: TextStyle(
-                                      color: Colors.blue,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }
+                ),
+                const SizedBox(height: 12),
+              ],
 
-                        final itemIndex = index - 1;
-
-                        if (itemIndex == _userItems.length) {
-                          return Container(
-                            width: 80,
-                            margin: const EdgeInsets.only(right: 12),
-                            child: const Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                          );
-                        }
-
-                        final item = _userItems[itemIndex];
-                        final selected = _selectedItems.any(
-                          (selectedItem) => selectedItem.id == item.id,
-                        );
-
-                        return GestureDetector(
-                          onTap: () => _toggleItemSelection(item),
-                          child: Container(
-                            width: 110,
-                            margin: const EdgeInsets.only(right: 12),
-                            child: Stack(
-                              children: [
-                                Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: selected
-                                          ? Colors.blue
-                                          : Colors.grey.shade200,
-                                      width: selected ? 2 : 1,
-                                    ),
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(14),
-                                    child: item.imageUrl.isNotEmpty
-                                        ? Image.network(
-                                            item.imageUrl,
-                                            fit: BoxFit.cover,
-                                            errorBuilder:
-                                                (context, error, stackTrace) {
-                                                  return Container(
-                                                    color: Colors.grey.shade200,
-                                                    child: const Center(
-                                                      child: Icon(
-                                                        Icons.image,
-                                                        size: 30,
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                          )
-                                        : Container(
-                                            color: Colors.grey.shade200,
-                                            child: const Center(
-                                              child: Icon(
-                                                Icons.image,
-                                                size: 30,
-                                              ),
-                                            ),
-                                          ),
-                                  ),
-                                ),
-
-                                if (selected)
-                                  Positioned(
-                                    top: 6,
-                                    right: 6,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
-                                        color: Colors.blue,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        Icons.check,
-                                        size: 12,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-
-                                Positioned(
-                                  bottom: 0,
-                                  left: 0,
-                                  right: 0,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      borderRadius: const BorderRadius.only(
-                                        bottomLeft: Radius.circular(14),
-                                        bottomRight: Radius.circular(14),
-                                      ),
-                                      color: Colors.black.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      item.name,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+              if (!widget.isZeroCoin &&
+                  widget.offerMode == OfferSubmissionMode.barter &&
+                  _selectedItems.isNotEmpty &&
+                  widget.post.price > 0) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    _pureBarterValueGap == null
+                        ? 'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)} · Values match ✓'
+                        : 'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)} · '
+                              'Listing: ${CoinFormat.withLabel(widget.post.price)} · '
+                              'Values must match for a pure barter offer',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _pureBarterValueGap == null
+                          ? Colors.green.shade700
+                          : Colors.orange.shade800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-        ],
+                const SizedBox(height: 12),
+              ],
+
+              // -------- MY ITEMS TITLE ----------
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "My Items",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      "Tap to select",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // -------- MY ITEMS HORIZONTAL SCROLLING LIST ----------
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _errorMessage != null
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 64,
+                            color: Colors.red.shade300,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _errorMessage!,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: _fetchMyPosts,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                            ),
+                            child: const Text('Try Again'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : _userItems.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.inbox,
+                            size: 64,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No items to offer',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _emptyItemsMessage,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade500,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          OutlinedButton.icon(
+                            onPressed: _openAddPostAndRefresh,
+                            icon: const Icon(Icons.add_circle_outline),
+                            label: const Text('Add Post'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : SizedBox(
+                      height: 150,
+                      child: RefreshIndicator(
+                        onRefresh: _refreshPosts,
+                        color: const Color(0xFF2E5BFF),
+                        backgroundColor: Colors.transparent,
+                        elevation: 0,
+                        strokeWidth: 2.2,
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount:
+                              1 + _userItems.length + (_isLoadingMore ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == 0) {
+                              return GestureDetector(
+                                onTap: _openAddPostAndRefresh,
+                                child: Container(
+                                  width: 110,
+                                  margin: const EdgeInsets.only(right: 12),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: Colors.blue.shade200,
+                                      width: 1.2,
+                                    ),
+                                    color: Colors.blue.shade50,
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: const [
+                                      Icon(
+                                        Icons.add_circle_outline,
+                                        color: Colors.blue,
+                                        size: 28,
+                                      ),
+                                      SizedBox(height: 6),
+                                      Text(
+                                        'Add New',
+                                        style: TextStyle(
+                                          color: Colors.blue,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final itemIndex = index - 1;
+
+                            if (itemIndex == _userItems.length) {
+                              return Container(
+                                width: 80,
+                                margin: const EdgeInsets.only(right: 12),
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                            }
+
+                            final item = _userItems[itemIndex];
+                            final selected = _selectedItems.any(
+                              (selectedItem) => selectedItem.id == item.id,
+                            );
+
+                            return GestureDetector(
+                              onTap: () => _toggleItemSelection(item),
+                              child: Container(
+                                width: 110,
+                                height: 140,
+                                margin: const EdgeInsets.only(right: 12),
+                                child: Stack(
+                                  children: [
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: selected
+                                              ? Colors.blue
+                                              : Colors.grey.shade200,
+                                          width: selected ? 2 : 1,
+                                        ),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: Container(
+                                          color: Colors.grey.shade100,
+                                          child: item.imageUrl.isNotEmpty
+                                              ? Image.network(
+                                                  item.imageUrl,
+                                                  width: double.infinity,
+                                                  height: double.infinity,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder:
+                                                      (
+                                                        context,
+                                                        error,
+                                                        stackTrace,
+                                                      ) {
+                                                        return Container(
+                                                          color: Colors
+                                                              .grey
+                                                              .shade200,
+                                                          child: const Center(
+                                                            child: Icon(
+                                                              Icons.image,
+                                                              size: 30,
+                                                            ),
+                                                          ),
+                                                        );
+                                                      },
+                                                )
+                                              : Container(
+                                                  color: Colors.grey.shade200,
+                                                  child: const Center(
+                                                    child: Icon(
+                                                      Icons.image,
+                                                      size: 30,
+                                                    ),
+                                                  ),
+                                                ),
+                                        ),
+                                      ),
+                                    ),
+
+                                    if (selected)
+                                      Positioned(
+                                        top: 6,
+                                        right: 6,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: Colors.blue,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.check,
+                                            size: 12,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+
+                                    Positioned(
+                                      bottom: 0,
+                                      left: 0,
+                                      right: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          borderRadius: const BorderRadius.only(
+                                            bottomLeft: Radius.circular(14),
+                                            bottomRight: Radius.circular(14),
+                                          ),
+                                          color: Colors.black.withValues(
+                                            alpha: 0.5,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              item.name,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            if (item.value > 0)
+                                              Text(
+                                                CoinFormat.withLabel(item.value),
+                                                style: const TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 10,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+            ],
+          ),
+        ),
       ),
 
       // -------- BOTTOM BUTTONS ----------
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 10,
-            bottom: 5 + MediaQuery.of(context).viewPadding.bottom,
-          ),
+          padding: EdgeInsets.only(left: 16, right: 16, top: 10, bottom: 10),
           decoration: BoxDecoration(
             color: Colors.white,
             boxShadow: [

@@ -1,27 +1,27 @@
-import 'package:YemPover_app/utils/notification_provider.dart';
+import 'package:yempover_app/utils/notification_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:YemPover_app/payment/SubscriptionScreen.dart';
-import 'package:YemPover_app/screens/FavoritesScreen.dart';
-import 'package:YemPover_app/screens/BlockedUsersScreen.dart';
-import 'package:YemPover_app/screens/HelpSupportScreen.dart';
-import 'package:YemPover_app/screens/HiddenPostsScreen.dart';
-import 'package:YemPover_app/screens/MyProfileScreen.dart';
-import 'package:YemPover_app/screens/NotificationsScreen.dart';
-import 'package:YemPover_app/screens/CoinsWalletScreen.dart';
-import 'package:YemPover_app/screens/PrivacyScreen.dart';
-import 'package:YemPover_app/screens/service/AppointmentsDashboardScreen.dart';
-import 'package:YemPover_app/screens/TermsScreen.dart';
-import 'package:YemPover_app/screens/TradeHistoryScreen.dart';
-import 'package:YemPover_app/services/account_service.dart';
-import 'package:YemPover_app/services/auth_service.dart';
-import 'package:YemPover_app/services/profile_session_manager.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/screens/LoginScreen.dart';
-import 'package:YemPover_app/screens/Home_screen.dart';
-import 'package:YemPover_app/services/subscription_plan_service.dart';
-import 'package:YemPover_app/models/get_current_subscription_plan_response.dart';
-import 'package:YemPover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/payment/SubscriptionScreen.dart';
+import 'package:yempover_app/screens/FavoritesScreen.dart';
+import 'package:yempover_app/screens/BlockedUsersScreen.dart';
+import 'package:yempover_app/screens/HelpSupportScreen.dart';
+import 'package:yempover_app/screens/HiddenPostsScreen.dart';
+import 'package:yempover_app/screens/MyProfileScreen.dart';
+import 'package:yempover_app/screens/NotificationsScreen.dart';
+import 'package:yempover_app/screens/CoinsWalletScreen.dart';
+import 'package:yempover_app/screens/PrivacyScreen.dart';
+import 'package:yempover_app/screens/TermsScreen.dart';
+import 'package:yempover_app/screens/TradeHistoryScreen.dart';
+import 'package:yempover_app/services/account_service.dart';
+import 'package:yempover_app/services/auth_service.dart';
+import 'package:yempover_app/services/profile_session_manager.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/screens/LoginScreen.dart';
+import 'package:yempover_app/screens/Home_screen.dart';
+import 'package:yempover_app/services/subscription_plan_service.dart';
+import 'package:yempover_app/models/get_current_subscription_plan_response.dart';
+import 'package:yempover_app/utils/snackbar_utils.dart';
+import 'package:yempover_app/utils/blocked_users_cache.dart';
 
 class HamburgerMenuScreen extends StatefulWidget {
   const HamburgerMenuScreen({super.key});
@@ -212,7 +212,7 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
                 ),
                 const SizedBox(height: 4),
                 Row(
-                  children: [
+                  children:[
                     const Icon(Icons.location_on, size: 14, color: Colors.grey),
                     const SizedBox(width: 4),
                     Expanded(
@@ -496,6 +496,10 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
                     )
                   : null,
               onTap: () {
+                if (_isGuestUser) {
+                  SnackbarUtils.showGuestLoginRequired(context);
+                  return;
+                }
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -589,6 +593,11 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
       await TokenService()
           .clearTokens(); // FIXED: Using clearTokens() instead of deleteToken()
 
+      // Clear in-memory provider state so the next session can't see stale badges.
+      if (mounted) {
+        context.read<NotificationProvider>().reset();
+      }
+
       // Clear session manager
       ProfileSessionManager.instance.clearSession();
 
@@ -624,6 +633,8 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
         await TokenService()
             .clearTokens(); // FIXED: Using clearTokens() here too
         if (!mounted) return;
+
+        context.read<NotificationProvider>().reset();
         ProfileSessionManager.instance.clearSession();
 
         Navigator.pushAndRemoveUntil(
@@ -675,6 +686,12 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
 
       // Clear all local data
       await accountService.clearAllLocalData();
+      await TokenService().clearTokens();
+      ProfileSessionManager.instance.clearSession();
+      if (mounted) {
+        context.read<NotificationProvider>().reset();
+      }
+      BlockedUsersCache.instance.reset();
 
       // Close loading dialog
       if (mounted && isDialogShowing) {

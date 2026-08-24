@@ -93,6 +93,14 @@ class AppNotification {
   final DateTime createdAt;
   final String? deepLinkPath;
 
+  // Sender + related product/service details, resolved server-side so the
+  // notification list doesn't have to make follow-up lookups per row.
+  final String? actorName;
+  final String? actorAvatar;
+  final String? itemTitle;
+  final String? itemImage;
+  final double? itemPrice;
+
   AppNotification({
     required this.id,
     required this.userId,
@@ -108,6 +116,11 @@ class AppNotification {
     this.readAt,
     required this.createdAt,
     this.deepLinkPath,
+    this.actorName,
+    this.actorAvatar,
+    this.itemTitle,
+    this.itemImage,
+    this.itemPrice,
   });
 
   static String? _readString(dynamic value) {
@@ -155,6 +168,34 @@ class AppNotification {
 
     final deepLinkPath = _readByKeys(json, ['deepLinkPath', 'deep_link_path']);
 
+    final actorMap = json['actor'];
+    final actorFirstName = actorMap is Map
+        ? _readString(actorMap['firstName']) ?? ''
+        : '';
+    final actorLastName = actorMap is Map
+        ? _readString(actorMap['lastName']) ?? ''
+        : '';
+    final actorName = ('$actorFirstName $actorLastName').trim();
+    final actorAvatar = actorMap is Map
+        ? _readString(actorMap['profileImage'])
+        : null;
+
+    final itemMap = (json['product'] is Map)
+        ? json['product']
+        : (json['service'] is Map ? json['service'] : null);
+    String? itemImage;
+    double? itemPrice;
+    if (itemMap is Map) {
+      final images = itemMap['images'];
+      if (images is List && images.isNotEmpty) {
+        itemImage = _readString(images.first);
+      }
+      final rawPrice = itemMap['price'];
+      if (rawPrice != null) {
+        itemPrice = double.tryParse(rawPrice.toString());
+      }
+    }
+
     return AppNotification(
       id: _readByKeys(json, ['id', '_id']) ?? '',
       userId: _readByKeys(json, ['userId', 'user_id']) ?? '',
@@ -174,6 +215,11 @@ class AppNotification {
         json['createdAt'] ?? DateTime.now().toIso8601String(),
       ),
       deepLinkPath: deepLinkPath,
+      actorName: actorName.isEmpty ? null : actorName,
+      actorAvatar: actorAvatar,
+      itemTitle: itemMap is Map ? _readString(itemMap['title']) : null,
+      itemImage: itemImage,
+      itemPrice: itemPrice,
     );
   }
 
@@ -193,6 +239,11 @@ class AppNotification {
       'readAt': readAt?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'deepLinkPath': deepLinkPath,
+      'actorName': actorName,
+      'actorAvatar': actorAvatar,
+      'itemTitle': itemTitle,
+      'itemImage': itemImage,
+      'itemPrice': itemPrice,
     };
   }
 

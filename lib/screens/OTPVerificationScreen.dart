@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/models/auth_models.dart';
-import 'package:YemPover_app/services/api_service.dart';
-import 'package:YemPover_app/services/auth_service.dart';
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/services/notification1_service.dart';
-import 'package:YemPover_app/screens/LoginScreen.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/auth_models.dart';
+import 'package:yempover_app/services/api_service.dart';
+import 'package:yempover_app/services/auth_service.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/services/notification1_service.dart';
+import 'package:yempover_app/screens/LoginScreen.dart';
+import 'package:yempover_app/screens/SignupScreen.dart';
+import 'package:yempover_app/screens/SignupPhotoVerificationScreen.dart';
+import 'package:yempover_app/services/profile_session_manager.dart';
+import 'package:yempover_app/utils/blocked_users_cache.dart';
+import 'package:yempover_app/utils/subscription_gate.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -147,6 +152,92 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     }
   }
 
+  Future<void> _handleVerificationSuccess(VerifyOtpResponseData responseData) async {
+    final userId = responseData.user.id;
+    final token = responseData.token;
+    final refreshToken = responseData.refreshToken;
+
+    debugPrint('👤 User ID from response: $userId');
+    debugPrint('🔑 Token from response: ${token.substring(0, token.length > 20 ? 20 : token.length)}...');
+
+    // Ensure we don't reuse any in-memory state from a prior account.
+    ProfileSessionManager.instance.clearSession();
+    BlockedUsersCache.instance.reset();
+
+    await TokenService().saveTokens(
+      token: token,
+      refreshToken: refreshToken,
+      userId: userId,
+    );
+
+    // Ensure device FCM token is registered with backend after auth is available.
+    await NotificationService1.syncTokenWithBackend();
+
+    debugPrint('✅ Tokens and user ID saved successfully');
+
+    final savedUserId = await TokenService().getUserId();
+    debugPrint('✅ Verified saved userId: $savedUserId');
+
+    // Check if live photo verification is still pending
+    final hasProfilePic = responseData.user.profileImage != null &&
+        responseData.user.profileImage!.trim().isNotEmpty;
+    final needsPhotoVerification =
+        responseData.user.verificationPending || !hasProfilePic;
+
+    if (needsPhotoVerification) {
+      debugPrint(
+        '📸 User needs live photo verification '
+        '(verificationPending=${responseData.user.verificationPending}). '
+        'Redirecting to Live Photo Verification',
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => SignupPhotoVerificationScreen(
+            isLoginFlow: true,
+            mobileNumber: widget.phoneNumber,
+            uploadOnly: true,
+            onLoginComplete: (user) =>
+                widget.onVerificationSuccess(user ?? responseData.user),
+          ),
+        ),
+        (route) => false,
+      );
+      return;
+    }
+
+    // Show push notification based on flow
+    if (widget.isSignupFlow) {
+      // Show OTP verification success notification (same style as signup)
+      await _notificationService.showOTPVerificationSuccessNotification();
+      debugPrint('✅ OTP verification success notification shown');
+
+      // Show success dialog (same style as signup)
+      _showVerificationSuccessDialog();
+    } else {
+      // Show login success notification
+      await _notificationService.showLoginSuccessNotification();
+      debugPrint('✅ Login success notification shown');
+
+      // Show success dialog for login (similar style)
+      _showLoginSuccessDialog(responseData);
+    }
+  }
+
+  void _navigateToLivePhotoVerification(String otp) {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => SignupPhotoVerificationScreen(
+          isLoginFlow: true,
+          mobileNumber: widget.phoneNumber,
+          pendingOtp: otp,
+          onLoginComplete: (user) => widget.onVerificationSuccess(user),
+        ),
+      ),
+    );
+  }
+
   Future<void> _verifyOTP() async {
     debugPrint('🟡 OTPVerificationScreen: _verifyOTP() called');
 
@@ -205,59 +296,46 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         debugPrint('🟢 OTPVerificationScreen: OTP verification successful');
         debugPrint('🟢 User data received: ${response.data}');
 
-        // Save tokens
         if (response.data != null) {
-          final userId = response.data!.user.id;
-          final token = response.data!.token;
-          final refreshToken = response.data!.refreshToken;
-
-          debugPrint('👤 User ID from response: $userId');
-          debugPrint('🔑 Token from response: ${token.substring(0, 20)}...');
-
-          await TokenService().saveTokens(
-            token: token,
-            refreshToken: refreshToken,
-            userId: userId,
-          );
-
-          // Ensure device FCM token is registered with backend after auth is available.
-          await NotificationService1.syncTokenWithBackend();
-
-          debugPrint('✅ Tokens and user ID saved successfully');
-
-          final savedUserId = await TokenService().getUserId();
-          debugPrint('✅ Verified saved userId: $savedUserId');
-        }
-
-        // Show push notification based on flow
-        if (widget.isSignupFlow) {
-          // Show OTP verification success notification (same style as signup)
-          await _notificationService.showOTPVerificationSuccessNotification();
-          debugPrint('✅ OTP verification success notification shown');
-
-          // Show success dialog (same style as signup)
-          _showVerificationSuccessDialog();
-        } else {
-          // Show login success notification
-          await _notificationService.showLoginSuccessNotification();
-          debugPrint('✅ Login success notification shown');
-
-          // Show success dialog for login (similar style)
-          _showLoginSuccessDialog(response.data?.user);
+          await _handleVerificationSuccess(response.data!);
         }
       } else {
         debugPrint(
           '🔴 OTPVerificationScreen: OTP verification failed: ${response.message}',
         );
         if (!mounted) return;
-        AuthService.showErrorDialog(context, response.message);
+        if (response.message.toLowerCase().contains('profile pic required')) {
+          _navigateToLivePhotoVerification(otp);
+        } else {
+          AuthService.showErrorDialog(context, response.message);
+        }
       }
     } on ApiException catch (e) {
       debugPrint(
         '🔴 OTPVerificationScreen: ApiException during verification: ${e.message}',
       );
       if (!mounted) return;
-      AuthService.showErrorDialog(context, e.message);
+
+      final isDeletedOrMissingUser = e.statusCode == 403 || e.statusCode == 404;
+      if (isDeletedOrMissingUser) {
+        AuthService.showErrorDialog(context, e.message);
+        await TokenService().clearTokens();
+        ProfileSessionManager.instance.clearSession();
+        BlockedUsersCache.instance.reset();
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SignupScreen()),
+          (route) => false,
+        );
+        return;
+      }
+
+      if (e.statusCode == 400 &&
+          e.message.toLowerCase().contains('profile pic required')) {
+        _navigateToLivePhotoVerification(otp);
+      } else {
+        AuthService.showErrorDialog(context, e.message);
+      }
     } catch (e) {
       debugPrint(
         '🔴 OTPVerificationScreen: General exception during verification: $e',
@@ -345,7 +423,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   }
 
   // Success dialog for login (similar style)
-  void _showLoginSuccessDialog(User? user) {
+  void _showLoginSuccessDialog(VerifyOtpResponseData responseData) {
+    final user = responseData.user;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -383,6 +462,15 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                 onPressed: () {
                   Navigator.of(context).pop(); // Close the dialog
                   widget.onVerificationSuccess(user); // Pass user data
+
+                  final subscription = responseData.subscription;
+                  if (subscription != null && !subscription.isValid) {
+                    // Let the post-login navigation (e.g. to Home) finish
+                    // its first frame before gating on top of it.
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      SubscriptionGate.showIfNeeded();
+                    });
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppConstants.primaryColor,
@@ -430,6 +518,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   @override
   Widget build(BuildContext context) {
     debugPrint('🟡 OTPVerificationScreen: build() called');
+    final textScale = MediaQuery.of(context).textScaler.scale(1.0);
+    final verifyButtonHeight = (56 * textScale.clamp(1.0, 1.25)).toDouble();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -597,13 +687,17 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                     // Verify Button
                     SizedBox(
                       width: double.infinity,
-                      height: 56,
+                      height: verifyButtonHeight,
                       child: _isLoading
                           ? ElevatedButton(
                               onPressed: null,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppConstants.primaryColor
                                     .withValues(alpha: 0.7),
+                                minimumSize: Size.fromHeight(verifyButtonHeight),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(28),
                                 ),
@@ -621,6 +715,10 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                               onPressed: _verifyOTP,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppConstants.primaryColor,
+                                minimumSize: Size.fromHeight(verifyButtonHeight),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(28),
                                 ),
@@ -631,9 +729,12 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                                     : 'Verify & Login',
                                 style: const TextStyle(
                                   fontSize: 18,
+                                  height: 1.2,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                     ),

@@ -2,10 +2,10 @@
 // import 'dart:convert';
 // import 'package:flutter/material.dart';
 // import 'package:http/http.dart' as http;
-// import 'package:YemPover_app/services/token_service.dart';
-// import 'package:YemPover_app/constants/api_constants.dart';
-// import 'package:YemPover_app/models/my_post_model.dart';
-// import 'package:YemPover_app/models/api_response.dart'; // Add this import
+// import 'package:yempover_app/services/token_service.dart';
+// import 'package:yempover_app/constants/api_constants.dart';
+// import 'package:yempover_app/models/my_post_model.dart';
+// import 'package:yempover_app/models/api_response.dart'; // Add this import
 
 // class MyPostsService {
 //   static final MyPostsService _instance = MyPostsService._internal();
@@ -279,10 +279,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:YemPover_app/services/token_service.dart';
-import 'package:YemPover_app/constants/api_constants.dart';
-import 'package:YemPover_app/models/my_post_model.dart';
-import 'package:YemPover_app/models/api_response.dart';
+import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/my_post_model.dart';
+import 'package:yempover_app/models/api_response.dart';
 
 class MyPostsService {
   static final MyPostsService _instance = MyPostsService._internal();
@@ -297,7 +297,11 @@ class MyPostsService {
     return token;
   }
 
-  Future<MyPostsResponse> getMyPosts({int page = 1, int limit = 20}) async {
+  Future<MyPostsResponse> getMyPosts({
+    int page = 1,
+    int limit = 20,
+    String? type,
+  }) async {
     final client = http.Client();
 
     try {
@@ -307,7 +311,9 @@ class MyPostsService {
         throw Exception('No authentication token found. Please login again.');
       }
 
-      final url = '${ApiConstants.baseUrl}/me/posts?page=$page&limit=$limit';
+      final typeParam = (type == null || type.isEmpty) ? '' : '&type=$type';
+      final url =
+          '${ApiConstants.baseUrl}/me/posts?page=$page&limit=$limit$typeParam';
       debugPrint('🌐 MyPostsService: Fetching my posts from: $url');
 
       final response = await client
@@ -338,6 +344,52 @@ class MyPostsService {
       }
     } catch (e) {
       debugPrint('🔴 MyPostsService: Error fetching my posts: $e');
+      rethrow;
+    } finally {
+      client.close();
+    }
+  }
+
+  // GET /me/posts/products/:id/offers | /me/posts/services/:id/offers
+  // (Point 4) — who has offered on one of the owner's posts.
+  Future<PostOfferersResult> getPostOfferers({
+    required String postId,
+    required bool isProduct,
+  }) async {
+    final client = http.Client();
+
+    try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token found. Please login again.');
+      }
+
+      final segment = isProduct ? 'products' : 'services';
+      final url = '${ApiConstants.baseUrl}/me/posts/$segment/$postId/offers';
+      debugPrint('🌐 MyPostsService: Fetching post offerers from: $url');
+
+      final response = await client
+          .get(
+            Uri.parse(url),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> jsonResponse = json.decode(response.body);
+        return PostOfferersResult.fromJson(jsonResponse['data'] ?? {});
+      } else if (response.statusCode == 401) {
+        await TokenService().clearTokens();
+        throw Exception('Session expired. Please login again.');
+      } else {
+        throw Exception('Failed to load offerers: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('🔴 MyPostsService: Error fetching post offerers: $e');
       rethrow;
     } finally {
       client.close();
