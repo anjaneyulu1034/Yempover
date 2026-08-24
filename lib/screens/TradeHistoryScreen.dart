@@ -293,8 +293,13 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                   ),
                   const SizedBox(height: 4),
 
-                  // Trade Type and Price
-                  Row(
+                  // Trade Type and Price — Wrap (not Row) so a long exchange
+                  // label ("Barter + Coins") can drop to a second line
+                  // instead of overflowing on narrow screens.
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -314,8 +319,7 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                           ),
                         ),
                       ),
-                      if (trade.exchangeSummary != null) ...[
-                        const SizedBox(width: 6),
+                      if (trade.exchangeSummary != null)
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -335,8 +339,6 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                             ),
                           ),
                         ),
-                      ],
-                      const SizedBox(width: 8),
                       if (price != null)
                         CoinPriceLabel(
                           text: CoinFormat.withLabel(price),
