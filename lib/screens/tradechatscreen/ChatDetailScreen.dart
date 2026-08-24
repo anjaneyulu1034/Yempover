@@ -2132,48 +2132,56 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                         ),
                       ),
                     ),
-                  // The barter item already on the table stays part of the
+                  // The barter item(s) already on the table stay part of the
                   // deal — only the coin amount is being renegotiated here.
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        _buildOfferItemThumb(
-                          originalOffer.barterProducts.isNotEmpty
-                              ? originalOffer.barterProducts.first.firstImage
-                              : (originalOffer.barterItemImages.isNotEmpty
-                                    ? originalOffer.barterItemImages.first
-                                    : ''),
+                  // A clubbed offer can hold several items, so show one
+                  // thumbnail per item (not just the first) — same source
+                  // the chat card itself uses.
+                  Builder(
+                    builder: (context) {
+                      final itemImages = originalOffer.barterProducts.isNotEmpty
+                          ? originalOffer.barterProducts
+                                .map((p) => p.firstImage)
+                                .where((url) => url.isNotEmpty)
+                                .toList()
+                          : originalOffer.barterItemImages;
+
+                      return Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Item stays part of this offer',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey.shade600,
-                                ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: itemImages.isNotEmpty
+                                  ? itemImages
+                                        .map((url) => _buildOfferItemThumb(url))
+                                        .toList()
+                                  : [_buildOfferItemThumb('')],
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Item stays part of this offer',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade600,
                               ),
-                              Text(
-                                _offeredItemsLabel(originalOffer),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              _offeredItemsLabel(originalOffer),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   TextField(
