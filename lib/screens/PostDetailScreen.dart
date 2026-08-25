@@ -1180,7 +1180,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         ? _post.location
         : 'Location not specified';
     final providerArea = (_post.postedBy.homeAddress ?? '').trim();
-    final hasCoordinates = _post.latitude != null && _post.longitude != null;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -1254,8 +1253,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     : Icons.block_outlined,
                 _post.isListed ? 'Listed' : 'Unlisted',
               ),
-              if (hasCoordinates)
-                _buildInfoPill(Icons.my_location_outlined, 'Geo-tagged'),
             ],
           ),
           const SizedBox(height: 14),
@@ -1269,13 +1266,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               icon: Icons.home_work_outlined,
               label: 'Provider area',
               value: providerArea,
-            ),
-          if (hasCoordinates)
-            _buildServiceMetaRow(
-              icon: Icons.pin_drop_outlined,
-              label: 'Coordinates',
-              value:
-                  '${_post.latitude!.toStringAsFixed(5)}, ${_post.longitude!.toStringAsFixed(5)}',
             ),
           _buildServiceMetaRow(
             icon: Icons.event_outlined,

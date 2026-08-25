@@ -14,8 +14,13 @@ import 'package:yempover_app/widgets/coin_icon.dart';
 class _BarterLineItem {
   final String imageUrl;
   final String? productId;
+  final double? price;
 
-  const _BarterLineItem({required this.imageUrl, required this.productId});
+  const _BarterLineItem({
+    required this.imageUrl,
+    required this.productId,
+    this.price,
+  });
 }
 
 class TradeDetailScreen extends StatelessWidget {
@@ -49,6 +54,35 @@ class TradeDetailScreen extends StatelessWidget {
     final effectiveActualPrice = summary?.actualPrice ?? actualPrice;
     final effectiveSellingPrice = summary?.coins ?? price;
     final effectiveDifference = summary?.priceDifference ?? difference;
+
+    // For a Barter + Coins deal (a real swapped item on both sides, plus a
+    // coin top-up), work out a basic net-value check: my item(s) value plus
+    // the coins involved, minus their item(s) value. Only computed when
+    // both sides actually have known per-item prices — older trades or
+    // legacy barter snapshots without price data leave this null and the
+    // row simply doesn't show.
+    double? netValue;
+    if (trade.hasBarterItemSnapshot) {
+      final theirItems = trade.isMyBarterItem == true
+          ? [_listingItem(trade)]
+          : _barterSnapshotItems(trade);
+      final myItems = trade.isMyBarterItem == true
+          ? _barterSnapshotItems(trade)
+          : [_listingItem(trade)];
+      final myHasPrice = myItems.any((item) => item.price != null);
+      final theirHasPrice = theirItems.any((item) => item.price != null);
+      if (myHasPrice && theirHasPrice) {
+        final myTotal = myItems.fold<double>(
+          0,
+          (sum, item) => sum + (item.price ?? 0),
+        );
+        final theirTotal = theirItems.fold<double>(
+          0,
+          (sum, item) => sum + (item.price ?? 0),
+        );
+        netValue = myTotal + (effectiveSellingPrice ?? 0) - theirTotal;
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -189,113 +223,136 @@ class TradeDetailScreen extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // Item Section
-            Text(
-              trade.hasBarterItemSnapshot ? 'Item Bartered:' : 'Item Details:',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // A genuine two-item swap needs a distinct record for each side.
-            // This isn't gated on `isBarter` — that flag just says which
-            // bucket the backend sorted the trade into (Sold/Bought vs
-            // Barter), not whether a barter item was actually part of the
-            // deal. A "Barter + Coins" offer accepted on a for-sale listing
-            // lands in the Bought/Sold bucket (isBarter == false) but still
-            // has a real barterItemTitle/Images snapshot that must be shown.
-            // Older trades (before that was tracked) and pure sales never
-            // have a snapshot, so they still fall through to the single,
-            // honestly-labeled card below instead of fake "Their Item"/"My
-            // Item" cards.
-            if (trade.hasBarterItemSnapshot)
-              _buildBarterSwapCard(context, trade)
-            else
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _buildUserSection(
-                    context: context,
-                    title: trade.otherUser.fullName,
-                    imageUrl:
-                        trade.otherUser.profileImage ??
-                        'https://via.placeholder.com/150',
-                    badgeLabel: tradeType == 'Sold'
-                        ? 'Sold to this user'
-                        : tradeType == 'Purchased'
-                        ? 'Purchased from this user'
-                        : 'Bartered with this user',
-                    itemTitle: trade.product.title,
-                    items: [_listingItem(trade)],
-                  ),
+            // Value breakdown: when the backend has computed a real
+            // per-side item+coins ledger, it replaces both the old item
+            // card and the Price Information block below — one component
+            // covers Coins/Barter/Barter+Coins alike (heading switches on
+            // exchangeLabel), and the formula/differenceLabel are
+            // ready-made copy, not re-derived client-side.
+            if (trade.valueBreakdown != null)
+              _buildValueBreakdownCard(context, trade.valueBreakdown!)
+            else ...[
+              // Item Section
+              Text(
+                trade.hasBarterItemSnapshot
+                    ? 'Item Bartered:'
+                    : 'Item Details:',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
                 ),
               ),
+              const SizedBox(height: 16),
 
-            const SizedBox(height: 24),
-
-            // Price Information: shown for Sold/Purchased trades, and also
-            // for a Barter + Coins deal that landed in the barter bucket but
-            // still had a real coin amount recorded (trade.sellingPrice).
-            // Excluded for a pure barter with no price component, since
-            // displayPrice would otherwise fall back to the listing's
-            // nominal price — a number that was never actually charged.
-            if ((!isBarter || trade.sellingPrice != null) &&
-                effectiveSellingPrice != null &&
-                effectiveActualPrice != null)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Price Information:',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
+              // A genuine two-item swap needs a distinct record for each
+              // side. This isn't gated on `isBarter` — that flag just says
+              // which bucket the backend sorted the trade into (Sold/Bought
+              // vs Barter), not whether a barter item was actually part of
+              // the deal. A "Barter + Coins" offer accepted on a for-sale
+              // listing lands in the Bought/Sold bucket (isBarter == false)
+              // but still has a real barterItemTitle/Images snapshot that
+              // must be shown. Older trades (before that was tracked) and
+              // pure sales never have a snapshot, so they still fall
+              // through to the single, honestly-labeled card below instead
+              // of fake "Their Item"/"My Item" cards.
+              if (trade.hasBarterItemSnapshot)
+                _buildBarterSwapCard(context, trade)
+              else
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: _buildUserSection(
+                      context: context,
+                      title: trade.otherUser.fullName,
+                      imageUrl:
+                          trade.otherUser.profileImage ??
+                          'https://via.placeholder.com/150',
+                      badgeLabel: tradeType == 'Sold'
+                          ? 'Sold to this user'
+                          : tradeType == 'Purchased'
+                          ? 'Purchased from this user'
+                          : 'Bartered with this user',
+                      itemTitle: trade.product.title,
+                      items: [_listingItem(trade)],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          _buildPriceRow(
-                            'Actual Price',
-                            CoinFormat.amount(effectiveActualPrice),
-                            Colors.grey,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildPriceRow(
-                            'Selling Price',
-                            CoinFormat.amount(effectiveSellingPrice),
-                            Colors.green,
-                          ),
-                          const SizedBox(height: 12),
-                          const Divider(),
-                          const SizedBox(height: 12),
-                          _buildPriceRow(
-                            'Price Difference',
-                            _formatPriceDifference(effectiveDifference),
-                            _priceDifferenceColor(effectiveDifference),
-                          ),
-                        ],
+                ),
+
+              const SizedBox(height: 24),
+
+              // Price Information: shown for Sold/Purchased trades, and
+              // also for a Barter + Coins deal that landed in the barter
+              // bucket but still had a real coin amount recorded
+              // (trade.sellingPrice). Excluded for a pure barter with no
+              // price component, since displayPrice would otherwise fall
+              // back to the listing's nominal price — a number that was
+              // never actually charged.
+              if ((!isBarter || trade.sellingPrice != null) &&
+                  effectiveSellingPrice != null &&
+                  effectiveActualPrice != null)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Price Information:',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[800],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            _buildPriceRow(
+                              'Actual Price',
+                              CoinFormat.amount(effectiveActualPrice),
+                              Colors.grey,
+                            ),
+                            const SizedBox(height: 12),
+                            _buildPriceRow(
+                              'Selling Price',
+                              CoinFormat.amount(effectiveSellingPrice),
+                              Colors.green,
+                            ),
+                            const SizedBox(height: 12),
+                            const Divider(),
+                            const SizedBox(height: 12),
+                            _buildPriceRow(
+                              'Price Difference',
+                              _formatPriceDifference(effectiveDifference),
+                              _priceDifferenceColor(effectiveDifference),
+                            ),
+                            if (netValue != null) ...[
+                              const SizedBox(height: 12),
+                              const Divider(),
+                              const SizedBox(height: 12),
+                              _buildPriceRow(
+                                'Net Value',
+                                _formatPriceDifference(netValue),
+                                _priceDifferenceColor(netValue),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+            ],
 
             // Remarks
             if (trade.remarks != null && trade.remarks!.isNotEmpty)
@@ -467,7 +524,11 @@ class TradeDetailScreen extends StatelessWidget {
     final image = trade.product.primaryImage.isNotEmpty
         ? trade.product.primaryImage
         : 'https://via.placeholder.com/150';
-    return _BarterLineItem(imageUrl: image, productId: trade.product.id);
+    return _BarterLineItem(
+      imageUrl: image,
+      productId: trade.product.id,
+      price: trade.product.price,
+    );
   }
 
   // The barter-offer side can hold several clubbed products — pair each
@@ -482,7 +543,7 @@ class TradeDetailScreen extends StatelessWidget {
         final image = p.images.isNotEmpty
             ? p.images.first
             : 'https://via.placeholder.com/150';
-        return _BarterLineItem(imageUrl: image, productId: p.id);
+        return _BarterLineItem(imageUrl: image, productId: p.id, price: p.price);
       }).toList();
     }
     if (trade.barterItemImages.isEmpty) {
@@ -699,7 +760,7 @@ class TradeDetailScreen extends StatelessWidget {
                           )
                         : null,
                   );
-                  return item.productId != null
+                  final tappableThumb = item.productId != null
                       ? InkWell(
                           borderRadius: BorderRadius.circular(6),
                           onTap: () =>
@@ -707,6 +768,21 @@ class TradeDetailScreen extends StatelessWidget {
                           child: thumb,
                         )
                       : thumb;
+                  if (item.price == null) return tappableThumb;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      tappableThumb,
+                      const SizedBox(height: 4),
+                      Text(
+                        CoinFormat.amount(item.price!),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  );
                 }).toList(),
               ),
               const SizedBox(height: 10),
@@ -719,8 +795,192 @@ class TradeDetailScreen extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
+              if (items.any((item) => item.price != null)) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Total: ${CoinFormat.amount(items.fold<double>(0, (sum, item) => sum + (item.price ?? 0)))}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ],
             ],
           ),
+        ),
+      ],
+    );
+  }
+
+  // Server-computed "your side / their side" ledger — one component covers
+  // Coins, Barter, and Barter+Coins alike; only the heading and the
+  // presence of a coins line differ per side.
+  Widget _buildValueBreakdownCard(BuildContext context, ValueBreakdown vb) {
+    final differenceColor = vb.difference > 0
+        ? Colors.orange.shade800
+        : vb.difference < 0
+        ? Colors.green.shade700
+        : Colors.grey;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${vb.exchangeLabel} Details:',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[800],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _buildValueBreakdownSide(
+                          context,
+                          'Your side',
+                          vb.you,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const VerticalDivider(width: 1),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildValueBreakdownSide(
+                          context,
+                          'Their side',
+                          vb.them,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 12),
+                Text(
+                  vb.formula,
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  vb.differenceLabel,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: differenceColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildValueBreakdownSide(
+    BuildContext context,
+    String heading,
+    ValueBreakdownSide side,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          heading,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        if (side.items.isEmpty)
+          Text(
+            'No items',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+          )
+        else
+          ...side.items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      color: Colors.grey.shade100,
+                      image: (item.image != null && item.image!.isNotEmpty)
+                          ? DecorationImage(
+                              image: NetworkImage(item.image!),
+                              fit: BoxFit.cover,
+                              onError: (exception, stackTrace) {},
+                            )
+                          : null,
+                    ),
+                    child: (item.image == null || item.image!.isEmpty)
+                        ? const Icon(
+                            Icons.image_not_supported,
+                            size: 18,
+                            color: Colors.grey,
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          style: const TextStyle(fontSize: 12.5),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          CoinFormat.amount(item.price),
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (side.coins > 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              '+ ${CoinFormat.amount(side.coins)} coins',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: Colors.green.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        const Divider(height: 16),
+        Text(
+          'Total ${CoinFormat.amount(side.total)}',
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
         ),
       ],
     );

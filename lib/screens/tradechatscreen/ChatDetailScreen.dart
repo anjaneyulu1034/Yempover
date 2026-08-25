@@ -86,6 +86,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   // full PostDetailScreen navigation, which wants more than that summary.
   final Map<String, Post> _barterItemPostCache = {};
 
+  bool get _isServiceChat =>
+      (_currentChat.serviceId != null && _currentChat.serviceId!.isNotEmpty) ||
+      _currentChat.service != null;
+
   bool get _isReferenceUnavailable {
     // The backend marks the product/service SOLD as soon as an offer is
     // accepted (to reserve it) — well before both users have given deal
@@ -3840,7 +3844,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Unable to edit slot: service details are missing.'),
+          content: Text(
+            'Unable to reschedule slot: service details are missing.',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -4011,7 +4017,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Edit Slot & Send Return Proposal',
+                      'Reschedule Slot & Send Return Proposal',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -4646,10 +4652,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     visibleOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final latestOffer = visibleOffers.last;
     final isIncoming = latestOffer.madeById != widget.currentUserId;
-    final isServiceChat =
-        (_currentChat.serviceId != null &&
-            _currentChat.serviceId!.isNotEmpty) ||
-        _currentChat.service != null;
+    final isServiceChat = _isServiceChat;
 
     if (!isIncoming) return const SizedBox();
 
@@ -4797,83 +4800,56 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               !_currentChat.hasAcceptedOffer &&
               !_isBlocked) ...[
             const SizedBox(height: 12),
-            if (isServiceChat)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed:
-                      _isOfferActionInProgress &&
-                          _processingOfferId == latestOffer.id
-                      ? null
-                      : () => _acceptOffer(latestOffer),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed:
+                        _isOfferActionInProgress &&
+                            _processingOfferId == latestOffer.id
+                        ? null
+                        : () => _rejectOffer(latestOffer),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                    ),
+                    child:
+                        _isOfferActionInProgress &&
+                            _processingOfferId == latestOffer.id
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Reject'),
                   ),
-                  child:
-                      _isOfferActionInProgress &&
-                          _processingOfferId == latestOffer.id
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Accept'),
                 ),
-              )
-            else
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed:
-                          _isOfferActionInProgress &&
-                              _processingOfferId == latestOffer.id
-                          ? null
-                          : () => _rejectOffer(latestOffer),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                      ),
-                      child:
-                          _isOfferActionInProgress &&
-                              _processingOfferId == latestOffer.id
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Reject'),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed:
+                        _isOfferActionInProgress &&
+                            _processingOfferId == latestOffer.id
+                        ? null
+                        : () => _acceptOffer(latestOffer),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
                     ),
+                    child:
+                        _isOfferActionInProgress &&
+                            _processingOfferId == latestOffer.id
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Accept'),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed:
-                          _isOfferActionInProgress &&
-                              _processingOfferId == latestOffer.id
-                          ? null
-                          : () => _acceptOffer(latestOffer),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                      ),
-                      child:
-                          _isOfferActionInProgress &&
-                              _processingOfferId == latestOffer.id
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Accept'),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
+            ),
             // Zero-coin offers and pure product-swap barter offers are a
             // simple accept/reject — there's no coin amount to negotiate,
             // so countering doesn't apply (only Barter+Coins / Price offers
@@ -4895,7 +4871,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   icon: Icon(
                     isServiceChat ? Icons.edit_calendar : Icons.swap_horiz,
                   ),
-                  label: Text(isServiceChat ? 'Edit Slot' : 'Counter Offer'),
+                  label: Text(
+                    isServiceChat ? 'Reschedule Slot' : 'Counter Offer',
+                  ),
                 ),
               ),
             ],
@@ -4922,10 +4900,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     myOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final latestOffer = myOffers.last;
-    final isServiceChat =
-        (_currentChat.serviceId != null &&
-            _currentChat.serviceId!.isNotEmpty) ||
-        _currentChat.service != null;
+    final isServiceChat = _isServiceChat;
     final recipientName = _getOtherUser().firstName;
 
     final statusText = latestOffer.offerStatus.value;

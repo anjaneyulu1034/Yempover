@@ -235,6 +235,95 @@ class ServiceBookingService {
     return _patch('$_servicesRoot/appointments/$appointmentId/cancel');
   }
 
+  // Distinct from cancel — only legal while status is REQUESTED, and only
+  // the provider can call it. The server silently truncates a reason over
+  // 500 chars rather than rejecting it.
+  Future<Map<String, dynamic>> rejectAppointment(
+    String appointmentId, {
+    String? reason,
+  }) async {
+    final response = await http
+        .patch(
+          Uri.parse('$_servicesRoot/appointments/$appointmentId/reject'),
+          headers: await _headers(authRequired: true),
+          body: jsonEncode({
+            if (reason != null && reason.trim().isNotEmpty)
+              'reason': reason.trim(),
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    return _decode(response);
+  }
+
+  // Legal reschedule slots for an EXISTING appointment — the appointment's
+  // own current slot stays selectable (not excluded as "taken").
+  Future<Map<String, dynamic>> getRescheduleOptionsForAppointment(
+    String appointmentId, {
+    int days = 14,
+    String? fromDate,
+  }) async {
+    final query = <String, String>{
+      'days': '$days',
+      if (fromDate != null && fromDate.isNotEmpty) 'fromDate': fromDate,
+    };
+    final uri = Uri.parse(
+      '$_servicesRoot/appointments/$appointmentId/reschedule-options',
+    ).replace(queryParameters: query);
+    final response = await http
+        .get(uri, headers: await _headers(authRequired: true))
+        .timeout(const Duration(seconds: 30));
+
+    return _decode(response);
+  }
+
+  // Same shape, for a service that doesn't have an appointment yet (the
+  // initial booking / pre-acceptance offer picker).
+  Future<Map<String, dynamic>> getRescheduleOptionsForService(
+    String serviceId, {
+    int days = 14,
+    String? fromDate,
+  }) async {
+    final query = <String, String>{
+      'days': '$days',
+      if (fromDate != null && fromDate.isNotEmpty) 'fromDate': fromDate,
+    };
+    final uri = Uri.parse(
+      '$_servicesRoot/$serviceId/reschedule-options',
+    ).replace(queryParameters: query);
+    final response = await http
+        .get(uri, headers: await _headers(authRequired: false))
+        .timeout(const Duration(seconds: 30));
+
+    return _decode(response);
+  }
+
+  // appointmentDate must be a LOCAL wall-clock ISO string with no
+  // trailing Z/offset (e.g. "2026-08-26T10:00:00") — the server extracts
+  // the date/time by regex against the provider's saved local schedule,
+  // not real timezone math. Use ServiceBookingService.localIso() to build it.
+  Future<Map<String, dynamic>> rescheduleAppointment(
+    String appointmentId, {
+    required String appointmentDate,
+    int? duration,
+    String? reason,
+  }) async {
+    final response = await http
+        .patch(
+          Uri.parse('$_servicesRoot/appointments/$appointmentId/reschedule'),
+          headers: await _headers(authRequired: true),
+          body: jsonEncode({
+            'appointmentDate': appointmentDate,
+            if (duration != null) 'duration': duration,
+            if (reason != null && reason.trim().isNotEmpty)
+              'reason': reason.trim(),
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    return _decode(response);
+  }
+
   Future<Map<String, dynamic>> completeAppointment(String appointmentId) async {
     return _patch('$_servicesRoot/appointments/$appointmentId/complete');
   }
@@ -291,6 +380,16 @@ class ServiceBookingService {
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
 
     return '${date}T$time$sign$hours:$minutes';
+  }
+
+  // Local wall-clock ISO string with no timezone suffix — what the
+  // reschedule/appointment endpoints expect (see rescheduleAppointment).
+  String localIso(DateTime dateTime) {
+    final date =
+        '${dateTime.year.toString().padLeft(4, '0')}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
+    final time =
+        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}:${dateTime.second.toString().padLeft(2, '0')}';
+    return '${date}T$time';
   }
 
   DateTime? parseTimeOfDay(DateTime date, String? time) {

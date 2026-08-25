@@ -47,6 +47,11 @@ class _AddPostScreenState extends State<AddPostScreen> {
   final LocationService _locationService = LocationService();
   final ServiceBookingService _serviceBookingService = ServiceBookingService();
 
+  // Set via the availability picker just before creating a "Provide
+  // Service" post, so create + schedule happen as one continuous flow
+  // instead of a forced separate screen after the post already exists.
+  List<Map<String, dynamic>>? _pendingAvailabilitySlots;
+
   // Step 1 variables
   int _selectedOption = 1;
   String _postType = 'Product';
@@ -454,13 +459,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
         });
         _showSuccessSnackBar('Location updated successfully');
       } else {
+        // Reverse-geocoding failed — keep the coordinates for submission,
+        // but never surface raw lat/lng in the visible field. Leave it for
+        // the user to type their address instead.
         setState(() {
           _selectedLatitude = position.latitude;
           _selectedLongitude = position.longitude;
-          _locationController.text =
-              '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
-          _showLocationMinCharsHint = false;
         });
+        _showError(
+          'Could not determine your address. Please enter it manually.',
+        );
       }
     } catch (e) {
       debugPrint('🔴 Error getting location: $e');
@@ -2126,6 +2134,26 @@ class _AddPostScreenState extends State<AddPostScreen> {
           await _addPostService.createProductPost(request);
           debugPrint('✅ Product created successfully');
         } else {
+          // Collect the weekly schedule as part of this same flow (not a
+          // forced separate screen after the post already exists) — if the
+          // user backs out of the picker, stay on the form instead of
+          // creating a service with no bookable slots.
+          if (_pendingAvailabilitySlots == null) {
+            if (!mounted) return;
+            final picked = await Navigator.push<List<Map<String, dynamic>>>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ServiceAvailabilityScreen(
+                  pickerMode: true,
+                  isInitialSetup: true,
+                ),
+              ),
+            );
+            if (picked == null) return;
+            if (!mounted) return;
+            _pendingAvailabilitySlots = picked;
+          }
+
           debugPrint(
             '📦 Creating provider service with ${imageUrls.length} images via /api/services',
           );
@@ -2160,19 +2188,30 @@ class _AddPostScreenState extends State<AddPostScreen> {
             );
           }
 
-          if (!mounted) return;
+          if (_pendingAvailabilitySlots!.isNotEmpty) {
+            try {
+              await _serviceBookingService.setAvailability(
+                serviceId: serviceId,
+                availabilitySlots: _pendingAvailabilitySlots!,
+              );
+            } catch (e) {
+              // The service itself was created successfully — don't block
+              // the post over a schedule save failure, just let them know.
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Service created, but availability could not be '
+                      'saved: ${_serviceBookingService.extractMessage(e)}',
+                    ),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            }
+          }
 
-          widget.onPostAdded?.call();
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ServiceAvailabilityScreen(
-                serviceId: serviceId!,
-                isInitialSetup: true,
-              ),
-            ),
-          );
-          return;
+          debugPrint('✅ Service created successfully');
         }
       } else {
         // Handle "Looking For" (service only)

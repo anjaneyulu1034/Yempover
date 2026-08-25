@@ -896,6 +896,42 @@ class DealCompletion {
 // PIN-free, photo-free: single source of truth for the Deal panel, which is
 // just an exchange-mode header, a background payment info banner, and the
 // mutual "Deal Completed" / "Deal Not Completed" buttons.
+// Server-computed copy for the "Deal Not Completed" reason dialog — already
+// worded per product vs service and provider vs client side, so render it
+// verbatim rather than re-deriving wording client-side.
+class CloseDealPrompt {
+  final String title;
+  final String placeholder;
+  final String helperText;
+  final bool required;
+  final int maxLength;
+  final List<String> suggestions;
+
+  CloseDealPrompt({
+    required this.title,
+    required this.placeholder,
+    required this.helperText,
+    required this.required,
+    required this.maxLength,
+    required this.suggestions,
+  });
+
+  factory CloseDealPrompt.fromJson(Map<String, dynamic> json) {
+    return CloseDealPrompt(
+      title: json['title']?.toString() ?? 'Deal Not Completed',
+      placeholder: json['placeholder']?.toString() ?? '',
+      helperText: json['helperText']?.toString() ?? '',
+      required: json['required'] == true,
+      maxLength: json['maxLength'] is num
+          ? (json['maxLength'] as num).toInt()
+          : 500,
+      suggestions: (json['suggestions'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
+    );
+  }
+}
+
 class DealVerification {
   final String chatId;
   final String scenario;
@@ -909,6 +945,7 @@ class DealVerification {
   final DealRole role;
   final DealPayment payment;
   final DealCompletion completion;
+  final CloseDealPrompt? closeDealPrompt;
 
   DealVerification({
     required this.chatId,
@@ -920,6 +957,7 @@ class DealVerification {
     required this.role,
     required this.payment,
     required this.completion,
+    this.closeDealPrompt,
   });
 
   factory DealVerification.fromJson(Map<String, dynamic> json) {
@@ -939,6 +977,11 @@ class DealVerification {
       completion: DealCompletion.fromJson(
         Map<String, dynamic>.from(json['completion'] ?? {}),
       ),
+      closeDealPrompt: json['closeDealPrompt'] is Map
+          ? CloseDealPrompt.fromJson(
+              Map<String, dynamic>.from(json['closeDealPrompt'] as Map),
+            )
+          : null,
     );
   }
 }

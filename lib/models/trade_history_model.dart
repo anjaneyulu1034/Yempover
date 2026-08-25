@@ -267,6 +267,123 @@ class ExchangeSummary {
   }
 }
 
+// One item on either side of a valueBreakdown (a bartered product, or the
+// listing itself when that side has no barter item of its own).
+class ValueBreakdownItem {
+  final String id;
+  final String type; // 'product' | 'service'
+  final String title;
+  final String? image;
+  final List<String> images;
+  final double price;
+  final String? ownerId;
+  final bool isListing;
+
+  ValueBreakdownItem({
+    required this.id,
+    required this.type,
+    required this.title,
+    this.image,
+    this.images = const [],
+    required this.price,
+    this.ownerId,
+    this.isListing = false,
+  });
+
+  factory ValueBreakdownItem.fromJson(Map<String, dynamic> json) {
+    return ValueBreakdownItem(
+      id: _asString(json['id']),
+      type: _asString(json['type']),
+      title: _asString(json['title']),
+      image: json['image']?.toString(),
+      images: _asList(json['images']).map((e) => e.toString()).toList(),
+      price: _asNullableDouble(json['price']) ?? 0,
+      ownerId: json['ownerId']?.toString(),
+      isListing: json['isListing'] == true,
+    );
+  }
+}
+
+// One side (either the viewer or the other user) of a valueBreakdown.
+class ValueBreakdownSide {
+  final String? userId;
+  final String name;
+  final bool isYou;
+  final List<ValueBreakdownItem> items;
+  final int itemCount;
+  final double itemsTotal;
+  final double coins;
+  final double total;
+
+  ValueBreakdownSide({
+    this.userId,
+    required this.name,
+    required this.isYou,
+    required this.items,
+    required this.itemCount,
+    required this.itemsTotal,
+    required this.coins,
+    required this.total,
+  });
+
+  factory ValueBreakdownSide.fromJson(Map<String, dynamic> json) {
+    final items = _asList(json['items'])
+        .whereType<Map>()
+        .map((e) => ValueBreakdownItem.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+    return ValueBreakdownSide(
+      userId: json['userId']?.toString(),
+      name: _asString(json['name']),
+      isYou: json['isYou'] == true,
+      items: items,
+      itemCount: json['itemCount'] is num
+          ? (json['itemCount'] as num).toInt()
+          : items.length,
+      itemsTotal: _asNullableDouble(json['itemsTotal']) ?? 0,
+      coins: _asNullableDouble(json['coins']) ?? 0,
+      total: _asNullableDouble(json['total']) ?? 0,
+    );
+  }
+}
+
+// Server-computed "who gave what" breakdown for a completed trade — one
+// component covers Coins/Barter/Barter+Coins alike (see exchangeLabel for
+// the heading), so the viewer never has to do this arithmetic themselves.
+class ValueBreakdown {
+  final String exchangeType; // COINS | BARTER | BARTER_PLUS_COINS
+  final String exchangeLabel;
+  final String? listingType;
+  final ValueBreakdownSide you;
+  final ValueBreakdownSide them;
+  final double difference;
+  final String differenceLabel;
+  final String formula;
+
+  ValueBreakdown({
+    required this.exchangeType,
+    required this.exchangeLabel,
+    this.listingType,
+    required this.you,
+    required this.them,
+    required this.difference,
+    required this.differenceLabel,
+    required this.formula,
+  });
+
+  factory ValueBreakdown.fromJson(Map<String, dynamic> json) {
+    return ValueBreakdown(
+      exchangeType: _asString(json['exchangeType']),
+      exchangeLabel: _asString(json['exchangeLabel']),
+      listingType: json['listingType']?.toString(),
+      you: ValueBreakdownSide.fromJson(_asMap(json['you'])),
+      them: ValueBreakdownSide.fromJson(_asMap(json['them'])),
+      difference: _asNullableDouble(json['difference']) ?? 0,
+      differenceLabel: _asString(json['differenceLabel']),
+      formula: _asString(json['formula']),
+    );
+  }
+}
+
 class TradeItem {
   final String id;
   final DateTime completedDate;
@@ -295,6 +412,10 @@ class TradeItem {
   // Coins) plus the actual/selling/difference price block. Null for trades
   // completed before this was tracked.
   final ExchangeSummary? exchangeSummary;
+  // Full "your side / their side" item + coins + net-value breakdown,
+  // server-computed. Null for trades completed before this was tracked —
+  // fall back to exchangeSummary-based rendering in that case.
+  final ValueBreakdown? valueBreakdown;
 
   TradeItem({
     required this.id,
@@ -313,6 +434,7 @@ class TradeItem {
     this.barterProducts = const [],
     this.isMyBarterItem,
     this.exchangeSummary,
+    this.valueBreakdown,
   });
 
   factory TradeItem.fromJson(
@@ -347,6 +469,11 @@ class TradeItem {
       exchangeSummary: json['exchangeSummary'] is Map
           ? ExchangeSummary.fromJson(
               Map<String, dynamic>.from(json['exchangeSummary'] as Map),
+            )
+          : null,
+      valueBreakdown: json['valueBreakdown'] is Map
+          ? ValueBreakdown.fromJson(
+              Map<String, dynamic>.from(json['valueBreakdown'] as Map),
             )
           : null,
     );

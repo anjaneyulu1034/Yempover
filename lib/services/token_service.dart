@@ -156,7 +156,23 @@ class TokenService {
         debugPrint(
           '🔄 TokenService: isLoggedIn detected expired token, refreshing...',
         );
-        token = await refreshToken();
+        final refreshed = await refreshToken();
+        if (refreshed != null) {
+          token = refreshed;
+        } else {
+          // refreshToken() only clears storage on a definitive failure (401
+          // or missing refresh token) — see _handleRefreshFailure. A
+          // transient failure (network blip, timeout, server hiccup) leaves
+          // the old token in storage. If that token isn't actually past its
+          // real expiry yet (just within the 5-minute proactive-refresh
+          // buffer), keep using it instead of reporting a false logout.
+          final stillStored = prefs.getString(_tokenKey);
+          token = (stillStored != null &&
+                  stillStored.isNotEmpty &&
+                  !_isPastActualExpiry(stillStored))
+              ? stillStored
+              : null;
+        }
       }
 
       final isLoggedIn =
@@ -298,6 +314,28 @@ class TokenService {
       return expiryTime.isBefore(fiveMinutesFromNow);
     } catch (e) {
       debugPrint('🔴 TokenService: Error checking token expiry: $e');
+      return true;
+    }
+  }
+
+  /// Like [isTokenExpired] but checks the real `exp` claim with no
+  /// lookahead buffer — used to decide whether a still-stored token remains
+  /// usable after a transient refresh failure.
+  bool _isPastActualExpiry(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return true;
+
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      final exp = payload['exp'];
+      if (exp == null) return true;
+
+      final expiryTime = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      return expiryTime.isBefore(DateTime.now());
+    } catch (e) {
+      debugPrint('🔴 TokenService: Error checking actual token expiry: $e');
       return true;
     }
   }

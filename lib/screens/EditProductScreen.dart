@@ -66,6 +66,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
   late List<String> _images;
   double? _selectedLatitude;
   double? _selectedLongitude;
+  // Set when the user picks a new weekly schedule via "Manage Availability"
+  // — held locally and sent as part of the single _saveChanges() PUT rather
+  // than saved separately, so a service edit is one save action.
+  List<Map<String, dynamic>>? _pendingAvailabilitySlots;
 
   List<Map<String, dynamic>> _mainCategories = [];
   List<Map<String, dynamic>> _subCategories = [];
@@ -675,10 +679,24 @@ class _EditProductScreenState extends State<EditProductScreen> {
   }
 
   Future<void> _openManageAvailability() async {
-    await Navigator.push(
+    final result = await Navigator.push<List<Map<String, dynamic>>>(
       context,
       MaterialPageRoute(
-        builder: (_) => ServiceAvailabilityScreen(serviceId: widget.post.id),
+        builder: (_) => ServiceAvailabilityScreen(
+          serviceId: widget.post.id,
+          pickerMode: true,
+          initialAvailabilitySlots: _pendingAvailabilitySlots,
+        ),
+      ),
+    );
+
+    if (result == null || !mounted) return;
+    setState(() => _pendingAvailabilitySlots = result);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Availability updated — tap Save to apply your changes.',
+        ),
       ),
     );
   }
@@ -792,6 +810,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
       }
       if (_selectedLongitude != null) {
         requestData['longitude'] = _selectedLongitude;
+      }
+      if (_postType == 'service' && _pendingAvailabilitySlots != null) {
+        requestData['availabilitySlots'] = _pendingAvailabilitySlots;
       }
 
       debugPrint('📦 Sending update request with type: $_postType');
