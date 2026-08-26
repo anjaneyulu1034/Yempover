@@ -183,18 +183,29 @@ Future<bool?> _confirmZeroCoinSelection(BuildContext context) {
 Widget _buildExchangeModeCard(BuildContext context, ExchangeModeOption option) {
   final isBarterFlavored =
       option.mode == 'PURE_BARTER' || option.mode == 'SERVICE_FOR_BARTER';
+  // Only meaningful for the slot-based (Pure Coins) service option — the
+  // provider hasn't published a schedule yet, so there's nothing to book.
+  final schedulingBlocked =
+      option.requiresSlotSelection && !option.schedulingConfigured;
 
   return ListTile(
     contentPadding: EdgeInsets.zero,
     leading: isBarterFlavored
-        ? const Icon(Icons.swap_horiz, color: Colors.orange, size: 32)
+        ? Icon(
+            Icons.swap_horiz,
+            color: schedulingBlocked ? Colors.grey : Colors.orange,
+            size: 32,
+          )
         : const CoinIcon(size: 32, iconSize: 20),
     title: Row(
       children: [
         Flexible(
           child: Text(
             option.label,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: schedulingBlocked ? Colors.grey.shade600 : null,
+            ),
           ),
         ),
         if (option.isCrossMode) ...[
@@ -221,6 +232,24 @@ Widget _buildExchangeModeCard(BuildContext context, ExchangeModeOption option) {
       option.note,
       style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
     ),
-    onTap: () => Navigator.pop(context, option),
+    onTap: () {
+      if (schedulingBlocked) {
+        showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(option.label),
+            content: Text(option.note),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+      Navigator.pop(context, option);
+    },
   );
 }

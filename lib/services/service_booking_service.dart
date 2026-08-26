@@ -166,23 +166,35 @@ class ServiceBookingService {
     return _decode(response);
   }
 
+  // Always pass duration when known — a longer booking legitimately has
+  // fewer options, and the server needs it to compute isBookable correctly.
   Future<Map<String, dynamic>> getAvailableSlots({
     required String serviceId,
     required String date,
+    int? duration,
   }) async {
+    final query = <String, String>{
+      'date': date,
+      if (duration != null) 'duration': '$duration',
+    };
+    final uri = Uri.parse(
+      '$_servicesRoot/$serviceId/available-slots',
+    ).replace(queryParameters: query);
     final response = await http
-        .get(
-          Uri.parse('$_servicesRoot/$serviceId/available-slots?date=$date'),
-          headers: await _headers(authRequired: false),
-        )
+        .get(uri, headers: await _headers(authRequired: false))
         .timeout(const Duration(seconds: 30));
 
     return _decode(response);
   }
 
+  // appointmentDate is date-only ("YYYY-MM-DD") and appointmentTime is
+  // "HH:mm", sent as separate fields — never combined into one timestamp —
+  // so the stored slot is exactly the wall clock the user picked, with no
+  // timezone math on either end that could shift it.
   Future<Map<String, dynamic>> createAppointment({
     required String serviceId,
     required String appointmentDate,
+    required String appointmentTime,
     required int duration,
     required String location,
     double? proposedPrice,
@@ -194,6 +206,7 @@ class ServiceBookingService {
           headers: await _headers(authRequired: true),
           body: jsonEncode({
             'appointmentDate': appointmentDate,
+            'appointmentTime': appointmentTime,
             'duration': duration,
             'location': location,
             if (proposedPrice != null) 'proposedPrice': proposedPrice,
@@ -256,16 +269,19 @@ class ServiceBookingService {
     return _decode(response);
   }
 
-  // Legal reschedule slots for an EXISTING appointment — the appointment's
-  // own current slot stays selectable (not excluded as "taken").
+  // Reschedule-screen data for an EXISTING appointment: the currently-held
+  // slot (to pre-fill date/time/duration), the provider's weekly schedule +
+  // special dates (to build the date picker), and one day's slot grid — the
+  // appointment's own window is marked isCurrent rather than booked, so it
+  // stays selectable. `date` is optional and defaults server-side to the
+  // current slot's day; pass it again whenever the user picks a different
+  // date to fetch that day's slots.
   Future<Map<String, dynamic>> getRescheduleOptionsForAppointment(
     String appointmentId, {
-    int days = 14,
-    String? fromDate,
+    String? date,
   }) async {
     final query = <String, String>{
-      'days': '$days',
-      if (fromDate != null && fromDate.isNotEmpty) 'fromDate': fromDate,
+      if (date != null && date.isNotEmpty) 'date': date,
     };
     final uri = Uri.parse(
       '$_servicesRoot/appointments/$appointmentId/reschedule-options',
@@ -298,13 +314,15 @@ class ServiceBookingService {
     return _decode(response);
   }
 
-  // appointmentDate must be a LOCAL wall-clock ISO string with no
-  // trailing Z/offset (e.g. "2026-08-26T10:00:00") — the server extracts
-  // the date/time by regex against the provider's saved local schedule,
-  // not real timezone math. Use ServiceBookingService.localIso() to build it.
+  // appointmentDate is date-only ("YYYY-MM-DD") and appointmentTime is
+  // "HH:mm" — sent as separate fields, never combined into one timestamp,
+  // so the stored slot is exactly the wall clock picked, with no timezone
+  // math on either end that could shift it (that's what used to turn a
+  // 12:30 booking into 5:30).
   Future<Map<String, dynamic>> rescheduleAppointment(
     String appointmentId, {
     required String appointmentDate,
+    required String appointmentTime,
     int? duration,
     String? reason,
   }) async {
@@ -314,9 +332,15 @@ class ServiceBookingService {
           headers: await _headers(authRequired: true),
           body: jsonEncode({
             'appointmentDate': appointmentDate,
+            'appointmentTime': appointmentTime,
             if (duration != null) 'duration': duration,
-            if (reason != null && reason.trim().isNotEmpty)
+            // The backend accepts both keys — send both so callers using
+            // either name (this app's own "reason" vs. the API's documented
+            // "notes") both work.
+            if (reason != null && reason.trim().isNotEmpty) ...{
               'reason': reason.trim(),
+              'notes': reason.trim(),
+            },
           }),
         )
         .timeout(const Duration(seconds: 30));

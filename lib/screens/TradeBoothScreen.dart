@@ -57,8 +57,14 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
     super.dispose();
   }
 
+  // A service is never "sold" — completing a deal on it doesn't take it out
+  // of circulation, so COMPLETED only reads as sold for products (where it
+  // never actually occurs; SOLD/BARTERED are the real product-sold states).
   bool _isPostSold(MyPost post) {
     final status = post.status.trim().toUpperCase();
+    if (post.type.toLowerCase() == 'service') {
+      return false;
+    }
     return status == 'SOLD' || status == 'BARTERED' || status == 'COMPLETED';
   }
 

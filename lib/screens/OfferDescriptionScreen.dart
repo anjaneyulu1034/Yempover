@@ -21,6 +21,9 @@ enum OfferSubmissionMode { price, barter, both }
 class OfferDescriptionScreen extends StatefulWidget {
   final Post post;
   final List<UserItem> selectedItems;
+  // Services offered in exchange (service-for-barter direct flow) —
+  // alongside or instead of selectedItems (products).
+  final List<UserItem> selectedServiceItems;
   final List<UserItem> selectedBundleItems;
   final String currentUserId;
   final bool isService;
@@ -34,6 +37,7 @@ class OfferDescriptionScreen extends StatefulWidget {
     super.key,
     required this.post,
     required this.selectedItems,
+    this.selectedServiceItems = const [],
     this.selectedBundleItems = const [],
     required this.currentUserId,
     this.isService = false,
@@ -91,10 +95,10 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           width: double.maxFinite,
           child: ListView.separated(
             shrinkWrap: true,
-            itemCount: widget.selectedItems.length,
+            itemCount: _allSelectedItems.length,
             separatorBuilder: (_, _) => const Divider(height: 16),
             itemBuilder: (context, index) {
-              final item = widget.selectedItems[index];
+              final item = _allSelectedItems[index];
               return Row(
                 children: [
                   ClipRRect(
@@ -150,25 +154,32 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
     );
   }
 
+  // Products + services together, in that order, for the free-text
+  // title/images snapshot — barterProducts/barterServices (resolved
+  // server-side from the id lists) are what's actually rendered in the
+  // chat, this is just the legacy fallback text/images.
+  List<UserItem> get _allSelectedItems => [
+    ...widget.selectedItems,
+    ...widget.selectedServiceItems,
+  ];
+
   String _buildOfferTitle() {
-    if (widget.selectedItems.isEmpty) {
+    final items = _allSelectedItems;
+    if (items.isEmpty) {
       return 'Offer for ${widget.post.title}';
     }
 
-    if (widget.selectedItems.length == 1) {
-      return widget.selectedItems.first.name;
+    if (items.length == 1) {
+      return items.first.name;
     }
 
-    final firstTwo = widget.selectedItems
-        .take(2)
-        .map((item) => item.name)
-        .join(', ');
-    final remaining = widget.selectedItems.length - 2;
+    final firstTwo = items.take(2).map((item) => item.name).join(', ');
+    final remaining = items.length - 2;
     return remaining > 0 ? '$firstTwo +$remaining more' : firstTwo;
   }
 
   List<String> _buildOfferImages() {
-    return widget.selectedItems
+    return _allSelectedItems
         .map((item) => item.imageUrl)
         .where((url) => url.trim().isNotEmpty)
         .toList();
@@ -286,7 +297,8 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
 
     if (_requiresBarterItems &&
         !widget.isZeroCoin &&
-        widget.selectedItems.isEmpty) {
+        widget.selectedItems.isEmpty &&
+        widget.selectedServiceItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select at least one item for barter'),
@@ -394,6 +406,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           barterItemDescription: _buildOfferDescription(),
           barterItemImages: _buildOfferImages(),
           barterItemIds: widget.selectedItems.map((item) => item.id).toList(),
+          barterServiceItemIds: widget.selectedServiceItems
+              .map((item) => item.id)
+              .toList(),
         );
       } else {
         createdOffer = await _chatService.createBothOffer(
@@ -403,6 +418,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           barterItemDescription: _buildOfferDescription(),
           barterItemImages: _buildOfferImages(),
           barterItemIds: widget.selectedItems.map((item) => item.id).toList(),
+          barterServiceItemIds: widget.selectedServiceItems
+              .map((item) => item.id)
+              .toList(),
         );
       }
 
@@ -700,7 +718,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                             ),
                             const SizedBox(height: 4),
                             if (_requiresBarterItems) ...[
-                              if (widget.isZeroCoin && widget.selectedItems.isEmpty)
+                              if (widget.isZeroCoin && _allSelectedItems.isEmpty)
                                 Text(
                                   'No item — asking for zero coins',
                                   style: TextStyle(
@@ -709,7 +727,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                     fontStyle: FontStyle.italic,
                                   ),
                                 ),
-                              ...widget.selectedItems
+                              ..._allSelectedItems
                                   .take(2)
                                   .map(
                                     (item) => Padding(
@@ -771,13 +789,13 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                       ),
                                     ),
                                   ),
-                              if (widget.selectedItems.length > 2)
+                              if (_allSelectedItems.length > 2)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 2),
                                   child: InkWell(
                                     onTap: _showAllSelectedItemsDialog,
                                     child: Text(
-                                      '+ ${widget.selectedItems.length - 2} more',
+                                      '+ ${_allSelectedItems.length - 2} more',
                                       style: TextStyle(
                                         color: Colors.blue.shade700,
                                         fontSize: 11,
@@ -896,7 +914,12 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
               },
               decoration: AppInputDecoration.build(
                 label: 'Description',
-                hint: 'Explain your offer and why you want to trade...',
+                // For a service, this is the only description of what's
+                // actually being offered (there's no listed item to point
+                // at) — a work description, not a general note.
+                hint: widget.isService
+                    ? 'Describe the work you will do (e.g. "I will rewire two rooms")...'
+                    : 'Explain your offer and why you want to trade...',
                 errorText: _descriptionError,
                 fillColor: Colors.grey.shade50,
                 alignLabelWithHint: true,

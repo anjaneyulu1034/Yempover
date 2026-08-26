@@ -261,15 +261,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       return;
     }
 
-    if (_post.type == PostType.service) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ServiceDetailBookingScreen(serviceId: _post.id),
-        ),
-      );
-      return;
-    }
+    final isService = _post.type == PostType.service;
 
     // Don't allow offering on own post
     if (_currentUserId == _post.postedById) {
@@ -282,17 +274,22 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       return;
     }
 
-    // Feature 3: always offer the full exchange-mode picker (backend-driven,
-    // includes cross-mode requests like barter on a pure-price listing)
-    // instead of a static local list gated on the listing's native mode.
+    // Always offer the full exchange-mode picker (backend-driven, includes
+    // cross-mode requests like barter on a pure-price listing, and — for
+    // services — the SCHEDULED/DIRECT flow split) instead of a static local
+    // list, or (for services) jumping straight to the slot picker.
     if (_isFetchingExchangeModes) return;
     setState(() => _isFetchingExchangeModes = true);
 
     ExchangeModeOptions options;
     try {
-      options = await _tradeChatService.getExchangeModeOptions(
-        productId: _post.id,
-      );
+      options = isService
+          ? await _tradeChatService.getExchangeModeOptions(
+              serviceId: _post.id,
+            )
+          : await _tradeChatService.getExchangeModeOptions(
+              productId: _post.id,
+            );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isFetchingExchangeModes = false);
@@ -337,9 +334,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       if (!mounted || confirmed != true) return;
     }
 
+    // Pure Coins on a service: pick a slot, the offer books it directly.
+    if (selectedOption.requiresSlotSelection) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ServiceDetailBookingScreen(serviceId: _post.id),
+        ),
+      );
+      return;
+    }
+
     final offerMode = mapOfferTypeToSubmissionMode(selectedOption.offerType);
 
-    if (!selectedOption.requiresProductSelection) {
+    if (!selectedOption.requiresProductSelection &&
+        !selectedOption.requiresServiceSelection) {
       final hasEnoughBalance = await _ensureSufficientWalletBalance();
       if (!mounted || !hasEnoughBalance) return;
 
@@ -350,6 +359,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             post: _post,
             selectedItems: const [],
             currentUserId: _currentUserId!,
+            isService: isService,
             offerMode: offerMode,
           ),
         ),
@@ -364,6 +374,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           post: _post,
           currentUserId: _currentUserId!,
           offerMode: offerMode,
+          allowServiceSelection: selectedOption.requiresServiceSelection,
         ),
       ),
     );

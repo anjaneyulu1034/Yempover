@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:yempover_app/services/socket_io/socket_service.dart';
-import 'package:yempover_app/services/service_booking_service.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:yempover_app/models/ProductPostmain.dart';
 import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:yempover_app/screens/OfferDeckScreen.dart';
+import 'package:yempover_app/screens/service/ServiceDetailBookingScreen.dart';
 import 'package:yempover_app/screens/OfferDescriptionScreen.dart';
 import 'package:yempover_app/screens/PostDetailScreen.dart';
 import 'package:yempover_app/services/my_posts_service.dart';
@@ -52,7 +52,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     with WidgetsBindingObserver {
   final TradeChatService _chatService = TradeChatService();
   final CoinService _coinService = CoinService();
-  final ServiceBookingService _serviceBookingService = ServiceBookingService();
   final SocketService _socketService = SocketService();
   final TokenService _tokenService = TokenService();
   final BlockedUserService _blockedUserService = BlockedUserService();
@@ -108,9 +107,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       return true;
     }
 
+    // A service is never "sold" — completing a deal on it doesn't take it
+    // out of circulation, so the owner can keep negotiating with other
+    // users on the same listing. Only CANCELLED (the owner deliberately
+    // taking it down) makes it unavailable.
     final serviceStatus = _currentChat.service?.status.trim().toUpperCase();
-    if (serviceStatus != null &&
-        (serviceStatus == 'COMPLETED' || serviceStatus == 'CANCELLED')) {
+    if (serviceStatus != null && serviceStatus == 'CANCELLED') {
       return true;
     }
 
@@ -1361,10 +1363,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (!mounted) return;
     setState(() => _isPreparingOffer = false);
 
+    // Pure Coins on a service: pick a slot, the offer books it directly —
+    // reuses the existing chat (initiateChat is get-or-create).
+    if (selectedOption?.requiresSlotSelection == true) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ServiceDetailBookingScreen(serviceId: postId),
+        ),
+      );
+      if (mounted) unawaited(_refreshChat());
+      return;
+    }
+
     final requiresProductSelection =
         isZeroCoin || (selectedOption?.requiresProductSelection ?? true);
+    final requiresServiceSelection =
+        selectedOption?.requiresServiceSelection ?? false;
 
-    if (!requiresProductSelection) {
+    if (!requiresProductSelection && !requiresServiceSelection) {
       final hasEnoughBalance = await _ensureSufficientWalletBalance(post);
       if (!mounted || !hasEnoughBalance) return;
 
@@ -1396,6 +1413,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           currentUserId: widget.currentUserId,
           offerMode: offerMode,
           isZeroCoin: isZeroCoin,
+          allowServiceSelection: requiresServiceSelection,
         ),
       ),
     );
@@ -2143,8 +2161,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   // the chat card itself uses.
                   Builder(
                     builder: (context) {
-                      final itemImages = originalOffer.barterProducts.isNotEmpty
-                          ? originalOffer.barterProducts
+                      final itemImages =
+                          originalOffer.combinedBarterItems.isNotEmpty
+                          ? originalOffer.combinedBarterItems
                                 .map((p) => p.firstImage)
                                 .where((url) => url.isNotEmpty)
                                 .toList()
@@ -2315,6 +2334,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       barterItemTitle: originalOffer.barterItemTitle,
       barterItemImages: originalOffer.barterItemImages,
       barterItemIds: originalOffer.barterProductIds,
+      barterServiceItemIds: originalOffer.barterServiceIds,
       keepOriginalBarterItems: true,
     );
   }
@@ -2326,6 +2346,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     String? barterItemTitle,
     String? barterItemDescription,
     List<String> barterItemIds = const [],
+    List<String> barterServiceItemIds = const [],
     List<String> barterItemImages = const [],
     bool keepOriginalBarterItems = false,
   }) async {
@@ -2359,6 +2380,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         barterItemTitle: barterItemTitle,
         barterItemDescription: barterItemDescription,
         barterItemIds: barterItemIds,
+        barterServiceItemIds: barterServiceItemIds,
         barterItemImages: barterItemImages,
         keepOriginalBarterItems: keepOriginalBarterItems,
       );
@@ -3077,15 +3099,26 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       }
 
       final rawDate = trimmed.replaceFirst('Date/Time:', '').trim();
-      final parsed = DateTime.tryParse(rawDate);
-      if (parsed == null) {
+      // Regex-extract the wall-clock digits rather than
+      // DateTime.parse(...).toLocal() — that re-interprets them against the
+      // device's timezone, which is what turned a 12:30 booking into 5:30.
+      final match = RegExp(
+        r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})',
+      ).firstMatch(rawDate);
+      if (match == null) {
         return line;
       }
 
+      final wallClock = DateTime(
+        int.parse(match.group(1)!),
+        int.parse(match.group(2)!),
+        int.parse(match.group(3)!),
+        int.parse(match.group(4)!),
+        int.parse(match.group(5)!),
+      );
+
       changed = true;
-      final displayDate = DateFormat(
-        'dd MMM yyyy, h:mm a',
-      ).format(parsed.toLocal());
+      final displayDate = DateFormat('dd MMM yyyy, h:mm a').format(wallClock);
       return 'Date/Time: $displayDate';
     }).toList();
 
@@ -3687,561 +3720,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
-  DateTime? _proposalSlotDateTime(
-    DateTime selectedDate,
-    Map<String, dynamic> slot,
-  ) {
-    final direct = [
-      slot['startDateTime'],
-      slot['appointmentDate'],
-      slot['dateTime'],
-      slot['slotDateTime'],
-    ];
-
-    for (final raw in direct) {
-      if (raw == null) continue;
-      final dt = DateTime.tryParse(raw.toString());
-      if (dt != null) return dt;
-    }
-
-    final time = slot['startTime']?.toString() ?? slot['time']?.toString();
-    return _serviceBookingService.parseTimeOfDay(selectedDate, time);
-  }
-
-  bool _proposalSlotAvailable(Map<String, dynamic> slot) {
-    final available = slot['available'];
-    if (available is bool) return available;
-    return slot['isAvailable'] != false;
-  }
-
-  String _proposalSlotLabel(DateTime selectedDate, Map<String, dynamic> slot) {
-    final dt = _proposalSlotDateTime(selectedDate, slot);
-    final end = slot['endTime']?.toString();
-    if (dt != null) {
-      final startText = DateFormat('h:mm a').format(dt);
-      if (end != null && end.isNotEmpty) {
-        return '$startText - $end';
-      }
-      return startText;
-    }
-
-    return slot['startTime']?.toString() ?? slot['time']?.toString() ?? 'Slot';
-  }
-
-  String? _proposalSlotKey(DateTime selectedDate, Map<String, dynamic> slot) {
-    final dt = _proposalSlotDateTime(selectedDate, slot);
-    if (dt != null) {
-      return dt.toIso8601String();
-    }
-    final raw = slot['startTime']?.toString() ?? slot['time']?.toString();
-    if (raw == null || raw.isEmpty) return null;
-    return '${_serviceBookingService.dateOnly(selectedDate)} $raw';
-  }
-
-  DateTime? _parseProposalTime(DateTime date, String? raw) {
-    if (raw == null || raw.trim().isEmpty) return null;
-    final value = raw.trim();
-
-    // Common backend formats first.
-    final normalized = value.length >= 5 ? value.substring(0, 5) : value;
-    final hhmm = _serviceBookingService.parseTimeOfDay(date, normalized);
-    if (hhmm != null) return hhmm;
-
-    for (final pattern in ['h:mm a', 'hh:mm a']) {
-      try {
-        final parsed = DateFormat(pattern).parseStrict(value.toUpperCase());
-        return DateTime(
-          date.year,
-          date.month,
-          date.day,
-          parsed.hour,
-          parsed.minute,
-        );
-      } catch (_) {
-        // Try next pattern.
-      }
-    }
-
-    return null;
-  }
-
-  bool _matchesWeekDay(DateTime date, dynamic dayValue) {
-    if (dayValue == null) return false;
-
-    if (dayValue is num) {
-      return date.weekday == dayValue.toInt();
-    }
-
-    final dayText = dayValue.toString().trim().toUpperCase();
-    if (dayText.isEmpty) return false;
-
-    final selected = DateFormat('EEEE').format(date).toUpperCase();
-    if (dayText == selected) return true;
-
-    final aliases = {
-      'MON': 'MONDAY',
-      'TUE': 'TUESDAY',
-      'WED': 'WEDNESDAY',
-      'THU': 'THURSDAY',
-      'FRI': 'FRIDAY',
-      'SAT': 'SATURDAY',
-      'SUN': 'SUNDAY',
-    };
-
-    return aliases[dayText] == selected;
-  }
-
-  List<Map<String, dynamic>> _buildSlotsFromWeeklyAvailability(
-    DateTime date,
-    List<Map<String, dynamic>> weekly,
-    int fallbackDuration,
-  ) {
-    final slots = <Map<String, dynamic>>[];
-
-    for (final row in weekly) {
-      if (row['isAvailable'] == false || row['available'] == false) {
-        continue;
-      }
-      if (!_matchesWeekDay(date, row['dayOfWeek'])) {
-        continue;
-      }
-
-      final start = _parseProposalTime(date, row['startTime']?.toString());
-      final end = _parseProposalTime(date, row['endTime']?.toString());
-      if (start == null || end == null || !end.isAfter(start)) {
-        continue;
-      }
-
-      final rawDuration = row['slotDurationMinutes'];
-      final slotDuration = rawDuration is int
-          ? rawDuration
-          : int.tryParse(rawDuration?.toString() ?? '') ?? fallbackDuration;
-      if (slotDuration <= 0) continue;
-
-      var pointer = start;
-      while (pointer
-              .add(Duration(minutes: slotDuration))
-              .isAtSameMomentAs(end) ||
-          pointer.add(Duration(minutes: slotDuration)).isBefore(end)) {
-        final slotEnd = pointer.add(Duration(minutes: slotDuration));
-        slots.add({
-          'startTime': DateFormat('HH:mm').format(pointer),
-          'endTime': DateFormat('HH:mm').format(slotEnd),
-          'available': true,
-          'slotDurationMinutes': slotDuration,
-          'startDateTime': pointer.toIso8601String(),
-        });
-        pointer = slotEnd;
-      }
-    }
-
-    return slots;
-  }
-
-  Future<void> _openServiceProposalEditor(TradeOffer sourceOffer) async {
-    final serviceId = _currentChat.serviceId;
-    if (serviceId == null || serviceId.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Unable to reschedule slot: service details are missing.',
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    DateTime selectedDate = DateTime.now();
-    List<Map<String, dynamic>> slots = [];
-    Map<String, dynamic>? selectedSlot;
-    String? slotsUnavailableReason;
-    bool loadingSlots = false;
-    bool sendingProposal = false;
-    bool initialized = false;
-    String location = '';
-    int duration = 30;
-    String notes = '';
-    List<Map<String, dynamic>> weeklyAvailability = [];
-
-    try {
-      final detail = await _serviceBookingService.getServiceDetail(serviceId);
-      final data = detail['data'];
-      if (data is Map<String, dynamic>) {
-        final service = data['service'] is Map<String, dynamic>
-            ? Map<String, dynamic>.from(data['service'])
-            : data;
-        location = service['location']?.toString() ?? '';
-        if (service['availabilitySlots'] is List) {
-          weeklyAvailability = (service['availabilitySlots'] as List)
-              .whereType<Map>()
-              .map((row) => Map<String, dynamic>.from(row))
-              .toList();
-        }
-      }
-    } catch (_) {
-      // Keep defaults when detail fetch fails.
-    }
-
-    Future<void> loadSlotsForDate(
-      DateTime date,
-      void Function(void Function()) setSheetState,
-    ) async {
-      setSheetState(() {
-        selectedDate = DateTime(date.year, date.month, date.day);
-        loadingSlots = true;
-        slots = const [];
-        selectedSlot = null;
-        slotsUnavailableReason = null;
-      });
-
-      try {
-        final response = await _serviceBookingService.getAvailableSlots(
-          serviceId: serviceId,
-          date: _serviceBookingService.dateOnly(selectedDate),
-        );
-
-        List<Map<String, dynamic>> loadedSlots = [];
-        String? unavailableReason;
-
-        final data = response['data'];
-        if (data is List) {
-          if (data.isNotEmpty && data.first is String) {
-            loadedSlots = data
-                .whereType<String>()
-                .map(
-                  (t) => <String, dynamic>{
-                    'startTime': t,
-                    'available': true,
-                    'slotDurationMinutes': duration,
-                  },
-                )
-                .toList();
-          } else {
-            loadedSlots = data
-                .whereType<Map>()
-                .map((slot) => Map<String, dynamic>.from(slot))
-                .toList();
-          }
-        } else if (data is Map<String, dynamic>) {
-          final source =
-              data['slots'] ?? data['availableSlots'] ?? data['data'];
-          if (source is List) {
-            if (source.isNotEmpty && source.first is String) {
-              loadedSlots = source
-                  .whereType<String>()
-                  .map(
-                    (t) => <String, dynamic>{
-                      'startTime': t,
-                      'available': true,
-                      'slotDurationMinutes': duration,
-                    },
-                  )
-                  .toList();
-            } else {
-              loadedSlots = source
-                  .whereType<Map>()
-                  .map((slot) => Map<String, dynamic>.from(slot))
-                  .toList();
-            }
-          }
-          unavailableReason = data['message']?.toString();
-
-          if (loadedSlots.isEmpty && data['availabilitySlots'] is List) {
-            final fromResponseWeekly = (data['availabilitySlots'] as List)
-                .whereType<Map>()
-                .map((row) => Map<String, dynamic>.from(row))
-                .toList();
-            loadedSlots = _buildSlotsFromWeeklyAvailability(
-              selectedDate,
-              fromResponseWeekly,
-              duration,
-            );
-          }
-        }
-
-        if (loadedSlots.isEmpty && weeklyAvailability.isNotEmpty) {
-          loadedSlots = _buildSlotsFromWeeklyAvailability(
-            selectedDate,
-            weeklyAvailability,
-            duration,
-          );
-        }
-
-        final now = DateTime.now();
-        loadedSlots = loadedSlots.where((slot) {
-          if (!_proposalSlotAvailable(slot)) return false;
-          final start = _proposalSlotDateTime(selectedDate, slot);
-          if (start == null) return false;
-          return start.isAfter(now);
-        }).toList();
-
-        setSheetState(() {
-          slots = loadedSlots;
-          slotsUnavailableReason = unavailableReason;
-          loadingSlots = false;
-        });
-      } catch (e) {
-        setSheetState(() {
-          loadingSlots = false;
-          slots = const [];
-          slotsUnavailableReason = _serviceBookingService.extractMessage(e);
-        });
-      }
-    }
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            if (!initialized) {
-              initialized = true;
-              Future.microtask(
-                () => loadSlotsForDate(selectedDate, setSheetState),
-              );
-            }
-
-            return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  16,
-                  16,
-                  MediaQuery.of(sheetContext).viewInsets.bottom + 16,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Reschedule Slot & Send Return Proposal',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: loadingSlots
-                                ? null
-                                : () async {
-                                    final picked = await showDatePicker(
-                                      context: sheetContext,
-                                      initialDate: selectedDate,
-                                      firstDate: DateTime.now(),
-                                      lastDate: DateTime.now().add(
-                                        const Duration(days: 60),
-                                      ),
-                                    );
-                                    if (picked != null) {
-                                      await loadSlotsForDate(
-                                        picked,
-                                        setSheetState,
-                                      );
-                                    }
-                                  },
-                            icon: const Icon(Icons.calendar_today),
-                            label: Text(
-                              DateFormat('EEE, MMM d').format(selectedDate),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Available Slots',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (loadingSlots)
-                      const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    else if (slots.isEmpty)
-                      Text(
-                        slotsUnavailableReason ??
-                            'No slots available for this date',
-                        style: const TextStyle(color: Colors.black54),
-                      )
-                    else
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: slots.map((slot) {
-                          final selected =
-                              selectedSlot != null &&
-                              _proposalSlotKey(selectedDate, selectedSlot!) ==
-                                  _proposalSlotKey(selectedDate, slot);
-                          return ChoiceChip(
-                            label: Text(_proposalSlotLabel(selectedDate, slot)),
-                            selected: selected,
-                            onSelected: (_) {
-                              setSheetState(() {
-                                selectedSlot = slot;
-                                final rawDuration = slot['slotDurationMinutes'];
-                                duration = rawDuration is int
-                                    ? rawDuration
-                                    : int.tryParse(
-                                            rawDuration?.toString() ?? '',
-                                          ) ??
-                                          duration;
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Notes (optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (value) => notes = value,
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: (sendingProposal || selectedSlot == null)
-                            ? null
-                            : () async {
-                                final chosenSlot = selectedSlot;
-                                if (chosenSlot == null) return;
-
-                                final slotDateTime = _proposalSlotDateTime(
-                                  selectedDate,
-                                  chosenSlot,
-                                );
-                                if (slotDateTime == null) {
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Unable to resolve selected slot date/time',
-                                      ),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                  return;
-                                }
-
-                                setSheetState(() => sendingProposal = true);
-                                try {
-                                  final displayDate = DateFormat(
-                                    'dd MMM yyyy, h:mm a',
-                                  ).format(slotDateTime.toLocal());
-
-                                  final lines = <String>[
-                                    'Return service proposal',
-                                    'Date/Time: $displayDate',
-                                    'Duration: $duration minutes',
-                                  ];
-
-                                  final trimmedLocation = location.trim();
-                                  if (trimmedLocation.isNotEmpty) {
-                                    lines.add('Location: $trimmedLocation');
-                                  }
-
-                                  final trimmedNotes = notes.trim();
-                                  if (trimmedNotes.isNotEmpty) {
-                                    lines.add('Notes: $trimmedNotes');
-                                  }
-
-                                  final isSourcePrice =
-                                      sourceOffer.isPriceOffer;
-                                  final counterOffer =
-                                      await _createCounterOffer(
-                                        originalOffer: sourceOffer,
-                                        offerType: isSourcePrice
-                                            ? 'PRICE'
-                                            : 'BARTER',
-                                        price: isSourcePrice
-                                            ? sourceOffer.price
-                                            : null,
-                                        barterItemTitle: isSourcePrice
-                                            ? null
-                                            : (sourceOffer.barterItemTitle ??
-                                                  'Service Proposal'),
-                                        barterItemDescription: isSourcePrice
-                                            ? null
-                                            : sourceOffer.barterItemDescription,
-                                      );
-
-                                  if (counterOffer == null) {
-                                    return;
-                                  }
-
-                                  final proposalMessage = await _chatService
-                                      .sendMessage(
-                                        chatId: _currentChat.id,
-                                        messageText: lines.join('\n'),
-                                      );
-                                  _socketService.emitMessageCreated(
-                                    _currentChat.id,
-                                    proposalMessage.id,
-                                  );
-
-                                  if (!sheetContext.mounted) return;
-                                  Navigator.pop(sheetContext);
-                                } catch (e) {
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'Failed to send return proposal: ${e.toString()}',
-                                      ),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                } finally {
-                                  if (sheetContext.mounted) {
-                                    setSheetState(
-                                      () => sendingProposal = false,
-                                    );
-                                  }
-                                }
-                              },
-                        icon: sendingProposal
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.send),
-                        label: Text(
-                          sendingProposal
-                              ? 'Sending...'
-                              : 'Send Return Proposal',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (!mounted) return;
-    await _refreshChat();
-  }
+  // Rescheduling an already-booked appointment now happens post-acceptance
+  // via AppointmentsDashboardScreen (real PATCH .../reschedule against the
+  // provider's saved availability) — services never support countering a
+  // pending offer, so the old "Reschedule Slot" button here (which actually
+  // submitted via the counter-offer endpoint) has been removed.
 
   Widget _buildOfferItemThumb(String imageUrl) {
     return Container(
@@ -4283,6 +3766,165 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             TextSpan(text: description),
           ],
         ),
+      ),
+    );
+  }
+
+  // The booked slot on a scheduled (Pure Coins) service offer — shown on
+  // both offer banners once the offer carries a serviceAppointment. Renders
+  // Both halves of the trade, spelled out — server-computed and already
+  // swapped to this viewer's perspective (youGive/youGet). Shown on every
+  // offer type, including a plain Price offer, so the receiver never has to
+  // infer what's on the table from separate fields. Values are never
+  // compared here — this is a "here's what's on the table" summary, not a
+  // validation.
+  Widget _buildYouGiveYouGetBlock(TradeOffer offer) {
+    final youGive = offer.youGive;
+    final youGet = offer.youGet;
+    if (youGive == null || youGet == null) return const SizedBox();
+
+    Widget side(String heading, TradeExchangeSide side) {
+      final items = side.allItems;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            heading,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          if (items.isNotEmpty)
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: items
+                  .map((item) => _buildOfferItemThumb(item.image ?? ''))
+                  .toList(),
+            )
+          else if (side.listing?.image != null)
+            _buildOfferItemThumb(side.listing!.image!),
+          const SizedBox(height: 4),
+          if (items.isNotEmpty)
+            Text(
+              items.map((i) => i.title).join(', '),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            )
+          else if (side.listing != null)
+            Text(
+              side.listing!.title,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          if (side.coins > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                '+ ${CoinFormat.withUnit(side.coins)}',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.green.shade700,
+                ),
+              ),
+            ),
+          if (side.note != null && side.note!.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                side.note!,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey.shade700,
+                  fontStyle: FontStyle.italic,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: side('You give', youGive)),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: Icon(Icons.arrow_forward, size: 16, color: Colors.grey),
+          ),
+          Expanded(child: side('You get', youGet)),
+        ],
+      ),
+    );
+  }
+
+  // The booked slot on a scheduled (Pure Coins) service offer — shown on
+  // both offer banners once the offer carries a serviceAppointment. Renders
+  // the server's wall-clock slotDate/slotTime as-is — never derived via
+  // DateTime.toLocal()/toUtc(), which is what previously shifted a 12:30
+  // booking to display as 5:30.
+  Widget _buildOfferAppointmentInfo(ServiceAppointmentSnapshot appointment) {
+    final formattedDate = appointment.displayDateTime;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.indigo.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.event_available, size: 16, color: Colors.indigo),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  formattedDate,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (appointment.duration != null)
+                  Text(
+                    '${appointment.duration} minutes'
+                    '${appointment.location != null && appointment.location!.trim().isNotEmpty ? ' • ${appointment.location}' : ''}',
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700),
+                  ),
+                if (appointment.rescheduleCount > 0)
+                  Text(
+                    'Rescheduled',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.orange.shade800,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -4694,6 +4336,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ],
           ),
           const SizedBox(height: 8),
+          _buildYouGiveYouGetBlock(latestOffer),
 
           if (latestOffer.isPriceOffer) ...[
             Row(
@@ -4754,15 +4397,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   : '',
               theirLabel: '$senderName offers',
               theirName: latestOffer.barterItemTitle,
-              theirItems: latestOffer.barterProducts,
-              theirPriceLabel: latestOffer.barterProducts.isNotEmpty
-                  ? CoinFormat.withUnit(latestOffer.barterProductsTotalValue)
+              theirItems: latestOffer.combinedBarterItems,
+              theirPriceLabel: latestOffer.combinedBarterItems.isNotEmpty
+                  ? CoinFormat.withUnit(latestOffer.combinedBarterItemsTotalValue)
                   : null,
               onTheirTap:
-                  latestOffer.barterProducts.length == 1 &&
+                  latestOffer.combinedBarterItems.length == 1 &&
                       !_isOpeningPostDetail
                   ? () => _openBarterItemDetail(
-                      latestOffer.barterProducts.first.id,
+                      latestOffer.combinedBarterItems.first.id,
                     )
                   : null,
             ),
@@ -4786,7 +4429,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 ),
               ),
             if (latestOffer.isBothOffer &&
-                latestOffer.barterProducts.isNotEmpty)
+                latestOffer.combinedBarterItems.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
@@ -4795,6 +4438,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 ),
               ),
           ],
+          if (latestOffer.serviceAppointment != null)
+            _buildOfferAppointmentInfo(latestOffer.serviceAppointment!),
 
           if (latestOffer.isPending &&
               !_currentChat.hasAcceptedOffer &&
@@ -4850,13 +4495,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 ),
               ],
             ),
-            // Zero-coin offers and pure product-swap barter offers are a
-            // simple accept/reject — there's no coin amount to negotiate,
-            // so countering doesn't apply (only Barter+Coins / Price offers
-            // have a number worth countering). Service chats keep "Edit
-            // Slot" regardless — that's about the proposed time, not value.
-            if (!latestOffer.isZeroCoin &&
-                !(latestOffer.isBarterOffer && !isServiceChat)) ...[
+            // Server-authoritative: true for products on a Price/Both offer,
+            // and — for services — specifically when the pending offer is
+            // Barter/Service + Coins (BOTH). A service's Pure Coins and pure
+            // barter offers stay accept/reject only; countering those 400s.
+            if (_currentChat.canCounterOffer) ...[
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
@@ -4865,15 +4508,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       _isOfferActionInProgress &&
                           _processingOfferId == latestOffer.id
                       ? null
-                      : isServiceChat
-                      ? () => _openServiceProposalEditor(latestOffer)
                       : () => _showCounterOfferDialog(latestOffer),
-                  icon: Icon(
-                    isServiceChat ? Icons.edit_calendar : Icons.swap_horiz,
-                  ),
-                  label: Text(
-                    isServiceChat ? 'Reschedule Slot' : 'Counter Offer',
-                  ),
+                  icon: const Icon(Icons.swap_horiz),
+                  label: const Text('Counter Offer'),
                 ),
               ),
             ],
@@ -4956,6 +4593,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ],
           ),
           const SizedBox(height: 8),
+          _buildYouGiveYouGetBlock(latestOffer),
 
           if (latestOffer.isPriceOffer) ...[
             Row(
@@ -5002,15 +4640,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   : '',
               myLabel: 'You offer',
               myName: latestOffer.barterItemTitle,
-              myItems: latestOffer.barterProducts,
-              myPriceLabel: latestOffer.barterProducts.isNotEmpty
-                  ? CoinFormat.withUnit(latestOffer.barterProductsTotalValue)
+              myItems: latestOffer.combinedBarterItems,
+              myPriceLabel: latestOffer.combinedBarterItems.isNotEmpty
+                  ? CoinFormat.withUnit(latestOffer.combinedBarterItemsTotalValue)
                   : null,
               onMyTap:
-                  latestOffer.barterProducts.length == 1 &&
+                  latestOffer.combinedBarterItems.length == 1 &&
                       !_isOpeningPostDetail
                   ? () => _openBarterItemDetail(
-                      latestOffer.barterProducts.first.id,
+                      latestOffer.combinedBarterItems.first.id,
                     )
                   : null,
               theirImage: latestOffer.listing?.image ?? _currentChat.postImage,
@@ -5043,7 +4681,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 ),
               ),
             if (latestOffer.isBothOffer &&
-                latestOffer.barterProducts.isNotEmpty)
+                latestOffer.combinedBarterItems.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
@@ -5052,6 +4690,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 ),
               ),
           ],
+          if (latestOffer.serviceAppointment != null)
+            _buildOfferAppointmentInfo(latestOffer.serviceAppointment!),
         ],
       ),
     );

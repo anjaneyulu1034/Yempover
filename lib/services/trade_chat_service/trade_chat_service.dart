@@ -242,6 +242,18 @@ class TradeChatService {
     required double price,
     String? currency,
     String? description,
+    // Scheduled-service (Pure Coins) booking fields — appointmentDate is
+    // date-only ("YYYY-MM-DD") and appointmentTime is "HH:mm", sent as
+    // separate fields (never combined into one timestamp) so the stored
+    // slot is exactly the wall clock picked, with no timezone math on
+    // either end that could shift it. Pass appointmentId instead when the
+    // appointment was already created through the old booking screen.
+    String? appointmentId,
+    String? appointmentDate,
+    String? appointmentTime,
+    int? appointmentDuration,
+    String? appointmentLocation,
+    String? appointmentNotes,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -253,6 +265,14 @@ class TradeChatService {
         'currency': currency ?? 'USD',
         'barterItemTitle': null,
         'barterItemDescription': description,
+        if (appointmentId != null) 'appointmentId': appointmentId,
+        if (appointmentDate != null) 'appointmentDate': appointmentDate,
+        if (appointmentTime != null) 'appointmentTime': appointmentTime,
+        if (appointmentDuration != null)
+          'appointmentDuration': appointmentDuration,
+        if (appointmentLocation != null)
+          'appointmentLocation': appointmentLocation,
+        if (appointmentNotes != null) 'appointmentNotes': appointmentNotes,
       });
 
       print('📤 Creating price offer - URL: $url');
@@ -284,6 +304,9 @@ class TradeChatService {
     List<String>? barterItemImages,
     List<String>? barterWishCategories,
     List<String>? barterItemIds,
+    // The offerer's own SERVICES offered in exchange (service-for-barter
+    // direct flow) — alongside or instead of barterItemIds.
+    List<String>? barterServiceItemIds,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -300,6 +323,8 @@ class TradeChatService {
         // their actual listed price and enforce equal-value matching for a
         // pure barter offer, instead of only trusting client-side math.
         'barterItemIds': barterItemIds ?? [],
+        if (barterServiceItemIds != null)
+          'barterServiceItemIds': barterServiceItemIds,
       });
 
       print('📤 Creating barter offer - URL: $url');
@@ -332,6 +357,7 @@ class TradeChatService {
     List<String>? barterItemImages,
     List<String>? barterWishCategories,
     List<String>? barterItemIds,
+    List<String>? barterServiceItemIds,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -346,6 +372,8 @@ class TradeChatService {
         'barterItemImages': barterItemImages ?? [],
         'barterWishCategories': barterWishCategories ?? [],
         'barterItemIds': barterItemIds ?? [],
+        if (barterServiceItemIds != null)
+          'barterServiceItemIds': barterServiceItemIds,
       });
 
       print('📤 Creating BOTH offer - URL: $url');
@@ -726,6 +754,8 @@ class TradeChatService {
     List<String> barterItemImages = const [],
     List<String> barterWishCategories = const [],
     List<String> barterItemIds = const [],
+    // Services offered in exchange, alongside/instead of barterItemIds.
+    List<String> barterServiceItemIds = const [],
     // "Counter with Coins" on a Barter(+Coins) offer: keep the item already
     // on the table (owned by the OTHER user) instead of requiring the
     // countering user to own/re-offer it — see makeCounterOffer server-side.
@@ -757,6 +787,7 @@ class TradeChatService {
           'barterItemImages': barterItemImages,
           'barterWishCategories': barterWishCategories,
           'barterItemIds': barterItemIds,
+          'barterServiceItemIds': barterServiceItemIds,
           if (keepOriginalBarterItems) 'keepOriginalBarterItems': true,
         };
       } else {
@@ -768,6 +799,7 @@ class TradeChatService {
           'barterItemImages': barterItemImages,
           'barterWishCategories': barterWishCategories,
           'barterItemIds': barterItemIds,
+          'barterServiceItemIds': barterServiceItemIds,
         };
       }
 

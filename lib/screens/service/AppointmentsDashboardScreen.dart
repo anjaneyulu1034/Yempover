@@ -35,7 +35,49 @@ class _AppointmentsDashboardScreenState
   List<Map<String, dynamic>> _providerAppointments = [];
   List<Map<String, dynamic>> _clientAppointments = [];
 
-  final DateFormat _dateFormat = DateFormat('MMM d, yyyy • h:mm a');
+  // Formats a slot for display from the server's own wall-clock date/time
+  // strings (or a regex extraction of a raw ISO string as fallback) — never
+  // via DateTime.parse(...).toLocal()/.toUtc(), which re-interprets the
+  // digits against the device's timezone and is what previously turned a
+  // 12:30 booking into 5:30.
+  String _formatSlot({String? date, String? time, String? fallbackIso}) {
+    var d = (date != null && date.isNotEmpty) ? date : null;
+    var t = (time != null && time.isNotEmpty) ? time : null;
+    if (d == null && fallbackIso != null) {
+      d = RegExp(r'^(\d{4}-\d{2}-\d{2})').firstMatch(fallbackIso)?.group(1);
+    }
+    if (t == null && fallbackIso != null) {
+      t = RegExp(r'T(\d{2}:\d{2})').firstMatch(fallbackIso)?.group(1);
+    }
+    if (d == null) return fallbackIso ?? '-';
+
+    final dateParts = d.split('-');
+    if (dateParts.length != 3) return fallbackIso ?? d;
+    final year = int.tryParse(dateParts[0]);
+    final month = int.tryParse(dateParts[1]);
+    final day = int.tryParse(dateParts[2]);
+    if (year == null || month == null || day == null || month < 1 || month > 12) {
+      return fallbackIso ?? d;
+    }
+
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final dateText = '${months[month - 1]} $day, $year';
+    if (t == null) return dateText;
+
+    final timeParts = t.split(':');
+    if (timeParts.length != 2) return dateText;
+    final hour = int.tryParse(timeParts[0]);
+    final minute = int.tryParse(timeParts[1]);
+    if (hour == null || minute == null) return dateText;
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+    final timeText = '$displayHour:${minute.toString().padLeft(2, '0')} $period';
+
+    return '$dateText • $timeText';
+  }
 
   @override
   void initState() {
@@ -664,16 +706,17 @@ class _AppointmentsDashboardScreenState
             ? serviceInfo['title']?.toString() ?? 'Service'
             : item['serviceTitle']?.toString() ?? 'Service';
 
-        final appointmentDate = item['appointmentDate']?.toString();
-        String formattedDate = '-';
-        if (appointmentDate != null) {
-          try {
-            final date = DateTime.parse(appointmentDate);
-            formattedDate = _dateFormat.format(date.toLocal());
-          } catch (e) {
-            formattedDate = appointmentDate;
-          }
-        }
+        // Prefer the server's own wall-clock slotDate/slotTime when present
+        // (decorated appointment list rows carry these); fall back to a
+        // regex extraction of the raw appointmentDate string otherwise.
+        // Never DateTime.parse(...).toLocal() this — that re-interprets the
+        // digits against the device's timezone and is exactly what used to
+        // turn a 12:30 booking into 5:30.
+        final formattedDate = _formatSlot(
+          date: item['slotDate']?.toString(),
+          time: item['slotTime']?.toString(),
+          fallbackIso: item['appointmentDate']?.toString(),
+        );
 
         final actions = _actionsForItem(item, isProvider);
         final statusLabel = item['statusLabel']?.toString() ?? status;
@@ -684,13 +727,9 @@ class _AppointmentsDashboardScreenState
         if (wasRescheduled &&
             previousAppointmentDate != null &&
             previousAppointmentDate.isNotEmpty) {
-          try {
-            previousFormattedDate = _dateFormat.format(
-              DateTime.parse(previousAppointmentDate).toLocal(),
-            );
-          } catch (_) {
-            previousFormattedDate = previousAppointmentDate;
-          }
+          previousFormattedDate = _formatSlot(
+            fallbackIso: previousAppointmentDate,
+          );
         }
 
         return Container(
@@ -1188,9 +1227,23 @@ class _AppointmentsDashboardScreenState
     );
   }
 
+  static const List<String> _weekdayNames = [
+    'MONDAY',
+    'TUESDAY',
+    'WEDNESDAY',
+    'THURSDAY',
+    'FRIDAY',
+    'SATURDAY',
+    'SUNDAY',
+  ];
+
   // Only shows/allows dates+times the provider actually saved as available
   // (via GET .../reschedule-options) — the server is the source of truth,
-  // so the picker never offers a slot that would 400.
+  // so the picker never offers a slot that would 400. Rebuilt around the
+  // real single-day response shape: {current, weeklyAvailability,
+  // specialDates, availability:{slotDetails,...}} — the date picker is
+  // built locally from weeklyAvailability + specialDates, and a fresh call
+  // is made each time the user picks a different date.
   Future<void> _openReschedulePicker(Map<String, dynamic> item) async {
     final appointmentId = item['id']?.toString() ?? '';
     if (appointmentId.isEmpty) return;
@@ -1198,35 +1251,98 @@ class _AppointmentsDashboardScreenState
     bool initialized = false;
     bool loading = true;
     String? loadError;
-    List<Map<String, dynamic>> days = [];
+    Map<String, dynamic>? current;
+    List<Map<String, dynamic>> weeklyAvailability = [];
+    List<Map<String, dynamic>> specialDates = [];
+    Map<String, dynamic>? availability;
     DateTime? selectedDate;
     String? selectedSlot;
+    int? duration;
     bool submitting = false;
-    final reasonController = TextEditingController();
+    final notesController = TextEditingController();
     final dayFormat = DateFormat('EEE, MMM d');
 
-    Future<void> load(void Function(void Function()) setSheetState) async {
+    bool isDateSelectable(DateTime date) {
+      final dateKey = _service.dateOnly(date);
+      for (final special in specialDates) {
+        if ((special['date']?.toString() ?? '').startsWith(dateKey)) {
+          return special['isAvailable'] == true;
+        }
+      }
+      final dayName = _weekdayNames[date.weekday - 1];
+      return weeklyAvailability.any(
+        (d) => d['dayOfWeek'] == dayName && d['isAvailable'] == true,
+      );
+    }
+
+    Future<void> loadForDate(
+      DateTime? date,
+      void Function(void Function()) setSheetState,
+    ) async {
+      setSheetState(() => loading = true);
       try {
         final response = await _service.getRescheduleOptionsForAppointment(
           appointmentId,
-          days: 21,
+          date: date != null ? _service.dateOnly(date) : null,
         );
         final data = response['data'];
         final map = data is Map ? Map<String, dynamic>.from(data) : {};
-        final rawDays = map['days'];
-        final parsedDays = rawDays is List
-            ? rawDays
-                  .whereType<Map>()
-                  .map((e) => Map<String, dynamic>.from(e))
-                  .toList()
-            : <Map<String, dynamic>>[];
+        final currentMap = map['current'] is Map
+            ? Map<String, dynamic>.from(map['current'])
+            : null;
+        final availabilityMap = map['availability'] is Map
+            ? Map<String, dynamic>.from(map['availability'])
+            : null;
+        final weekly = (map['weeklyAvailability'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        final special = (map['specialDates'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+
+        DateTime resolvedDate = date ?? DateTime.now();
+        if (date == null) {
+          final selectedDateStr = map['selectedDate']?.toString();
+          if (selectedDateStr != null) {
+            try {
+              resolvedDate = DateTime.parse(selectedDateStr);
+            } catch (_) {}
+          }
+        }
+
         setSheetState(() {
-          days = parsedDays;
-          loading = false;
-          loadError = parsedDays.isEmpty
-              ? (map['reason']?.toString() ??
-                    'No available slots found for this service.')
+          current ??= currentMap;
+          weeklyAvailability = weekly;
+          specialDates = special;
+          availability = availabilityMap;
+          selectedDate = resolvedDate;
+          duration ??= currentMap?['durationMinutes'] is num
+              ? (currentMap!['durationMinutes'] as num).toInt()
               : null;
+          // Pre-select the currently-held slot (isCurrent) the first time
+          // through, or the just-picked date's own slot if it carries one.
+          final slotDetails =
+              (availabilityMap?['slotDetails'] as List?)
+                  ?.whereType<Map>()
+                  .toList() ??
+              const [];
+          final currentSlot = slotDetails.firstWhere(
+            (s) => s['isCurrent'] == true,
+            orElse: () => const {},
+          );
+          if (currentSlot.isNotEmpty) {
+            selectedSlot = currentSlot['time']?.toString();
+          } else if (date != null) {
+            // A fresh date the user picked has no "current" slot to default
+            // to — clear any stale selection from the previous day.
+            selectedSlot = null;
+          } else {
+            selectedSlot = currentMap?['time']?.toString();
+          }
+          loading = false;
+          loadError = null;
         });
       } catch (e) {
         setSheetState(() {
@@ -1247,18 +1363,15 @@ class _AppointmentsDashboardScreenState
           builder: (context, setSheetState) {
             if (!initialized) {
               initialized = true;
-              Future.microtask(() => load(setSheetState));
+              Future.microtask(() => loadForDate(null, setSheetState));
             }
 
-            final selectedDay = selectedDate == null
-                ? null
-                : days.firstWhere(
-                    (d) => d['date'] == _service.dateOnly(selectedDate!),
-                    orElse: () => const {},
-                  );
-            final slotsForSelectedDay =
-                (selectedDay?['slots'] as List?)?.map((e) => e.toString()).toList() ??
-                const <String>[];
+            final slotDetails =
+                (availability?['slotDetails'] as List?)
+                    ?.whereType<Map>()
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList() ??
+                const <Map<String, dynamic>>[];
 
             return SafeArea(
               child: Padding(
@@ -1274,10 +1387,7 @@ class _AppointmentsDashboardScreenState
                   children: [
                     const Text(
                       'Reschedule Slot',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -1285,120 +1395,129 @@ class _AppointmentsDashboardScreenState
                       style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                     const SizedBox(height: 16),
-                    if (loading)
+                    if (loading && current == null)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 24),
                         child: Center(child: CircularProgressIndicator()),
                       )
-                    else if (days.isEmpty)
+                    else if (weeklyAvailability.isEmpty && specialDates.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         child: Text(
-                          loadError ?? 'No available slots found.',
+                          loadError ??
+                              'The provider has not saved any availability yet.',
                           style: const TextStyle(color: Colors.red),
                         ),
                       )
                     else ...[
                       const Text(
                         'Date',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 8),
-                      SizedBox(
-                        height: 44,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: days.length,
-                          separatorBuilder: (_, __) =>
+                      InkWell(
+                        onTap: () async {
+                          final now = DateTime.now();
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: selectedDate ?? now,
+                            firstDate: now,
+                            lastDate: now.add(const Duration(days: 60)),
+                            selectableDayPredicate: isDateSelectable,
+                          );
+                          if (picked == null) return;
+                          await loadForDate(picked, setSheetState);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.calendar_month,
+                                size: 18,
+                                color: Colors.indigo,
+                              ),
                               const SizedBox(width: 8),
-                          itemBuilder: (context, index) {
-                            final day = days[index];
-                            final dateStr = day['date']?.toString();
-                            final slots =
-                                (day['slots'] as List?)?.length ?? 0;
-                            final hasSlots = slots > 0;
-                            DateTime? date;
-                            try {
-                              date = dateStr != null
-                                  ? DateTime.parse(dateStr)
-                                  : null;
-                            } catch (_) {
-                              date = null;
-                            }
-                            final isSelected =
-                                date != null &&
-                                selectedDate != null &&
-                                _service.dateOnly(date) ==
-                                    _service.dateOnly(selectedDate!);
-
-                            return ChoiceChip(
-                              label: Text(
-                                date != null
-                                    ? dayFormat.format(date)
-                                    : (dateStr ?? '-'),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: !hasSlots ? Colors.grey : null,
-                                ),
+                              Text(
+                                selectedDate != null
+                                    ? dayFormat.format(selectedDate!)
+                                    : 'Pick a date',
+                                style: const TextStyle(fontSize: 13.5),
                               ),
-                              selected: isSelected,
-                              onSelected: !hasSlots || date == null
-                                  ? null
-                                  : (_) => setSheetState(() {
-                                      selectedDate = date;
-                                      selectedSlot = null;
-                                    }),
-                              backgroundColor: !hasSlots
-                                  ? Colors.grey.shade100
-                                  : null,
-                              selectedColor: Colors.indigo.withValues(
-                                alpha: 0.15,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      if (selectedDate != null) ...[
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Time',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        if (slotsForSelectedDay.isEmpty)
-                          Text(
-                            selectedDay?['reason']?.toString() ??
-                                'No free slots on this day.',
-                            style: const TextStyle(color: Colors.red),
-                          )
-                        else
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: slotsForSelectedDay.map((slot) {
-                              final isSelected = selectedSlot == slot;
-                              return ChoiceChip(
-                                label: Text(slot),
-                                selected: isSelected,
-                                onSelected: (_) => setSheetState(
-                                  () => selectedSlot = slot,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Time',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 8),
+                      if (loading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (slotDetails.isEmpty)
+                        Text(
+                          availability?['reason']?.toString() ??
+                              'No free slots on this day.',
+                          style: const TextStyle(color: Colors.red),
+                        )
+                      else
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: slotDetails.map((slot) {
+                            final time = slot['time']?.toString() ?? '';
+                            final status = slot['status']?.toString() ?? '';
+                            final isCurrent = slot['isCurrent'] == true;
+                            final isBookable =
+                                slot['isBookable'] == true || isCurrent;
+                            final isSelected = selectedSlot == time;
+                            final label = isCurrent ? '$time (current)' : time;
+                            return Tooltip(
+                              message: !isBookable
+                                  ? (slot['reason']?.toString() ??
+                                        (status.isNotEmpty
+                                            ? status
+                                            : 'Not available'))
+                                  : '',
+                              child: ChoiceChip(
+                                label: Text(
+                                  label,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: !isBookable ? Colors.grey : null,
+                                  ),
                                 ),
+                                selected: isSelected,
+                                onSelected: !isBookable
+                                    ? null
+                                    : (_) => setSheetState(
+                                        () => selectedSlot = time,
+                                      ),
+                                backgroundColor: !isBookable
+                                    ? Colors.grey.shade100
+                                    : null,
                                 selectedColor: Colors.indigo.withValues(
                                   alpha: 0.15,
                                 ),
-                              );
-                            }).toList(),
-                          ),
-                      ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
                       const SizedBox(height: 16),
                       TextField(
-                        controller: reasonController,
+                        controller: notesController,
                         maxLines: 2,
                         maxLength: 500,
                         decoration: const InputDecoration(
@@ -1416,42 +1535,27 @@ class _AppointmentsDashboardScreenState
                                   submitting)
                               ? null
                               : () async {
-                                  final parts = selectedSlot!.split(':');
-                                  final hour = int.tryParse(parts[0]) ?? 0;
-                                  final minute = int.tryParse(
-                                    parts.length > 1 ? parts[1] : '0',
-                                  ) ??
-                                      0;
-                                  final dateTime = DateTime(
-                                    selectedDate!.year,
-                                    selectedDate!.month,
-                                    selectedDate!.day,
-                                    hour,
-                                    minute,
-                                  );
                                   setSheetState(() => submitting = true);
                                   try {
                                     final response = await _service
                                         .rescheduleAppointment(
                                           appointmentId,
-                                          appointmentDate: _service.localIso(
-                                            dateTime,
+                                          appointmentDate: _service.dateOnly(
+                                            selectedDate!,
                                           ),
-                                          reason:
-                                              reasonController.text.trim(),
+                                          appointmentTime: selectedSlot!,
+                                          duration: duration,
+                                          reason: notesController.text.trim(),
                                         );
                                     if (!mounted) return;
                                     Navigator.pop(sheetContext);
-                                    final appointmentData =
-                                        response['data'];
-                                    final appt =
-                                        appointmentData is Map
+                                    final appointmentData = response['data'];
+                                    final appt = appointmentData is Map
                                         ? appointmentData['appointment']
                                         : null;
                                     final requiresReconfirmation =
                                         appt is Map &&
-                                        appt['requiresReconfirmation'] ==
-                                            true;
+                                        appt['requiresReconfirmation'] == true;
                                     SnackbarUtils.showSuccess(
                                       context,
                                       requiresReconfirmation
