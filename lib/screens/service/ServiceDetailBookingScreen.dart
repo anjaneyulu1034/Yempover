@@ -38,6 +38,9 @@ class _ServiceDetailBookingScreenState
   bool _loggedIn = false;
   String? _error;
   String? _currentUserId;
+  // Inline error shown right under the coin-amount field, so the field
+  // itself flags what's wrong instead of only a passing toast message.
+  String? _quoteError;
 
   Map<String, dynamic>? _serviceData;
   List<Map<String, dynamic>> _slots = [];
@@ -758,26 +761,32 @@ class _ServiceDetailBookingScreenState
     }
 
     if (!_isLookingForService && _selectedSlot == null) {
-      SnackbarUtils.showError(context, 'Please select a time slot');
+      SnackbarUtils.showErrorToast(context, 'Please select a time slot');
       return;
     }
 
     // Free-form coin entry for both booking flows — required, positive, and
     // never checked against the listing price (the provider decides
-    // whether it's enough).
+    // whether it's enough). These are simple form-validation issues the user
+    // can fix right on the field, so they get a quick red toast plus the
+    // field's own inline error text, not the heavier "Something Went Wrong"
+    // modal sheet (that's reserved for real server/API failures).
     final quoteText = _quoteController.text.trim();
     final quote = double.tryParse(quoteText);
     if (quote == null || quote <= 0) {
-      SnackbarUtils.showError(context, 'Please enter the amount you want to offer');
+      setState(() => _quoteError = 'Please enter the amount you want to offer');
+      SnackbarUtils.showErrorToast(context, 'Please enter the amount you want to offer');
       return;
     }
     if (quoteText.length > Validators.maxAmountLength) {
-      SnackbarUtils.showError(context, 'Amount is too large');
+      setState(() => _quoteError = 'Amount is too large');
+      SnackbarUtils.showErrorToast(context, 'Amount is too large');
       return;
     }
+    setState(() => _quoteError = null);
 
     if (!_isValid) {
-      SnackbarUtils.showError(context, _invalidReason);
+      SnackbarUtils.showErrorToast(context, _invalidReason);
       return;
     }
 
@@ -1728,6 +1737,11 @@ class _ServiceDetailBookingScreenState
                             decimal: true,
                           ),
                           inputFormatters: Validators.amountInputFormatters(),
+                          onChanged: (_) {
+                            if (_quoteError != null) {
+                              setState(() => _quoteError = null);
+                            }
+                          },
                           decoration: AppInputDecoration.build(
                             label: _isLookingForService
                                 ? 'Your Quote Price'
@@ -1735,6 +1749,7 @@ class _ServiceDetailBookingScreenState
                             hint: 'Enter the amount you want to offer',
                             prefixIcon: coinInputPrefix(),
                             prefixIconConstraints: coinPrefixIconConstraints,
+                            errorText: _quoteError,
                           ),
                         ),
                         const SizedBox(height: 16),
