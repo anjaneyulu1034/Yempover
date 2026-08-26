@@ -914,12 +914,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
               },
               decoration: AppInputDecoration.build(
                 label: 'Description',
-                // For a service, this is the only description of what's
-                // actually being offered (there's no listed item to point
-                // at) — a work description, not a general note.
-                hint: widget.isService
-                    ? 'Describe the work you will do (e.g. "I will rewire two rooms")...'
-                    : 'Explain your offer and why you want to trade...',
+                hint: 'Explain your offer and why you want to trade...',
                 errorText: _descriptionError,
                 fillColor: Colors.grey.shade50,
                 alignLabelWithHint: true,

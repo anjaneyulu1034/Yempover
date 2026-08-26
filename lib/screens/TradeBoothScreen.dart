@@ -449,10 +449,11 @@ class _TradeBoothScreenState extends State<TradeBoothScreen> {
   }
 
   String _formatPrice(MyPost post) {
+    // Keep showing the coin value once a product is used to complete a deal
+    // (isSold) — it's history at that point, not an active listing, but the
+    // price should still be visible instead of disappearing from the card.
     if (post.price != null && post.price! > 0) {
-      if (post.isForSale) {
-        return CoinFormat.amount(post.price);
-      } else if (post.isProvidingService) {
+      if (post.isForSale || post.isProvidingService || post.isSold) {
         return CoinFormat.amount(post.price);
       }
     }

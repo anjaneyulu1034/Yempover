@@ -673,9 +673,11 @@ class _ServiceDetailBookingScreenState
     final eveningCount =
         _slotsForPeriod(_SlotPeriod.evening).where(_slotAvailable).length;
 
-    final periodSlots = _slotsForPeriod(_selectedSlotPeriod)
-        .where(_slotAvailable)
-        .toList()
+    // Show every slot for the period, not just the bookable ones — a slot
+    // someone else already has confirmed should still be visible, just
+    // disabled and greyed out (see _buildSlotChip), instead of disappearing
+    // from the grid as if it never existed.
+    final periodSlots = _slotsForPeriod(_selectedSlotPeriod).toList()
       ..sort((a, b) {
         final ad = _slotDateTime(a);
         final bd = _slotDateTime(b);

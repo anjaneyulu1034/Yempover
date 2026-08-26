@@ -511,7 +511,7 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Deal completed ✓',
+                'Deal completed',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
               ),
               if (hasExchangeSummary) ...[

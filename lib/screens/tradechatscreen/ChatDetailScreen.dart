@@ -3065,6 +3065,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final offer = _currentChat.latestAcceptedOffer;
     if (offer == null) return null;
     if (offer.isBarterOffer || offer.isBothOffer) {
+      // Prefer the resolved products/services (joined) over the free-text
+      // barterItemTitle, which only ever names a single item — otherwise a
+      // multi-item deal (e.g. a product + a service) shows just one name in
+      // the "Deal completed" summary.
+      if (offer.combinedBarterItems.isNotEmpty) {
+        return offer.combinedBarterItems.map((p) => p.title).join(', ');
+      }
       return offer.barterItemTitle;
     }
     if (offer.isPriceOffer && offer.price != null) {
@@ -3772,110 +3779,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   // The booked slot on a scheduled (Pure Coins) service offer — shown on
   // both offer banners once the offer carries a serviceAppointment. Renders
-  // Both halves of the trade, spelled out — server-computed and already
-  // swapped to this viewer's perspective (youGive/youGet). Shown on every
-  // offer type, including a plain Price offer, so the receiver never has to
-  // infer what's on the table from separate fields. Values are never
-  // compared here — this is a "here's what's on the table" summary, not a
-  // validation.
-  Widget _buildYouGiveYouGetBlock(TradeOffer offer) {
-    final youGive = offer.youGive;
-    final youGet = offer.youGet;
-    if (youGive == null || youGet == null) return const SizedBox();
-
-    Widget side(String heading, TradeExchangeSide side) {
-      final items = side.allItems;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            heading,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: Colors.grey.shade700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          if (items.isNotEmpty)
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: items
-                  .map((item) => _buildOfferItemThumb(item.image ?? ''))
-                  .toList(),
-            )
-          else if (side.listing?.image != null)
-            _buildOfferItemThumb(side.listing!.image!),
-          const SizedBox(height: 4),
-          if (items.isNotEmpty)
-            Text(
-              items.map((i) => i.title).join(', '),
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            )
-          else if (side.listing != null)
-            Text(
-              side.listing!.title,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          if (side.coins > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                '+ ${CoinFormat.withUnit(side.coins)}',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.green.shade700,
-                ),
-              ),
-            ),
-          if (side.note != null && side.note!.trim().isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                side.note!,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade700,
-                  fontStyle: FontStyle.italic,
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-        ],
-      );
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: side('You give', youGive)),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: Icon(Icons.arrow_forward, size: 16, color: Colors.grey),
-          ),
-          Expanded(child: side('You get', youGet)),
-        ],
-      ),
-    );
-  }
-
-  // The booked slot on a scheduled (Pure Coins) service offer — shown on
-  // both offer banners once the offer carries a serviceAppointment. Renders
   // the server's wall-clock slotDate/slotTime as-is — never derived via
   // DateTime.toLocal()/toUtc(), which is what previously shifted a 12:30
   // booking to display as 5:30.
@@ -4336,7 +4239,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ],
           ),
           const SizedBox(height: 8),
-          _buildYouGiveYouGetBlock(latestOffer),
 
           if (latestOffer.isPriceOffer) ...[
             Row(
@@ -4593,7 +4495,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ],
           ),
           const SizedBox(height: 8),
-          _buildYouGiveYouGetBlock(latestOffer),
 
           if (latestOffer.isPriceOffer) ...[
             Row(
@@ -4698,11 +4599,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   }
 
   // Offered-item display name for the offer banners — prefers the resolved
-  // barterProducts (real product titles) over the offerer's free-text
-  // barterItemTitle, which is only a fallback for pre-barterProducts offers.
+  // barter items (real product/service titles, combined) over the offerer's
+  // free-text barterItemTitle, which is only a fallback for older offers.
+  // Must include BOTH products and services: a service listing's barter side
+  // can carry either or both (see combinedBarterItems), so reading only
+  // barterProducts silently dropped any offered service from this label.
   String _offeredItemsLabel(TradeOffer offer) {
-    if (offer.barterProducts.isNotEmpty) {
-      return offer.barterProducts.map((p) => p.title).join(', ');
+    if (offer.combinedBarterItems.isNotEmpty) {
+      return offer.combinedBarterItems.map((p) => p.title).join(', ');
     }
     return offer.barterItemTitle ?? 'Unknown';
   }

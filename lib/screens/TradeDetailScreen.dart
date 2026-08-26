@@ -38,13 +38,6 @@ class TradeDetailScreen extends StatelessWidget {
     final isBarter = trade.isBarter;
     final price = trade.displayPrice;
     final actualPrice = trade.product.price;
-    final difference = (price != null && actualPrice != null)
-        ? _calculatePriceDifference(
-            tradeType: tradeType,
-            actualPrice: actualPrice,
-            finalPrice: price,
-          )
-        : null;
 
     // Prefer the backend's exchangeSummary for the price block when present
     // — it's computed once, server-side, from the actual transaction record.
@@ -53,36 +46,6 @@ class TradeDetailScreen extends StatelessWidget {
     final summary = trade.exchangeSummary;
     final effectiveActualPrice = summary?.actualPrice ?? actualPrice;
     final effectiveSellingPrice = summary?.coins ?? price;
-    final effectiveDifference = summary?.priceDifference ?? difference;
-
-    // For a Barter + Coins deal (a real swapped item on both sides, plus a
-    // coin top-up), work out a basic net-value check: my item(s) value plus
-    // the coins involved, minus their item(s) value. Only computed when
-    // both sides actually have known per-item prices — older trades or
-    // legacy barter snapshots without price data leave this null and the
-    // row simply doesn't show.
-    double? netValue;
-    if (trade.hasBarterItemSnapshot) {
-      final theirItems = trade.isMyBarterItem == true
-          ? [_listingItem(trade)]
-          : _barterSnapshotItems(trade);
-      final myItems = trade.isMyBarterItem == true
-          ? _barterSnapshotItems(trade)
-          : [_listingItem(trade)];
-      final myHasPrice = myItems.any((item) => item.price != null);
-      final theirHasPrice = theirItems.any((item) => item.price != null);
-      if (myHasPrice && theirHasPrice) {
-        final myTotal = myItems.fold<double>(
-          0,
-          (sum, item) => sum + (item.price ?? 0),
-        );
-        final theirTotal = theirItems.fold<double>(
-          0,
-          (sum, item) => sum + (item.price ?? 0),
-        );
-        netValue = myTotal + (effectiveSellingPrice ?? 0) - theirTotal;
-      }
-    }
 
     return Scaffold(
       appBar: AppBar(
@@ -327,24 +290,6 @@ class TradeDetailScreen extends StatelessWidget {
                               CoinFormat.amount(effectiveSellingPrice),
                               Colors.green,
                             ),
-                            const SizedBox(height: 12),
-                            const Divider(),
-                            const SizedBox(height: 12),
-                            _buildPriceRow(
-                              'Price Difference',
-                              _formatPriceDifference(effectiveDifference),
-                              _priceDifferenceColor(effectiveDifference),
-                            ),
-                            if (netValue != null) ...[
-                              const SizedBox(height: 12),
-                              const Divider(),
-                              const SizedBox(height: 12),
-                              _buildPriceRow(
-                                'Net Value',
-                                _formatPriceDifference(netValue),
-                                _priceDifferenceColor(netValue),
-                              ),
-                            ],
                           ],
                         ),
                       ),
@@ -481,32 +426,6 @@ class TradeDetailScreen extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  double _calculatePriceDifference({
-    required String tradeType,
-    required double actualPrice,
-    required double finalPrice,
-  }) {
-    if (tradeType == 'Purchased') {
-      // Positive means user saved money compared to listed price.
-      return actualPrice - finalPrice;
-    }
-
-    // For sold trades, positive means profit over listed price.
-    return finalPrice - actualPrice;
-  }
-
-  String _formatPriceDifference(double? difference) {
-    if (difference == null) return '--';
-    if (difference == 0) return '0';
-    final sign = difference > 0 ? '+' : '-';
-    return '$sign${CoinFormat.amount(difference.abs())}';
-  }
-
-  Color _priceDifferenceColor(double? difference) {
-    if (difference == null || difference == 0) return Colors.grey;
-    return difference > 0 ? Colors.green : Colors.red;
   }
 
   // The logged-in user's own profile image — was hardcoded to a placeholder
@@ -817,12 +736,6 @@ class TradeDetailScreen extends StatelessWidget {
   // Coins, Barter, and Barter+Coins alike; only the heading and the
   // presence of a coins line differ per side.
   Widget _buildValueBreakdownCard(BuildContext context, ValueBreakdown vb) {
-    final differenceColor = vb.difference > 0
-        ? Colors.orange.shade800
-        : vb.difference < 0
-        ? Colors.green.shade700
-        : Colors.grey;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -865,22 +778,6 @@ class TradeDetailScreen extends StatelessWidget {
                         ),
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 12),
-                Text(
-                  vb.formula,
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  vb.differenceLabel,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: differenceColor,
                   ),
                 ),
               ],
@@ -977,11 +874,6 @@ class TradeDetailScreen extends StatelessWidget {
               ),
             ),
           ),
-        const Divider(height: 16),
-        Text(
-          'Total ${CoinFormat.amount(side.total)}',
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-        ),
       ],
     );
   }
