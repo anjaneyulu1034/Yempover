@@ -763,7 +763,7 @@ class TradeDetailScreen extends StatelessWidget {
                       Expanded(
                         child: _buildValueBreakdownSide(
                           context,
-                          'Your side',
+                          _sideHeading(vb.you),
                           vb.you,
                         ),
                       ),
@@ -773,7 +773,7 @@ class TradeDetailScreen extends StatelessWidget {
                       Expanded(
                         child: _buildValueBreakdownSide(
                           context,
-                          'Their side',
+                          _sideHeading(vb.them),
                           vb.them,
                         ),
                       ),
@@ -786,6 +786,39 @@ class TradeDetailScreen extends StatelessWidget {
         ),
         const SizedBox(height: 24),
       ],
+    );
+  }
+
+  // "Your side" for the viewer, or the actual counterparty's name for the
+  // other side (e.g. "Syed's side") instead of a generic "Their side" —
+  // side.name already carries the real display name server-side.
+  String _sideHeading(ValueBreakdownSide side) {
+    return side.isYou ? 'Your side' : "${side.name}'s side";
+  }
+
+  // Small muted "Product"/"Service" tag so each item's type is clear at a
+  // glance — a barter side can carry either or both, so the item's own type
+  // is what tells you what's actually changing hands, not the trade's
+  // overall exchange label.
+  Widget _buildItemTypeTag(ValueBreakdownItem item) {
+    final isService = item.type == 'service';
+    return Container(
+      margin: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: isService
+            ? const Color(0xFFEEF2FF)
+            : const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        isService ? 'Service' : 'Product',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: isService ? const Color(0xFF4338CA) : const Color(0xFF15803D),
+        ),
+      ),
     );
   }
 
@@ -847,6 +880,7 @@ class TradeDetailScreen extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        _buildItemTypeTag(item),
                         Text(
                           CoinFormat.amount(item.price),
                           style: TextStyle(
