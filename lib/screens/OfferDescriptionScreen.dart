@@ -365,9 +365,15 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           chat.serviceId != null &&
           chat.serviceId != widget.post.id;
 
-      if (chat.hasAcceptedOffer ||
+      // An accepted offer only blocks a new one while its deal is still in
+      // flight (mirrors the backend's makeOffer gate) — once the deal has
+      // completed, that offer is settled history, not a live block. This
+      // matters most for services: unlike a product (sold once, caught by
+      // isChatItemSold below), a service stays live for repeat business
+      // after a completed deal, so a completed chat alone must not block a
+      // fresh barter/coins offer on it.
+      if ((chat.hasAcceptedOffer && !chat.isCompleted) ||
           chat.isArchived ||
-          chat.isCompleted ||
           chat.isCancelled ||
           isChatItemSold ||
           isMismatchedProductChat ||
