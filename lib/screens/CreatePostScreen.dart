@@ -62,7 +62,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       isClubbable: _isClubbable,
       isFromExistingPost: false,
       price: _priceController.text.isNotEmpty
-          ? '${_priceController.text} coins'
+          ? CoinFormat.withUnit(double.tryParse(_priceController.text) ?? 0)
           : null,
       description: _descriptionController.text,
     );

@@ -512,9 +512,19 @@ class MyPostsService {
       } else if (response.statusCode == 404) {
         throw Exception('Post not found');
       } else {
-        throw Exception(
-          'Failed to update post: ${response.statusCode} - ${response.body}',
-        );
+        // Server errors here are user-safe (e.g. SCHEDULE_HAS_BOOKINGS'
+        // "N upcoming booking(s) fall outside the new schedule...") — show
+        // that message directly rather than dumping the raw status/body.
+        String message = 'Failed to update post (${response.statusCode})';
+        try {
+          final body = json.decode(response.body);
+          if (body is Map && body['message'] != null) {
+            message = body['message'].toString();
+          }
+        } catch (_) {
+          // Keep the generic fallback above.
+        }
+        throw Exception(message);
       }
     } catch (e) {
       debugPrint('🔴 MyPostsService: Error updating post: $e');

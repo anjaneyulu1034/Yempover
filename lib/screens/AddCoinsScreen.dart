@@ -379,7 +379,7 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${pack.coinAmount} Coins',
+                  '${pack.coinAmount} Coin${pack.coinAmount == 1 ? '' : 's'}',
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 16,

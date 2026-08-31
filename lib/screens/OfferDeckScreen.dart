@@ -22,6 +22,11 @@ class OfferDeckScreen extends StatefulWidget {
   // (the user may submit with none selected) and no price/value-matching
   // rules apply.
   final bool isZeroCoin;
+  // Services only (SERVICE_FOR_BARTER / its +coins variant): lets the
+  // requester also pick from their own SERVICES, not just products — the
+  // owner simply accepts/rejects, so unlike products there's no
+  // value-matching requirement between what's picked and the listing.
+  final bool allowServiceSelection;
 
   const OfferDeckScreen({
     super.key,
@@ -29,6 +34,7 @@ class OfferDeckScreen extends StatefulWidget {
     required this.currentUserId,
     required this.offerMode,
     this.isZeroCoin = false,
+    this.allowServiceSelection = false,
   });
 
   @override
@@ -41,6 +47,11 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
   List<UserItem> _userItems = [];
   final List<UserItem> _selectedItems = [];
+  // Services only — a second, independent selection (no clubbing/value
+  // matching rules; services just get toggled on/off like a plain checklist).
+  List<UserItem> _userServiceItems = [];
+  final List<UserItem> _selectedServiceItems = [];
+  bool _showingServicesTab = false;
   String? _quotedPriceError;
   bool _isLoading = false;
   String? _errorMessage;
@@ -107,6 +118,68 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
           );
         })
         .toList();
+  }
+
+  // Services offered in the direct barter flow aren't clubbed/value-matched
+  // like products, so this doesn't gate on isBarterEligiblePost or
+  // isClubbable the way the product mapper does — the owner just accepts or
+  // rejects whatever's picked.
+  List<UserItem> _mapMyPostsToServiceItems(List<MyPost> posts) {
+    return posts
+        .where((myPost) => myPost.postedById == widget.currentUserId)
+        .where((myPost) => myPost.type.toLowerCase() == 'service')
+        .where((myPost) => myPost.isListed == true)
+        .where((myPost) => !_isPostExpired(myPost))
+        .where(
+          (myPost) =>
+              myPost.status.toUpperCase() != 'SOLD' &&
+              myPost.status.toUpperCase() != 'ARCHIVED' &&
+              myPost.status.toUpperCase() != 'DELETED',
+        )
+        .map((myPost) {
+          return UserItem(
+            id: myPost.id,
+            name: myPost.title,
+            description: myPost.description,
+            imageUrl: myPost.images.isNotEmpty ? myPost.images.first : '',
+            category: myPost.category.name,
+            price: myPost.price ?? 0.0,
+            value: myPost.price ?? 0.0,
+            isClubbable: false,
+          );
+        })
+        .toList();
+  }
+
+  Widget _buildTabButton({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFEAF1FF) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? const Color(0xFF2E5BFF) : Colors.grey.shade300,
+            width: selected ? 1.6 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selected ? const Color(0xFF2E5BFF) : Colors.grey.shade700,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildMetaChip({
@@ -189,8 +262,8 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     if (widget.post.price > 0) {
       chips.add(
         _buildMetaChip(
-          icon: Icons.attach_money,
-          label: '${CoinFormat.amount(widget.post.price)} coins',
+          icon: Icons.monetization_on,
+          label: CoinFormat.withLabel(widget.post.price),
           fg: const Color(0xFF1565C0),
           bg: const Color(0xFFE3F2FD),
         ),
@@ -211,20 +284,6 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
   double get _selectedBarterItemsCoinTotal =>
       _selectedItems.fold<double>(0, (sum, item) => sum + item.value);
-
-  /// Condition 1 (pure barter): the swapped items must be worth the same.
-  /// A mismatch here belongs in Condition 2 ("Barter + Price") instead, so a
-  /// pure barter offer is only allowed to proceed once values line up. A
-  /// zero-coin exchange is exempt — the parties have agreed to trade
-  /// without coins, at whatever values they agree.
-  double? get _pureBarterValueGap {
-    if (widget.isZeroCoin) return null;
-    if (widget.offerMode != OfferSubmissionMode.barter) return null;
-    final targetPrice = widget.post.price;
-    if (targetPrice <= 0) return null;
-    final gap = _selectedBarterItemsCoinTotal - targetPrice;
-    return gap.abs() < 0.01 ? null : gap;
-  }
 
   String? _validateQuotedPrice(String value) {
     if (!_requiresQuotedPrice) return null;
@@ -280,6 +339,9 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
       setState(() {
         _userItems = _mapMyPostsToUserItems(response.data.posts);
+        if (widget.allowServiceSelection) {
+          _userServiceItems = _mapMyPostsToServiceItems(response.data.posts);
+        }
         _currentPage = response.data.pagination.page;
         _totalPages = response.data.pagination.pages;
         _isLoading = false;
@@ -322,6 +384,11 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       setState(() {
         final newItems = _mapMyPostsToUserItems(response.data.posts);
         _userItems.addAll(newItems);
+        if (widget.allowServiceSelection) {
+          _userServiceItems.addAll(
+            _mapMyPostsToServiceItems(response.data.posts),
+          );
+        }
         _currentPage = response.data.pagination.page;
         _totalPages = response.data.pagination.pages;
         _isLoadingMore = false;
@@ -344,12 +411,32 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
       setState(() {
         _userItems = _mapMyPostsToUserItems(response.data.posts);
+        if (widget.allowServiceSelection) {
+          _userServiceItems = _mapMyPostsToServiceItems(response.data.posts);
+        }
         _currentPage = response.data.pagination.page;
         _totalPages = response.data.pagination.pages;
       });
     } catch (e) {
       _showErrorSnackBar('Failed to refresh items');
     }
+  }
+
+  void _toggleServiceSelection(UserItem item) {
+    setState(() {
+      final exists = _selectedServiceItems.any((i) => i.id == item.id);
+      if (exists) {
+        _selectedServiceItems.removeWhere((i) => i.id == item.id);
+      } else {
+        _selectedServiceItems.add(item);
+      }
+    });
+  }
+
+  void _removeSelectedServiceItem(UserItem item) {
+    setState(() {
+      _selectedServiceItems.removeWhere((i) => i.id == item.id);
+    });
   }
 
   void _showLoginDialog() {
@@ -554,24 +641,14 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     if (!widget.isZeroCoin &&
         (widget.offerMode == OfferSubmissionMode.barter ||
             widget.offerMode == OfferSubmissionMode.both) &&
-        _selectedItems.isEmpty) {
+        _selectedItems.isEmpty &&
+        _selectedServiceItems.isEmpty) {
       SnackbarUtils.showInfo(
         context,
-        'Please select at least one item to continue.',
+        widget.allowServiceSelection
+            ? 'Please select at least one product or service to continue.'
+            : 'Please select at least one item to continue.',
       );
-      return;
-    }
-
-    final barterValueGap = _pureBarterValueGap;
-    if (barterValueGap != null) {
-      final message = barterValueGap > 0
-          ? 'Your items are worth ${CoinFormat.amount(barterValueGap)} coins '
-                'more than this listing. Use "Barter + Price" to offer the '
-                'difference, or adjust your selected items.'
-          : 'Your items are worth ${CoinFormat.amount(barterValueGap.abs())} '
-                'coins less than this listing. Use "Barter + Price" to add '
-                'the difference, or adjust your selected items.';
-      SnackbarUtils.showInfo(context, message);
       return;
     }
 
@@ -580,20 +657,9 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       return;
     }
 
-    // Barter + Coins doesn't require the item value to match the listing
-    // (that's the pure-barter rule above) — but if the selected item(s)
-    // alone are already worth more than the listing, on top of whatever
-    // coins are quoted, that's worth a heads-up in case it's a mistake
-    // rather than silently accepting it.
-    if (widget.offerMode == OfferSubmissionMode.both &&
-        _selectedItems.isNotEmpty &&
-        widget.post.price > 0 &&
-        _selectedBarterItemsCoinTotal > widget.post.price) {
-      final proceed = await _confirmItemsWorthMoreThanListing(
-        _selectedBarterItemsCoinTotal - widget.post.price,
-      );
-      if (!mounted || proceed != true) return;
-    }
+    // No value-matching of any kind — a barter/both offer may be worth more
+    // or less than the listing on either side. The receiver looks at what's
+    // on the table and accepts or rejects; there's nothing to warn about.
 
     if (widget.offerMode == OfferSubmissionMode.both) {
       final quoted = double.tryParse(_quotedPriceController.text.trim());
@@ -625,6 +691,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         builder: (context) => OfferDescriptionScreen(
           post: widget.post,
           selectedItems: _selectedItems,
+          selectedServiceItems: _selectedServiceItems,
           selectedBundleItems: const [],
           currentUserId: widget.currentUserId,
           isService: isService, // Pass the correct type
@@ -636,219 +703,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
     );
   }
 
-  Widget _valueCompareRow(
-    String label,
-    String amount, {
-    bool bold = false,
-    Color? color,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13.5,
-              color: color ?? Colors.grey.shade700,
-              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-            ),
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CoinIcon(size: bold ? 16 : 14, iconSize: bold ? 10 : 9),
-              const SizedBox(width: 4),
-              Text(
-                amount,
-                style: TextStyle(
-                  fontSize: bold ? 14.5 : 13.5,
-                  color: color ?? Colors.black87,
-                  fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
-  /// Barter + Coins doesn't require item value to match the listing, so this
-  /// isn't a hard block — just a confirmation in case picking an item worth
-  /// noticeably more than the listing was a mistake. Shows what's actually
-  /// selected plus a clear line-by-line breakdown rather than one dense
-  /// sentence of numbers.
-  Future<bool?> _confirmItemsWorthMoreThanListing(double excess) {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.info_outline,
-                  color: Colors.orange.shade700,
-                  size: 26,
-                ),
-              ),
-              const SizedBox(height: 14),
-              const Text(
-                'Item worth more than the listing',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'That\'s okay if intended — here\'s the breakdown.',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-              ),
-              const SizedBox(height: 16),
-
-              // Selected items being offered
-              ..._selectedItems.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: item.imageUrl.isNotEmpty
-                            ? Image.network(
-                                item.imageUrl,
-                                width: 40,
-                                height: 40,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Container(
-                                      width: 40,
-                                      height: 40,
-                                      color: Colors.grey.shade200,
-                                      child: const Icon(Icons.image, size: 18),
-                                    ),
-                              )
-                            : Container(
-                                width: 40,
-                                height: 40,
-                                color: Colors.grey.shade200,
-                                child: const Icon(Icons.image, size: 18),
-                              ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          item.name,
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CoinIcon(size: 13, iconSize: 8),
-                          const SizedBox(width: 3),
-                          Text(
-                            CoinFormat.amount(item.value),
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-
-              // Calculation breakdown
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Column(
-                  children: [
-                    _valueCompareRow(
-                      'Your items',
-                      CoinFormat.amount(_selectedBarterItemsCoinTotal),
-                    ),
-                    _valueCompareRow(
-                      'Listing price',
-                      CoinFormat.amount(widget.post.price),
-                    ),
-                    const Divider(height: 16),
-                    _valueCompareRow(
-                      'Difference',
-                      '+${CoinFormat.amount(excess)}',
-                      bold: true,
-                      color: Colors.orange.shade800,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        side: BorderSide(color: Colors.grey.shade400),
-                        foregroundColor: Colors.black87,
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: const Text('Continue'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   /// Purely informational notice so the user knows upfront how many coins
   /// this "Barter + Price" offer will cost them if the other party accepts it.
@@ -1015,83 +870,6 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
               const SizedBox(height: 12),
 
-              if (_requiresQuotedPrice) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Quoted Price',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _quotedPriceController,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(9),
-                        ],
-                        onChanged: (_) {
-                          setState(() {
-                            _quotedPriceError = _validateQuotedPrice(
-                              _quotedPriceController.text,
-                            );
-                          });
-                        },
-                        decoration: AppInputDecoration.build(
-                          label: 'Price Quote',
-                          hint: 'Enter your price quote',
-                          prefixIcon: coinInputPrefix(),
-                          prefixIconConstraints: coinPrefixIconConstraints,
-                          errorText: _quotedPriceError,
-                          fillColor: Colors.grey.shade50,
-                        ),
-                      ),
-                      if (_selectedItems.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-
-              if (!widget.isZeroCoin &&
-                  widget.offerMode == OfferSubmissionMode.barter &&
-                  _selectedItems.isNotEmpty &&
-                  widget.post.price > 0) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    _pureBarterValueGap == null
-                        ? 'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins · Values match ✓'
-                        : 'Your items: ${CoinFormat.amount(_selectedBarterItemsCoinTotal)} coins · '
-                              'Listing: ${CoinFormat.amount(widget.post.price)} coins · '
-                              'Values must match for a pure barter offer',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _pureBarterValueGap == null
-                          ? Colors.green.shade700
-                          : Colors.orange.shade800,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-
               // -------- OFFER DECK ROW ----------
               // Only the target listing goes here now — adding a new post
               // to offer from is already covered by the "Add New" tile in
@@ -1211,7 +989,175 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                   ),
                 ),
 
+              // -------- SELECTED SERVICES (Horizontal deck) ----------
+              if (_selectedServiceItems.isNotEmpty)
+                SizedBox(
+                  height: 90,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _selectedServiceItems.length,
+                    itemBuilder: (context, index) {
+                      final item = _selectedServiceItems[index];
+                      return Container(
+                        width: 80,
+                        margin: const EdgeInsets.only(right: 10),
+                        child: Stack(
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.deepPurple.shade200,
+                                ),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: item.imageUrl.isNotEmpty
+                                    ? Image.network(
+                                        item.imageUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                              return Container(
+                                                color: Colors.grey.shade200,
+                                                child: const Center(
+                                                  child: Icon(Icons.handyman),
+                                                ),
+                                              );
+                                            },
+                                      )
+                                    : Container(
+                                        color: Colors.grey.shade200,
+                                        child: const Center(
+                                          child: Icon(Icons.handyman),
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 6,
+                              right: 6,
+                              child: GestureDetector(
+                                onTap: () => _removeSelectedServiceItem(item),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.close, size: 14),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
               const SizedBox(height: 16),
+
+              if (_requiresQuotedPrice) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Quoted Price',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _quotedPriceController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(9),
+                        ],
+                        onChanged: (_) {
+                          setState(() {
+                            _quotedPriceError = _validateQuotedPrice(
+                              _quotedPriceController.text,
+                            );
+                          });
+                        },
+                        decoration: AppInputDecoration.build(
+                          label: 'Price Quote',
+                          hint: 'Enter your price quote',
+                          prefixIcon: coinInputPrefix(),
+                          prefixIconConstraints: coinPrefixIconConstraints,
+                          errorText: _quotedPriceError,
+                          fillColor: Colors.grey.shade50,
+                        ),
+                      ),
+                      if (_selectedItems.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // Purely informational — any selection is valid for a barter
+              // offer, so this is never a warning, just a running total.
+              if (!widget.isZeroCoin &&
+                  widget.offerMode == OfferSubmissionMode.barter &&
+                  _selectedItems.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Your items: ${CoinFormat.withUnit(_selectedBarterItemsCoinTotal)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // -------- PRODUCTS / SERVICES TOGGLE (services flow only) ----------
+              if (widget.allowServiceSelection)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildTabButton(
+                          label: 'My Products',
+                          selected: !_showingServicesTab,
+                          onTap: () =>
+                              setState(() => _showingServicesTab = false),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildTabButton(
+                          label: 'My Services',
+                          selected: _showingServicesTab,
+                          onTap: () =>
+                              setState(() => _showingServicesTab = true),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (widget.allowServiceSelection) const SizedBox(height: 12),
 
               // -------- MY ITEMS TITLE ----------
               Padding(
@@ -1220,7 +1166,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      "My Items",
+                      _showingServicesTab ? "My Services" : "My Items",
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -1240,10 +1186,23 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
               const SizedBox(height: 12),
 
               // -------- MY ITEMS HORIZONTAL SCROLLING LIST ----------
-              _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _errorMessage != null
-                  ? Center(
+              Builder(
+                builder: (context) {
+                  final activeItems = _showingServicesTab
+                      ? _userServiceItems
+                      : _userItems;
+                  final activeSelected = _showingServicesTab
+                      ? _selectedServiceItems
+                      : _selectedItems;
+                  void toggleActive(UserItem item) => _showingServicesTab
+                      ? _toggleServiceSelection(item)
+                      : _toggleItemSelection(item);
+
+                  if (_isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (_errorMessage != null) {
+                    return Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -1275,9 +1234,10 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                           ),
                         ],
                       ),
-                    )
-                  : _userItems.isEmpty
-                  ? Center(
+                    );
+                  }
+                  if (activeItems.isEmpty) {
+                    return Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -1288,7 +1248,9 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'No items to offer',
+                            _showingServicesTab
+                                ? 'No services to offer'
+                                : 'No items to offer',
                             style: TextStyle(
                               fontSize: 16,
                               color: Colors.grey.shade600,
@@ -1296,7 +1258,9 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            _emptyItemsMessage,
+                            _showingServicesTab
+                                ? 'Post a service to offer it here.'
+                                : _emptyItemsMessage,
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey.shade500,
@@ -1311,8 +1275,9 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                           ),
                         ],
                       ),
-                    )
-                  : SizedBox(
+                    );
+                  }
+                  return SizedBox(
                       height: 150,
                       child: RefreshIndicator(
                         onRefresh: _refreshPosts,
@@ -1325,7 +1290,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount:
-                              1 + _userItems.length + (_isLoadingMore ? 1 : 0),
+                              1 + activeItems.length + (_isLoadingMore ? 1 : 0),
                           itemBuilder: (context, index) {
                             if (index == 0) {
                               return GestureDetector(
@@ -1366,7 +1331,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
                             final itemIndex = index - 1;
 
-                            if (itemIndex == _userItems.length) {
+                            if (itemIndex == activeItems.length) {
                               return Container(
                                 width: 80,
                                 margin: const EdgeInsets.only(right: 12),
@@ -1376,13 +1341,13 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                               );
                             }
 
-                            final item = _userItems[itemIndex];
-                            final selected = _selectedItems.any(
+                            final item = activeItems[itemIndex];
+                            final selected = activeSelected.any(
                               (selectedItem) => selectedItem.id == item.id,
                             );
 
                             return GestureDetector(
-                              onTap: () => _toggleItemSelection(item),
+                              onTap: () => toggleActive(item),
                               child: Container(
                                 width: 110,
                                 height: 140,
@@ -1494,7 +1459,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                                             ),
                                             if (item.value > 0)
                                               Text(
-                                                '${CoinFormat.amount(item.value)} coins',
+                                                CoinFormat.withLabel(item.value),
                                                 style: const TextStyle(
                                                   color: Colors.white70,
                                                   fontSize: 10,
@@ -1513,7 +1478,9 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                           },
                         ),
                       ),
-                    ),
+                    );
+                },
+              ),
             ],
           ),
         ),

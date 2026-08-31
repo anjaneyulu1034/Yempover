@@ -293,8 +293,13 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                   ),
                   const SizedBox(height: 4),
 
-                  // Trade Type and Price
-                  Row(
+                  // Trade Type and Price — Wrap (not Row) so a long exchange
+                  // label ("Barter + Coins") can drop to a second line
+                  // instead of overflowing on narrow screens.
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -314,10 +319,29 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      if (trade.exchangeSummary != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Text(
+                            trade.exchangeSummary!.label,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
                       if (price != null)
                         CoinPriceLabel(
-                          text: '${CoinFormat.amount(price)} coins',
+                          text: CoinFormat.withLabel(price),
                           iconSize: 16,
                           style: TextStyle(
                             fontSize: 16,

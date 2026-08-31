@@ -173,7 +173,7 @@ class WalletOfferGuard {
                           ),
                         ),
                         Text(
-                          ' / ${CoinFormat.amount(required)} coins',
+                          ' / ${CoinFormat.withUnit(required)}',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -205,8 +205,8 @@ class WalletOfferGuard {
                     const SizedBox(height: 10),
                     Text(
                       itemName != null && itemName.isNotEmpty
-                          ? 'Add ${CoinFormat.amount(shortfall)} coins to make an offer on "$itemName"'
-                          : 'Add ${CoinFormat.amount(shortfall)} coins to continue',
+                          ? 'Add ${CoinFormat.withUnit(shortfall)} to make an offer on "$itemName"'
+                          : 'Add ${CoinFormat.withUnit(shortfall)} to continue',
                       style: const TextStyle(
                         fontSize: 13.5,
                         height: 1.25,
@@ -232,7 +232,7 @@ class WalletOfferGuard {
                     ),
                   ),
                   child: Text(
-                    'Add ${CoinFormat.amount(shortfall)} coins',
+                    'Add ${CoinFormat.withUnit(shortfall)}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 15,

@@ -261,15 +261,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       return;
     }
 
-    if (_post.type == PostType.service) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ServiceDetailBookingScreen(serviceId: _post.id),
-        ),
-      );
-      return;
-    }
+    final isService = _post.type == PostType.service;
 
     // Don't allow offering on own post
     if (_currentUserId == _post.postedById) {
@@ -282,17 +274,22 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       return;
     }
 
-    // Feature 3: always offer the full exchange-mode picker (backend-driven,
-    // includes cross-mode requests like barter on a pure-price listing)
-    // instead of a static local list gated on the listing's native mode.
+    // Always offer the full exchange-mode picker (backend-driven, includes
+    // cross-mode requests like barter on a pure-price listing, and — for
+    // services — the SCHEDULED/DIRECT flow split) instead of a static local
+    // list, or (for services) jumping straight to the slot picker.
     if (_isFetchingExchangeModes) return;
     setState(() => _isFetchingExchangeModes = true);
 
     ExchangeModeOptions options;
     try {
-      options = await _tradeChatService.getExchangeModeOptions(
-        productId: _post.id,
-      );
+      options = isService
+          ? await _tradeChatService.getExchangeModeOptions(
+              serviceId: _post.id,
+            )
+          : await _tradeChatService.getExchangeModeOptions(
+              productId: _post.id,
+            );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isFetchingExchangeModes = false);
@@ -337,9 +334,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       if (!mounted || confirmed != true) return;
     }
 
+    // Pure Coins on a service: pick a slot, the offer books it directly.
+    if (selectedOption.requiresSlotSelection) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ServiceDetailBookingScreen(serviceId: _post.id),
+        ),
+      );
+      return;
+    }
+
     final offerMode = mapOfferTypeToSubmissionMode(selectedOption.offerType);
 
-    if (!selectedOption.requiresProductSelection) {
+    if (!selectedOption.requiresProductSelection &&
+        !selectedOption.requiresServiceSelection) {
       final hasEnoughBalance = await _ensureSufficientWalletBalance();
       if (!mounted || !hasEnoughBalance) return;
 
@@ -350,6 +359,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             post: _post,
             selectedItems: const [],
             currentUserId: _currentUserId!,
+            isService: isService,
             offerMode: offerMode,
           ),
         ),
@@ -364,6 +374,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           post: _post,
           currentUserId: _currentUserId!,
           offerMode: offerMode,
+          allowServiceSelection: selectedOption.requiresServiceSelection,
         ),
       ),
     );
@@ -1180,7 +1191,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         ? _post.location
         : 'Location not specified';
     final providerArea = (_post.postedBy.homeAddress ?? '').trim();
-    final hasCoordinates = _post.latitude != null && _post.longitude != null;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -1244,7 +1254,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   ),
                 ),
               _buildCoinPricePill(
-                _post.price > 0 ? _post.formattedPrice : 'Price on request',
+                _post.price > 0
+                    ? CoinFormat.withUnit(_post.price)
+                    : 'Price on request',
               ),
               _buildInfoPill(
                 _post.isListed
@@ -1252,8 +1264,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     : Icons.block_outlined,
                 _post.isListed ? 'Listed' : 'Unlisted',
               ),
-              if (hasCoordinates)
-                _buildInfoPill(Icons.my_location_outlined, 'Geo-tagged'),
             ],
           ),
           const SizedBox(height: 14),
@@ -1267,13 +1277,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               icon: Icons.home_work_outlined,
               label: 'Provider area',
               value: providerArea,
-            ),
-          if (hasCoordinates)
-            _buildServiceMetaRow(
-              icon: Icons.pin_drop_outlined,
-              label: 'Coordinates',
-              value:
-                  '${_post.latitude!.toStringAsFixed(5)}, ${_post.longitude!.toStringAsFixed(5)}',
             ),
           _buildServiceMetaRow(
             icon: Icons.event_outlined,
@@ -1318,8 +1321,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     return InkWell(borderRadius: BorderRadius.circular(999), onTap: onTap, child: pill);
   }
 
-  Widget _buildCoinPricePill(String text) {
-    final label = text == 'Price on request' ? text : '$text coins';
+  Widget _buildCoinPricePill(String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -1612,7 +1614,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
                         if (_post.price > 0)
                           CoinPriceLabel(
-                            text: '${_post.formattedPrice} coins',
+                            text: CoinFormat.withUnit(_post.price),
                             iconSize: 22,
                             style: const TextStyle(
                               fontSize: 20,

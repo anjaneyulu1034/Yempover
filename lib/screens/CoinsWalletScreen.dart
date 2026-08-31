@@ -311,7 +311,7 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'You need +${CoinFormat.amount(requiredAmount)} coins to complete this purchase.',
+              'You need +${CoinFormat.withUnit(requiredAmount)} to complete this purchase.',
               style: const TextStyle(
                 color: Color(0xFF9A3412),
                 fontWeight: FontWeight.w600,

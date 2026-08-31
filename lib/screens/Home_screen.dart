@@ -1733,7 +1733,9 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const TradeBoothScreen()),
-    );
+    ).then((_) {
+      if (mounted) _fetchPosts();
+    });
   }
 
   void _showNotificationScreen() async {
@@ -2759,8 +2761,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       if (post.post.price > 0)
                         CoinPriceLabel(
-                          text:
-                              '${post.formattedPrice}${post.formattedPrice == 'Free' ? '' : ' coins'}',
+                          text: CoinFormat.withUnit(post.post.price),
                           iconSize: 14,
                           style: TextStyle(
                             fontSize: 13,

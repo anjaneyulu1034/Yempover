@@ -91,9 +91,14 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
           chat.serviceId != null &&
           chat.serviceId != widget.post.id;
 
-      if (chat.hasAcceptedOffer ||
+      // An accepted offer only blocks a new one while its deal is still in
+      // flight (mirrors the backend's makeOffer gate) — once the deal has
+      // completed, that offer is settled history, not a live block. A
+      // service stays live for repeat business after a completed deal, so a
+      // completed chat alone must not block a fresh offer on it (a product
+      // is caught instead by isChatItemSold once sold).
+      if ((chat.hasAcceptedOffer && !chat.isCompleted) ||
           chat.isArchived ||
-          chat.isCompleted ||
           chat.isCancelled ||
           isChatItemSold ||
           isMismatchedProductChat ||
@@ -298,7 +303,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
                             ),
                             if (widget.post.price > 0)
                               Text(
-                                'Original Price: ${CoinFormat.amount(widget.post.price)} coins',
+                                'Original Price: ${CoinFormat.withLabel(widget.post.price)}',
                                 style: const TextStyle(
                                   fontSize: 14,
                                   color: Colors.green,
@@ -329,7 +334,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
             const SizedBox(height: 8),
             if (widget.post.price > 0)
               Text(
-                'Listed at ${CoinFormat.amount(widget.post.price)} coins — enter the amount you want to offer.',
+                'Listed at ${CoinFormat.withLabel(widget.post.price)} — enter the amount you want to offer.',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
             if (widget.post.price > 0) const SizedBox(height: 8),

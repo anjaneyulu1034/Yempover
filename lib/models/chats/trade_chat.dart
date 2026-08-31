@@ -297,6 +297,53 @@ class ProductInfo {
       barterStatus == 'OPEN_FOR_BARTER' || status == 'FOR_BARTER';
 }
 
+// The actual product being OFFERED in a barter (as opposed to ProductInfo,
+// which is the listing being bartered FOR). Resolved server-side from an
+// offer's barterProductIds — see TradeOffer.barterProducts.
+class BarterProductInfo {
+  final String id;
+  final String title;
+  final List<String> images;
+  final double? price;
+  final String status;
+  final String? postedById;
+
+  BarterProductInfo({
+    required this.id,
+    required this.title,
+    required this.images,
+    this.price,
+    required this.status,
+    this.postedById,
+  });
+
+  factory BarterProductInfo.fromJson(Map<String, dynamic> json) {
+    return BarterProductInfo(
+      id: json['id'] ?? '',
+      title: json['title'] ?? '',
+      images: (json['images'] as List? ?? []).map((e) => e.toString()).toList(),
+      price: json['price'] != null
+          ? double.tryParse(json['price'].toString())
+          : null,
+      status: json['status'] ?? '',
+      postedById: json['postedById'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'images': images,
+      'price': price,
+      'status': status,
+      'postedById': postedById,
+    };
+  }
+
+  String get firstImage => images.isNotEmpty ? images.first : '';
+}
+
 // Service Info Model
 class ServiceInfo {
   final String id;
@@ -344,6 +391,52 @@ class ServiceInfo {
   bool get allowsPrice => price != null && price! > 0;
   bool get allowsBarter =>
       barterStatus == 'OPEN_FOR_BARTER' || status == 'FOR_BARTER';
+}
+
+// The product/service the whole negotiation is anchored to — present on
+// every offer/counter-offer, including coins-only counters with no barter
+// items of their own. Distinct from BarterProductInfo, which is the item(s)
+// actually offered in exchange.
+class OfferListing {
+  final String postType; // 'product' | 'service'
+  final String? productId;
+  final String? serviceId;
+  final String title;
+  final String? image;
+  final double? price;
+
+  OfferListing({
+    required this.postType,
+    this.productId,
+    this.serviceId,
+    required this.title,
+    this.image,
+    this.price,
+  });
+
+  factory OfferListing.fromJson(Map<String, dynamic> json) {
+    return OfferListing(
+      postType: json['postType'] ?? '',
+      productId: json['productId'] as String?,
+      serviceId: json['serviceId'] as String?,
+      title: json['title'] ?? '',
+      image: json['image'] as String?,
+      price: json['price'] != null
+          ? double.tryParse(json['price'].toString())
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'postType': postType,
+      'productId': productId,
+      'serviceId': serviceId,
+      'title': title,
+      'image': image,
+      'price': price,
+    };
+  }
 }
 
 // ==================== CHAT MESSAGE MODEL ====================
@@ -444,6 +537,233 @@ class ChatMessage {
 
 // ==================== TRADE OFFER MODEL ====================
 
+// Pull the wall-clock date/time straight out of the ISO string's TEXT — the
+// server stores/returns the picked slot as a naive wall clock (not a real
+// timezone-aware instant), so parsing it as a DateTime and calling
+// .toLocal()/.toUtc() re-interprets those digits against the device's
+// timezone and silently shifts them (a 12:30 booking reading back as
+// 5:30). Regex-extracting the digits as printed is the only safe way to
+// display it. Falls back to '--' if the string doesn't parse at all.
+String? _extractDatePart(String? iso) {
+  if (iso == null) return null;
+  final match = RegExp(r'^(\d{4}-\d{2}-\d{2})').firstMatch(iso);
+  return match?.group(1);
+}
+
+String? _extractTimePart(String? iso) {
+  if (iso == null) return null;
+  final match = RegExp(r'T(\d{2}:\d{2})').firstMatch(iso);
+  return match?.group(1);
+}
+
+String? _addMinutesToHHmm(String? hhmm, int? minutes) {
+  if (hhmm == null || minutes == null) return null;
+  final parts = hhmm.split(':');
+  if (parts.length != 2) return null;
+  final h = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  if (h == null || m == null) return null;
+  final total = (h * 60 + m + minutes) % (24 * 60);
+  final endH = total ~/ 60;
+  final endM = total % 60;
+  return '${endH.toString().padLeft(2, '0')}:${endM.toString().padLeft(2, '0')}';
+}
+
+// A booked slot attached to a scheduled (Pure Coins) service offer — either
+// on the offer itself (serviceAppointment) or the lightweight snapshot on
+// TradeChat.appointment (same shape, sourced from the live/accepted offer).
+class ServiceAppointmentSnapshot {
+  final String id;
+  // Raw ISO string, kept only as a fallback/for sorting — NEVER call
+  // .toLocal()/.toUtc() on it for display. Use slotDate/slotTime/slotEndTime
+  // (or the display getters below) instead.
+  final String? appointmentDateRaw;
+  final int? duration;
+  final String? location;
+  final String? status;
+  final int rescheduleCount;
+  final String? previousAppointmentDateRaw;
+  // Server-provided wall-clock strings when the endpoint decorates them
+  // (appointment list/reschedule endpoints); regex-derived from the raw ISO
+  // string otherwise so display never depends on device timezone.
+  final String? slotDate;
+  final String? slotTime;
+  final String? slotEndTime;
+
+  ServiceAppointmentSnapshot({
+    required this.id,
+    this.appointmentDateRaw,
+    this.duration,
+    this.location,
+    this.status,
+    this.rescheduleCount = 0,
+    this.previousAppointmentDateRaw,
+    this.slotDate,
+    this.slotTime,
+    this.slotEndTime,
+  });
+
+  factory ServiceAppointmentSnapshot.fromJson(Map<String, dynamic> json) {
+    final rawDate = json['appointmentDate']?.toString();
+    final slotTime = json['slotTime']?.toString() ?? _extractTimePart(rawDate);
+    final duration = json['duration'] is num ? (json['duration'] as num).toInt() : null;
+    return ServiceAppointmentSnapshot(
+      id: json['id']?.toString() ?? '',
+      appointmentDateRaw: rawDate,
+      duration: duration,
+      location: json['location']?.toString(),
+      status: json['status']?.toString(),
+      rescheduleCount: json['rescheduleCount'] is num
+          ? (json['rescheduleCount'] as num).toInt()
+          : 0,
+      previousAppointmentDateRaw: json['previousAppointmentDate']?.toString(),
+      slotDate: json['slotDate']?.toString() ?? _extractDatePart(rawDate),
+      slotTime: slotTime,
+      slotEndTime:
+          json['slotEndTime']?.toString() ?? _addMinutesToHHmm(slotTime, duration),
+    );
+  }
+
+  // "2026-09-03" -> "Sep 3, 2026". Falls back to the raw key if it doesn't
+  // parse (never via DateTime timezone conversion — just a display format).
+  String get displayDate {
+    if (slotDate == null) return '--';
+    final parts = slotDate!.split('-');
+    if (parts.length != 3) return slotDate!;
+    final y = int.tryParse(parts[0]);
+    final mo = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
+    if (y == null || mo == null || d == null) return slotDate!;
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    if (mo < 1 || mo > 12) return slotDate!;
+    return '${months[mo - 1]} $d, $y';
+  }
+
+  // "14:30" -> "2:30 PM".
+  static String _displayTimeOf(String? hhmm) {
+    if (hhmm == null) return '--';
+    final parts = hhmm.split(':');
+    if (parts.length != 2) return hhmm;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return hhmm;
+    final period = h >= 12 ? 'PM' : 'AM';
+    final displayHour = h % 12 == 0 ? 12 : h % 12;
+    return '$displayHour:${m.toString().padLeft(2, '0')} $period';
+  }
+
+  String get displayTime => _displayTimeOf(slotTime);
+  String get displayEndTime => _displayTimeOf(slotEndTime);
+  String get displayDateTime => '$displayDate • $displayTime';
+}
+
+// One product or service on either side of the trade — used for display
+// only (thumbnail + title + price), never to validate the deal.
+class TradeExchangeItem {
+  final String type; // "product" | "service"
+  final String id;
+  final String title;
+  final String? image;
+  final double? price;
+
+  TradeExchangeItem({
+    required this.type,
+    required this.id,
+    required this.title,
+    this.image,
+    this.price,
+  });
+
+  factory TradeExchangeItem.fromJson(Map<String, dynamic> json) {
+    return TradeExchangeItem(
+      type: json['type']?.toString() ?? '',
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      image: json['image']?.toString(),
+      price: json['price'] != null
+          ? double.tryParse(json['price'].toString())
+          : null,
+    );
+  }
+}
+
+// One half of a trade — what one side is putting on the table (products,
+// services, coins) or, for `askedFor`, the listing itself. Values are never
+// compared/validated here; this is purely a "here's what's on the table"
+// snapshot for the receiver to look at and accept or reject.
+class TradeExchangeSide {
+  final String? userId;
+  final List<TradeExchangeItem> products;
+  final List<TradeExchangeItem> services;
+  final double coins;
+  // Free text: for a service, the offerer's description of the work they
+  // will do (e.g. "I will rewire two rooms") — the only sensible
+  // description for something that isn't a listed item.
+  final String? note;
+  final String? itemTitle;
+  final OfferListing? listing;
+  final String summary;
+
+  TradeExchangeSide({
+    this.userId,
+    this.products = const [],
+    this.services = const [],
+    this.coins = 0,
+    this.note,
+    this.itemTitle,
+    this.listing,
+    required this.summary,
+  });
+
+  factory TradeExchangeSide.fromJson(Map<String, dynamic> json) {
+    return TradeExchangeSide(
+      userId: json['userId']?.toString(),
+      products: (json['products'] as List? ?? [])
+          .whereType<Map>()
+          .map((p) => TradeExchangeItem.fromJson(Map<String, dynamic>.from(p)))
+          .toList(),
+      services: (json['services'] as List? ?? [])
+          .whereType<Map>()
+          .map((s) => TradeExchangeItem.fromJson(Map<String, dynamic>.from(s)))
+          .toList(),
+      coins: double.tryParse(json['coins']?.toString() ?? '') ?? 0,
+      note: json['note']?.toString(),
+      itemTitle: json['itemTitle']?.toString(),
+      listing: json['listing'] is Map
+          ? OfferListing.fromJson(Map<String, dynamic>.from(json['listing'] as Map))
+          : null,
+      summary: json['summary']?.toString() ?? '',
+    );
+  }
+
+  // Every item on this side, products and services together, for a single
+  // "one tile per item" render.
+  List<TradeExchangeItem> get allItems => [...products, ...services];
+}
+
+// Both halves of the trade, spelled out — offer.exchange.offeredBy /
+// .askedFor. See TradeOffer.youGive/.youGet for the viewer-relative version.
+class TradeExchange {
+  final TradeExchangeSide offeredBy;
+  final TradeExchangeSide askedFor;
+
+  TradeExchange({required this.offeredBy, required this.askedFor});
+
+  factory TradeExchange.fromJson(Map<String, dynamic> json) {
+    return TradeExchange(
+      offeredBy: TradeExchangeSide.fromJson(
+        Map<String, dynamic>.from(json['offeredBy'] ?? {}),
+      ),
+      askedFor: TradeExchangeSide.fromJson(
+        Map<String, dynamic>.from(json['askedFor'] ?? {}),
+      ),
+    );
+  }
+}
+
 class TradeOffer {
   final String id;
   final String tradeChatId;
@@ -461,6 +781,22 @@ class TradeOffer {
   // client look up the offered item's actual listed price and deep-link to
   // its post detail, the same way the chat's own product/service already does.
   final List<String> barterProductIds;
+  // The actually-OFFERED products, resolved server-side from
+  // barterProductIds — distinct from chat.product (the listing being
+  // bartered FOR). Render these for the offer preview instead of
+  // barterItemTitle/barterItemImages so the chat never shows the listing
+  // product as if it were the offered item. Empty for free-text-only offers.
+  final List<BarterProductInfo> barterProducts;
+  // Combined coin value of every product in barterProducts.
+  final double barterProductsTotalValue;
+  // Same idea as barterProductIds/barterProducts, but for the offerer's own
+  // SERVICES offered in exchange (service-only barter/both offers).
+  final List<String> barterServiceIds;
+  final List<BarterProductInfo> barterServices;
+  final double barterServicesTotalValue;
+  // barterProductsTotalValue + barterServicesTotalValue + the coin top-up
+  // (price) for a Barter + Coins offer — the grand total value of the offer.
+  final double offerTotalValue;
   final int counterOfferCount;
   final DateTime createdAt;
   final DateTime? acceptedAt;
@@ -469,6 +805,24 @@ class TradeOffer {
   // free. Never carries a price, and (per product decision) can't be
   // countered — only accepted or rejected.
   final bool isZeroCoin;
+  // The listing this offer/counter is anchored to — see OfferListing. Null
+  // only for offers fetched before the backend started sending this field.
+  final OfferListing? listing;
+  // The booked slot for a scheduled (Pure Coins) service offer. Null for
+  // every other offer type/flow.
+  final ServiceAppointmentSnapshot? serviceAppointment;
+  // Both halves of the trade spelled out server-side (offeredBy/askedFor).
+  // Prefer youGive/youGet for display — same data, already swapped to this
+  // viewer's perspective.
+  final TradeExchange? exchange;
+  // Viewer-relative: youGive is whichever side (offeredBy/askedFor) THIS
+  // user is giving up, youGet is the other. Null until the backend
+  // computes it (needs to know who's viewing), which it does whenever this
+  // offer is fetched as part of a chat for a specific user.
+  final TradeExchangeSide? youGive;
+  final TradeExchangeSide? youGet;
+  // Ready-made copy: "You give X · You get Y". Render as-is.
+  final String? exchangeSummary;
 
   TradeOffer({
     required this.id,
@@ -484,11 +838,23 @@ class TradeOffer {
     required this.barterItemImages,
     required this.barterWishCategories,
     this.barterProductIds = const [],
+    this.barterProducts = const [],
+    this.barterProductsTotalValue = 0,
+    this.barterServiceIds = const [],
+    this.barterServices = const [],
+    this.barterServicesTotalValue = 0,
+    this.offerTotalValue = 0,
     required this.counterOfferCount,
     required this.createdAt,
     this.acceptedAt,
     this.rejectedAt,
     this.isZeroCoin = false,
+    this.listing,
+    this.serviceAppointment,
+    this.exchange,
+    this.youGive,
+    this.youGet,
+    this.exchangeSummary,
   });
 
   factory TradeOffer.fromJson(Map<String, dynamic> json) {
@@ -516,6 +882,25 @@ class TradeOffer {
       barterProductIds: (json['barterProductIds'] as List? ?? [])
           .map((e) => e.toString())
           .toList(),
+      barterProducts: (json['barterProducts'] as List? ?? [])
+          .whereType<Map>()
+          .map((p) => BarterProductInfo.fromJson(Map<String, dynamic>.from(p)))
+          .toList(),
+      barterProductsTotalValue:
+          double.tryParse(json['barterProductsTotalValue']?.toString() ?? '') ??
+              0,
+      barterServiceIds: (json['barterServiceIds'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
+      barterServices: (json['barterServices'] as List? ?? [])
+          .whereType<Map>()
+          .map((s) => BarterProductInfo.fromJson(Map<String, dynamic>.from(s)))
+          .toList(),
+      barterServicesTotalValue:
+          double.tryParse(json['barterServicesTotalValue']?.toString() ?? '') ??
+              0,
+      offerTotalValue:
+          double.tryParse(json['offerTotalValue']?.toString() ?? '') ?? 0,
       counterOfferCount: json['counterOfferCount'] ?? 0,
       createdAt: _parseLocal(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
@@ -523,6 +908,24 @@ class TradeOffer {
       acceptedAt: _tryParseLocal(json['acceptedAt']),
       rejectedAt: _tryParseLocal(json['rejectedAt']),
       isZeroCoin: json['isZeroCoin'] == true,
+      listing: json['listing'] is Map
+          ? OfferListing.fromJson(Map<String, dynamic>.from(json['listing'] as Map))
+          : null,
+      serviceAppointment: json['serviceAppointment'] is Map
+          ? ServiceAppointmentSnapshot.fromJson(
+              Map<String, dynamic>.from(json['serviceAppointment'] as Map),
+            )
+          : null,
+      exchange: json['exchange'] is Map
+          ? TradeExchange.fromJson(Map<String, dynamic>.from(json['exchange'] as Map))
+          : null,
+      youGive: json['youGive'] is Map
+          ? TradeExchangeSide.fromJson(Map<String, dynamic>.from(json['youGive'] as Map))
+          : null,
+      youGet: json['youGet'] is Map
+          ? TradeExchangeSide.fromJson(Map<String, dynamic>.from(json['youGet'] as Map))
+          : null,
+      exchangeSummary: json['exchangeSummary']?.toString(),
     );
   }
 
@@ -544,11 +947,23 @@ class TradeOffer {
     List<String>? barterItemImages,
     List<String>? barterWishCategories,
     List<String>? barterProductIds,
+    List<BarterProductInfo>? barterProducts,
+    double? barterProductsTotalValue,
+    List<String>? barterServiceIds,
+    List<BarterProductInfo>? barterServices,
+    double? barterServicesTotalValue,
+    double? offerTotalValue,
     int? counterOfferCount,
     DateTime? createdAt,
     DateTime? acceptedAt,
     DateTime? rejectedAt,
     bool? isZeroCoin,
+    OfferListing? listing,
+    ServiceAppointmentSnapshot? serviceAppointment,
+    TradeExchange? exchange,
+    TradeExchangeSide? youGive,
+    TradeExchangeSide? youGet,
+    String? exchangeSummary,
   }) {
     return TradeOffer(
       id: id ?? this.id,
@@ -565,11 +980,25 @@ class TradeOffer {
       barterItemImages: barterItemImages ?? this.barterItemImages,
       barterWishCategories: barterWishCategories ?? this.barterWishCategories,
       barterProductIds: barterProductIds ?? this.barterProductIds,
+      barterProducts: barterProducts ?? this.barterProducts,
+      barterProductsTotalValue:
+          barterProductsTotalValue ?? this.barterProductsTotalValue,
+      barterServiceIds: barterServiceIds ?? this.barterServiceIds,
+      barterServices: barterServices ?? this.barterServices,
+      barterServicesTotalValue:
+          barterServicesTotalValue ?? this.barterServicesTotalValue,
+      offerTotalValue: offerTotalValue ?? this.offerTotalValue,
       counterOfferCount: counterOfferCount ?? this.counterOfferCount,
       createdAt: createdAt ?? this.createdAt,
       acceptedAt: acceptedAt ?? this.acceptedAt,
       rejectedAt: rejectedAt ?? this.rejectedAt,
       isZeroCoin: isZeroCoin ?? this.isZeroCoin,
+      listing: listing ?? this.listing,
+      serviceAppointment: serviceAppointment ?? this.serviceAppointment,
+      exchange: exchange ?? this.exchange,
+      youGive: youGive ?? this.youGive,
+      youGet: youGet ?? this.youGet,
+      exchangeSummary: exchangeSummary ?? this.exchangeSummary,
     );
   }
 
@@ -588,11 +1017,18 @@ class TradeOffer {
       'barterItemImages': barterItemImages,
       'barterWishCategories': barterWishCategories,
       'barterProductIds': barterProductIds,
+      'barterProducts': barterProducts.map((p) => p.toJson()).toList(),
+      'barterProductsTotalValue': barterProductsTotalValue,
+      'barterServiceIds': barterServiceIds,
+      'barterServices': barterServices.map((s) => s.toJson()).toList(),
+      'barterServicesTotalValue': barterServicesTotalValue,
+      'offerTotalValue': offerTotalValue,
       'counterOfferCount': counterOfferCount,
       'createdAt': createdAt.toIso8601String(),
       'acceptedAt': acceptedAt?.toIso8601String(),
       'rejectedAt': rejectedAt?.toIso8601String(),
       'isZeroCoin': isZeroCoin,
+      'listing': listing?.toJson(),
     };
   }
 
@@ -608,19 +1044,33 @@ class TradeOffer {
   bool get isBothOffer => offerType == OfferType.BOTH;
   bool get isServiceOffer => offerType == OfferType.SERVICE;
 
+  // Offered products AND services together — render with the same tile,
+  // per the service-flow spec ("Render offered services with the same tile
+  // as products").
+  List<BarterProductInfo> get combinedBarterItems => [
+    ...barterProducts,
+    ...barterServices,
+  ];
+  double get combinedBarterItemsTotalValue =>
+      barterProductsTotalValue + barterServicesTotalValue;
+
+  // Plain number, no $/USD — whole numbers with no decimals (130), up to 2
+  // decimals only when fractional (135.5), "coin" singular for exactly 1.
+  static String _coinsLabel(double value) {
+    final formatted = value == value.roundToDouble()
+        ? value.toInt().toString()
+        : value.toStringAsFixed(2);
+    final isSingular = value == 1 || value == -1;
+    return '$formatted ${isSingular ? 'coin' : 'coins'}';
+  }
+
   String get offerSummary {
     if (isPriceOffer && price != null) {
-      final amount = price! == price!.roundToDouble()
-          ? price!.toInt().toString()
-          : price!.toStringAsFixed(2);
-      return 'Price: $amount coins';
+      return 'Price: ${_coinsLabel(price!)}';
     } else if (isBarterOffer || isBothOffer) {
       final itemSummary = 'Barter: ${barterItemTitle ?? 'Item'}';
       if (isBothOffer && price != null && price! > 0) {
-        final amount = price! == price!.roundToDouble()
-            ? price!.toInt().toString()
-            : price!.toStringAsFixed(2);
-        return '$itemSummary + $amount coins';
+        return '$itemSummary + ${_coinsLabel(price!)}';
       }
       return itemSummary;
     } else if (isServiceOffer) {
@@ -756,6 +1206,42 @@ class DealCompletion {
 // PIN-free, photo-free: single source of truth for the Deal panel, which is
 // just an exchange-mode header, a background payment info banner, and the
 // mutual "Deal Completed" / "Deal Not Completed" buttons.
+// Server-computed copy for the "Deal Not Completed" reason dialog — already
+// worded per product vs service and provider vs client side, so render it
+// verbatim rather than re-deriving wording client-side.
+class CloseDealPrompt {
+  final String title;
+  final String placeholder;
+  final String helperText;
+  final bool required;
+  final int maxLength;
+  final List<String> suggestions;
+
+  CloseDealPrompt({
+    required this.title,
+    required this.placeholder,
+    required this.helperText,
+    required this.required,
+    required this.maxLength,
+    required this.suggestions,
+  });
+
+  factory CloseDealPrompt.fromJson(Map<String, dynamic> json) {
+    return CloseDealPrompt(
+      title: json['title']?.toString() ?? 'Deal Not Completed',
+      placeholder: json['placeholder']?.toString() ?? '',
+      helperText: json['helperText']?.toString() ?? '',
+      required: json['required'] == true,
+      maxLength: json['maxLength'] is num
+          ? (json['maxLength'] as num).toInt()
+          : 500,
+      suggestions: (json['suggestions'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
+    );
+  }
+}
+
 class DealVerification {
   final String chatId;
   final String scenario;
@@ -769,6 +1255,7 @@ class DealVerification {
   final DealRole role;
   final DealPayment payment;
   final DealCompletion completion;
+  final CloseDealPrompt? closeDealPrompt;
 
   DealVerification({
     required this.chatId,
@@ -780,6 +1267,7 @@ class DealVerification {
     required this.role,
     required this.payment,
     required this.completion,
+    this.closeDealPrompt,
   });
 
   factory DealVerification.fromJson(Map<String, dynamic> json) {
@@ -799,6 +1287,11 @@ class DealVerification {
       completion: DealCompletion.fromJson(
         Map<String, dynamic>.from(json['completion'] ?? {}),
       ),
+      closeDealPrompt: json['closeDealPrompt'] is Map
+          ? CloseDealPrompt.fromJson(
+              Map<String, dynamic>.from(json['closeDealPrompt'] as Map),
+            )
+          : null,
     );
   }
 }
@@ -878,6 +1371,33 @@ class ExchangeModeOption {
   final String? productSelectionSource; // "MY_PRODUCTS" | null
   final bool isCrossMode;
   final String note;
+  // Services only — a barter/both option may let the requester offer one of
+  // their own SERVICES in addition to (or instead of) a product.
+  final bool requiresServiceSelection;
+  final String? serviceSelectionSource; // "MY_SERVICES" | null
+  // SCHEDULED = pick a slot, owner confirms (Pure Coins on a service).
+  // DIRECT = barter/both, no slot, owner just accepts/rejects. Null for
+  // product options, which don't carry this concept.
+  final String? flow;
+  final bool requiresSlotSelection;
+  // Only meaningful when requiresSlotSelection is true — false means the
+  // provider hasn't saved a weekly schedule yet, so the slot step should be
+  // disabled and `note` explains why.
+  final bool schedulingConfigured;
+  // Minimum combined count across product + service selections required
+  // (services only — e.g. "at least one of either list").
+  final int? selectionMinimum;
+  // True on Pure Coins (and Barter/Service + Coins) for a service: the coin
+  // amount is entirely free-form — the requester types whatever they want to
+  // offer, never pre-filled read-only from the listing price, never capped
+  // or validated against it. The owner decides whether it's enough.
+  final bool priceIsNegotiable;
+  // Per-mode: whether an offer made in THIS mode can later be countered.
+  // Distinct from the top-level ExchangeModeOptions.supportsCounterOffer,
+  // which is just "is any mode on this listing counterable at all" — a
+  // service's Pure Coins and pure-barter modes are still accept/reject only
+  // even though Barter/Service + Coins on the same listing is counterable.
+  final bool supportsCounterOffer;
 
   ExchangeModeOption({
     required this.mode,
@@ -888,6 +1408,14 @@ class ExchangeModeOption {
     this.productSelectionSource,
     required this.isCrossMode,
     required this.note,
+    this.requiresServiceSelection = false,
+    this.serviceSelectionSource,
+    this.flow,
+    this.requiresSlotSelection = false,
+    this.schedulingConfigured = true,
+    this.selectionMinimum,
+    this.priceIsNegotiable = false,
+    this.supportsCounterOffer = false,
   });
 
   factory ExchangeModeOption.fromJson(Map<String, dynamic> json) {
@@ -900,8 +1428,23 @@ class ExchangeModeOption {
       productSelectionSource: json['productSelectionSource'] as String?,
       isCrossMode: json['isCrossMode'] == true,
       note: json['note'] ?? '',
+      requiresServiceSelection: json['requiresServiceSelection'] == true,
+      serviceSelectionSource: json['serviceSelectionSource'] as String?,
+      priceIsNegotiable: json['priceIsNegotiable'] == true,
+      supportsCounterOffer: json['supportsCounterOffer'] == true,
+      flow: json['flow'] as String?,
+      requiresSlotSelection: json['requiresSlotSelection'] == true,
+      schedulingConfigured: json.containsKey('schedulingConfigured')
+          ? json['schedulingConfigured'] == true
+          : true,
+      selectionMinimum: json['selectionMinimum'] is num
+          ? (json['selectionMinimum'] as num).toInt()
+          : null,
     );
   }
+
+  bool get isScheduled => flow == 'SCHEDULED';
+  bool get isDirect => flow == 'DIRECT';
 }
 
 class ExchangeModeOptions {
@@ -914,6 +1457,14 @@ class ExchangeModeOptions {
   final bool canRequest;
   final bool isOwner;
   final bool available;
+  // Services only — whether the provider has saved a weekly schedule at
+  // all. When false, the Pure Coins option's slot step should be disabled
+  // (its own `note` already explains this to the user).
+  final bool schedulingConfigured;
+  // Services never support countering an offer — the owner accepts or
+  // rejects, and the requester may then offer again in any mode. Defaults
+  // true (the product behavior) for responses that predate this field.
+  final bool supportsCounterOffer;
   final List<ExchangeModeOption> options;
 
   ExchangeModeOptions({
@@ -926,6 +1477,8 @@ class ExchangeModeOptions {
     required this.canRequest,
     required this.isOwner,
     required this.available,
+    this.schedulingConfigured = true,
+    this.supportsCounterOffer = true,
     required this.options,
   });
 
@@ -942,12 +1495,20 @@ class ExchangeModeOptions {
       canRequest: json['canRequest'] == true,
       isOwner: json['isOwner'] == true,
       available: json['available'] == true,
+      schedulingConfigured: json.containsKey('schedulingConfigured')
+          ? json['schedulingConfigured'] == true
+          : true,
+      supportsCounterOffer: json.containsKey('supportsCounterOffer')
+          ? json['supportsCounterOffer'] == true
+          : true,
       options: (json['options'] as List? ?? [])
           .whereType<Map>()
           .map((o) => ExchangeModeOption.fromJson(Map<String, dynamic>.from(o)))
           .toList(),
     );
   }
+
+  bool get isService => target == 'service';
 }
 
 // ==================== TRADE CHAT MODEL ====================
@@ -1011,6 +1572,33 @@ class TradeChat {
   // separately to hide the composer/gallery/accept/reject/counter/deal
   // actions entirely (not just the offer button) while blocked.
   final bool isBlocked;
+  // getChatDetail only: product ids already committed to the live pending
+  // offer (sourced from the newest PENDING offer's barterProductIds). The
+  // counter-offer product picker should exclude these so a product already
+  // being bartered can't be selected again. Empty when there's no pending
+  // offer.
+  final List<String> activeBarterProductIds;
+  // Same idea, for services offered on the live pending offer.
+  final List<String> activeBarterServiceIds;
+  // getChatDetail only: true whenever this chat is on a service (serviceId
+  // set) — server-authoritative, prefer this over deriving it locally.
+  final bool isServiceChat;
+  // SCHEDULED (Pure Coins, slot-based) | DIRECT (barter/both, no slot) |
+  // null until the first offer exists. Derived from the live/accepted offer.
+  final String? serviceFlow;
+  // Services never support countering — the owner only accepts/rejects, and
+  // the API 400s a counter attempt. Always false for a non-service chat too
+  // (counter offers on products use canMakeOffer/hasPendingOffer instead).
+  final bool canCounterOffer;
+  // True when there's a pending offer awaiting THIS user's response
+  // (accept/reject) — use pendingOfferIdForMe for the actual API call
+  // rather than inferring which offer that is client-side.
+  final bool canRespondToOffer;
+  final String? pendingOfferIdForMe;
+  // The booked slot for the scheduled service flow, sourced from the
+  // live/accepted offer — lets the chat header show it without a second
+  // call. Null for non-scheduled chats or before any offer exists.
+  final ServiceAppointmentSnapshot? appointment;
   // List endpoints only (getChatDetail doesn't send these): server-derived
   // status chip for the chat row — PENDING | ACTIVE | COMPLETED |
   // NOT_COMPLETED, with badgeLabel as ready-to-render display copy.
@@ -1043,6 +1631,14 @@ class TradeChat {
     this.isOwner = false,
     this.hasPendingOffer = false,
     this.isBlocked = false,
+    this.activeBarterProductIds = const [],
+    this.activeBarterServiceIds = const [],
+    this.isServiceChat = false,
+    this.serviceFlow,
+    this.canCounterOffer = false,
+    this.canRespondToOffer = false,
+    this.pendingOfferIdForMe,
+    this.appointment,
     this.listingUnavailable = false,
     this.badge,
     this.badgeLabel,
@@ -1098,6 +1694,24 @@ class TradeChat {
       isOwner: json['isOwner'] == true,
       hasPendingOffer: json['hasPendingOffer'] == true,
       isBlocked: json['isBlocked'] == true,
+      activeBarterProductIds: (json['activeBarterProductIds'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
+      activeBarterServiceIds: (json['activeBarterServiceIds'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
+      isServiceChat: json['isServiceChat'] == true ||
+          (json['serviceId'] != null &&
+              json['serviceId'].toString().isNotEmpty),
+      serviceFlow: json['serviceFlow'] as String?,
+      canCounterOffer: json['canCounterOffer'] == true,
+      canRespondToOffer: json['canRespondToOffer'] == true,
+      pendingOfferIdForMe: json['pendingOfferIdForMe'] as String?,
+      appointment: json['appointment'] is Map
+          ? ServiceAppointmentSnapshot.fromJson(
+              Map<String, dynamic>.from(json['appointment'] as Map),
+            )
+          : null,
       badge: json['badge'] as String?,
       badgeLabel: json['badgeLabel'] as String?,
     );
@@ -1135,6 +1749,14 @@ class TradeChat {
     bool? isOwner,
     bool? hasPendingOffer,
     bool? isBlocked,
+    List<String>? activeBarterProductIds,
+    List<String>? activeBarterServiceIds,
+    bool? isServiceChat,
+    String? serviceFlow,
+    bool? canCounterOffer,
+    bool? canRespondToOffer,
+    String? pendingOfferIdForMe,
+    ServiceAppointmentSnapshot? appointment,
     bool? listingUnavailable,
     String? badge,
     String? badgeLabel,
@@ -1165,6 +1787,16 @@ class TradeChat {
       isOwner: isOwner ?? this.isOwner,
       hasPendingOffer: hasPendingOffer ?? this.hasPendingOffer,
       isBlocked: isBlocked ?? this.isBlocked,
+      activeBarterProductIds:
+          activeBarterProductIds ?? this.activeBarterProductIds,
+      activeBarterServiceIds:
+          activeBarterServiceIds ?? this.activeBarterServiceIds,
+      isServiceChat: isServiceChat ?? this.isServiceChat,
+      serviceFlow: serviceFlow ?? this.serviceFlow,
+      canCounterOffer: canCounterOffer ?? this.canCounterOffer,
+      canRespondToOffer: canRespondToOffer ?? this.canRespondToOffer,
+      pendingOfferIdForMe: pendingOfferIdForMe ?? this.pendingOfferIdForMe,
+      appointment: appointment ?? this.appointment,
       listingUnavailable: listingUnavailable ?? this.listingUnavailable,
       badge: badge ?? this.badge,
       badgeLabel: badgeLabel ?? this.badgeLabel,

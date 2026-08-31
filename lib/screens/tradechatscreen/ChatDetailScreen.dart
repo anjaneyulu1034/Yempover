@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:yempover_app/services/socket_io/socket_service.dart';
-import 'package:yempover_app/services/service_booking_service.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:yempover_app/models/ProductPostmain.dart';
 import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:yempover_app/screens/OfferDeckScreen.dart';
+import 'package:yempover_app/screens/service/ServiceDetailBookingScreen.dart';
 import 'package:yempover_app/screens/OfferDescriptionScreen.dart';
 import 'package:yempover_app/screens/PostDetailScreen.dart';
 import 'package:yempover_app/services/my_posts_service.dart';
@@ -52,7 +52,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     with WidgetsBindingObserver {
   final TradeChatService _chatService = TradeChatService();
   final CoinService _coinService = CoinService();
-  final ServiceBookingService _serviceBookingService = ServiceBookingService();
   final SocketService _socketService = SocketService();
   final TokenService _tokenService = TokenService();
   final BlockedUserService _blockedUserService = BlockedUserService();
@@ -79,12 +78,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   bool _isPreparingOffer = false;
   bool _isOpeningPostDetail = false;
   Timer? _typingTimer;
-  // Lazily-fetched detail for the offered barter item(s) referenced by
-  // offer.barterProductIds — lets the offer preview show that item's real
-  // listed price and deep-link into its post, the same way the chat's own
-  // product/service already does via _openPostDetail.
+  // Cache of full Post detail for offered barter items, populated lazily on
+  // tap (see _openBarterItemDetail) so a second tap on the same item is
+  // instant. The offer preview itself (image/title/price) now renders
+  // straight from offer.barterProducts — this cache is only needed for the
+  // full PostDetailScreen navigation, which wants more than that summary.
   final Map<String, Post> _barterItemPostCache = {};
-  final Set<String> _barterItemFetchInProgress = {};
+
+  bool get _isServiceChat =>
+      (_currentChat.serviceId != null && _currentChat.serviceId!.isNotEmpty) ||
+      _currentChat.service != null;
 
   bool get _isReferenceUnavailable {
     // The backend marks the product/service SOLD as soon as an offer is
@@ -104,9 +107,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       return true;
     }
 
+    // A service is never "sold" — completing a deal on it doesn't take it
+    // out of circulation, so the owner can keep negotiating with other
+    // users on the same listing. Only CANCELLED (the owner deliberately
+    // taking it down) makes it unavailable.
     final serviceStatus = _currentChat.service?.status.trim().toUpperCase();
-    if (serviceStatus != null &&
-        (serviceStatus == 'COMPLETED' || serviceStatus == 'CANCELLED')) {
+    if (serviceStatus != null && serviceStatus == 'CANCELLED') {
       return true;
     }
 
@@ -143,7 +149,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (_currentChat.serviceId == null) {
       return widget.currentUserId == _currentChat.initiatorId;
     }
-    final ownerIsProvider = _currentChat.service?.status != 'LOOKING_FOR_SERVICE';
+    final ownerIsProvider =
+        _currentChat.service?.status != 'LOOKING_FOR_SERVICE';
     final providerId = ownerIsProvider
         ? _currentChat.responderId
         : _currentChat.initiatorId;
@@ -215,34 +222,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
   }
 
-  // Best-effort background fetch so the offered barter item's real price is
-  // ready by the time the preview renders — a no-op once cached, and safe
-  // to call repeatedly (e.g. on every build) since it's guarded against
-  // duplicate concurrent fetches.
-  void _ensureBarterItemLoaded(String productId) {
-    if (productId.isEmpty) return;
-    if (_barterItemPostCache.containsKey(productId)) return;
-    if (_barterItemFetchInProgress.contains(productId)) return;
-
-    _barterItemFetchInProgress.add(productId);
-    ApiService()
-        .getPostDetail(postId: productId, type: PostType.product)
-        .then((response) {
-          if (!mounted) return;
-          setState(() => _barterItemPostCache[productId] = response.post);
-        })
-        .catchError((_) {
-          // Item may have been deleted/sold/blocked since the offer was
-          // made — leave it out of the cache so the preview just omits the
-          // price/tap instead of erroring.
-        })
-        .whenComplete(() => _barterItemFetchInProgress.remove(productId));
-  }
-
   // Deep-link to the OFFERED item's post detail (as opposed to
   // _openPostDetail, which is always the chat's own product/service).
-  // Reuses the cache from _ensureBarterItemLoaded when available so tapping
-  // is instant; falls back to a fresh fetch otherwise.
+  // Reuses _barterItemPostCache when available so a second tap is instant;
+  // falls back to a fresh fetch otherwise.
   Future<void> _openBarterItemDetail(String productId) async {
     if (productId.isEmpty || _isOpeningPostDetail) return;
 
@@ -1380,10 +1363,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (!mounted) return;
     setState(() => _isPreparingOffer = false);
 
+    // Pure Coins on a service: pick a slot, the offer books it directly —
+    // reuses the existing chat (initiateChat is get-or-create).
+    if (selectedOption?.requiresSlotSelection == true) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ServiceDetailBookingScreen(serviceId: postId),
+        ),
+      );
+      if (mounted) unawaited(_refreshChat());
+      return;
+    }
+
     final requiresProductSelection =
         isZeroCoin || (selectedOption?.requiresProductSelection ?? true);
+    final requiresServiceSelection =
+        selectedOption?.requiresServiceSelection ?? false;
 
-    if (!requiresProductSelection) {
+    if (!requiresProductSelection && !requiresServiceSelection) {
       final hasEnoughBalance = await _ensureSufficientWalletBalance(post);
       if (!mounted || !hasEnoughBalance) return;
 
@@ -1415,6 +1413,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           currentUserId: widget.currentUserId,
           offerMode: offerMode,
           isZeroCoin: isZeroCoin,
+          allowServiceSelection: requiresServiceSelection,
         ),
       ),
     );
@@ -1478,7 +1477,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return null;
   }
 
-
   String? _validateOfferPriceAgainstListing(double price) {
     if (price <= 0) {
       return 'Enter a valid price';
@@ -1497,7 +1495,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     if (price.round() > listing.round()) {
       return 'Offer cannot exceed listing price of '
-          '${CoinFormat.amount(listing)} coins';
+          '${CoinFormat.withUnit(listing)}';
     }
 
     return null;
@@ -1600,9 +1598,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 onPressed: () {
                   final trimmed = priceController.text.trim();
                   if (trimmed.isEmpty) {
-                    setDialogState(
-                      () => dialogError = 'Enter coins',
-                    );
+                    setDialogState(() => dialogError = 'Enter coins');
                     return;
                   }
 
@@ -1614,8 +1610,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     return;
                   }
 
-                  final validationError =
-                      _validateOfferPriceAgainstListing(parsed);
+                  final validationError = _validateOfferPriceAgainstListing(
+                    parsed,
+                  );
                   if (validationError != null) {
                     setDialogState(() => dialogError = validationError);
                     return;
@@ -1699,6 +1696,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   p.status.toUpperCase() != 'ARCHIVED' &&
                   p.status.toUpperCase() != 'DELETED',
             )
+            // Exclude items already committed to the live pending offer —
+            // they can't be re-added to a fresh counter-offer selection.
+            .where((p) => !_currentChat.activeBarterProductIds.contains(p.id))
+            // Exclude the listing itself (chat.product) — it's the item
+            // being negotiated FOR, not something the listing owner can
+            // also offer back as a barter item in the same deal. Without
+            // this, the owner's own listing kept reappearing as a
+            // selectable "item to offer" alongside their other products.
+            .where((p) => p.id != _currentChat.productId)
             .map(
               (p) => UserItem(
                 id: p.id,
@@ -1744,193 +1750,197 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               maxChildSize: 0.9,
               expand: false,
               builder: (context, scrollController) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Select items to offer',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Items with clubbing off can only be offered alone.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: isLoading
-                            ? const Center(child: CircularProgressIndicator())
-                            : loadError != null
-                            ? Center(child: Text(loadError!))
-                            : allItems.isEmpty
-                            ? const Center(
-                                child: Text('No barter-eligible items'),
-                              )
-                            : GridView.builder(
-                                controller: scrollController,
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 3,
-                                      crossAxisSpacing: 10,
-                                      mainAxisSpacing: 10,
-                                      childAspectRatio: 0.8,
-                                    ),
-                                itemCount: allItems.length,
-                                itemBuilder: (context, index) {
-                                  final item = allItems[index];
-                                  final isSelected = selected.any(
-                                    (i) => i.id == item.id,
-                                  );
-                                  return GestureDetector(
-                                    onTap: () {
-                                      final result = applyClubbingSelection(
-                                        current: selected,
-                                        tapped: item,
-                                      );
-                                      setSheetState(
-                                        () => selected = result.items,
-                                      );
-                                      if (result.hint != null) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(result.hint!),
-                                            duration: const Duration(
-                                              seconds: 2,
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    child: Stack(
-                                      children: [
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                            border: Border.all(
-                                              color: isSelected
-                                                  ? const Color(0xFF2E5BFF)
-                                                  : Colors.grey.shade300,
-                                              width: isSelected ? 2 : 1,
-                                            ),
-                                          ),
-                                          child: ClipRRect(
-                                            borderRadius:
-                                                BorderRadius.circular(9),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.stretch,
-                                              children: [
-                                                Expanded(
-                                                  child: item.imageUrl.isNotEmpty
-                                                      ? Image.network(
-                                                          item.imageUrl,
-                                                          fit: BoxFit.cover,
-                                                          errorBuilder:
-                                                              (
-                                                                context,
-                                                                error,
-                                                                stackTrace,
-                                                              ) => Container(
-                                                                color: Colors
-                                                                    .grey
-                                                                    .shade200,
-                                                                child: const Icon(
-                                                                  Icons.image,
-                                                                ),
-                                                              ),
-                                                        )
-                                                      : Container(
-                                                          color: Colors
-                                                              .grey
-                                                              .shade200,
-                                                          child: const Icon(
-                                                            Icons.image,
-                                                          ),
-                                                        ),
-                                                ),
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.all(4),
-                                                  child: Text(
-                                                    item.name,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: const TextStyle(
-                                                      fontSize: 11,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        if (isSelected)
-                                          const Positioned(
-                                            top: 4,
-                                            right: 4,
-                                            child: Icon(
-                                              Icons.check_circle,
-                                              color: Color(0xFF2E5BFF),
-                                              size: 18,
-                                            ),
-                                          ),
-                                        if (!item.isClubbable)
-                                          Positioned(
-                                            bottom: 22,
-                                            left: 4,
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 4,
-                                                    vertical: 1,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black54,
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                              ),
-                                              child: const Text(
-                                                'Solo only',
-                                                style: TextStyle(
-                                                  fontSize: 8,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: selected.isEmpty
-                              ? null
-                              : () => Navigator.pop(sheetContext, selected),
-                          child: Text(
-                            selected.isEmpty
-                                ? 'Select at least one item'
-                                : 'Use ${selected.length} item${selected.length > 1 ? 's' : ''}',
+                return SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Select items to offer',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          'Items with clubbing off can only be offered alone.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: isLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : loadError != null
+                              ? Center(child: Text(loadError!))
+                              : allItems.isEmpty
+                              ? const Center(
+                                  child: Text('No barter-eligible items'),
+                                )
+                              : GridView.builder(
+                                  controller: scrollController,
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 3,
+                                        crossAxisSpacing: 10,
+                                        mainAxisSpacing: 10,
+                                        childAspectRatio: 0.8,
+                                      ),
+                                  itemCount: allItems.length,
+                                  itemBuilder: (context, index) {
+                                    final item = allItems[index];
+                                    final isSelected = selected.any(
+                                      (i) => i.id == item.id,
+                                    );
+                                    return GestureDetector(
+                                      onTap: () {
+                                        final result = applyClubbingSelection(
+                                          current: selected,
+                                          tapped: item,
+                                        );
+                                        setSheetState(
+                                          () => selected = result.items,
+                                        );
+                                        if (result.hint != null) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(result.hint!),
+                                              duration: const Duration(
+                                                seconds: 2,
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      child: Stack(
+                                        children: [
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: isSelected
+                                                    ? const Color(0xFF2E5BFF)
+                                                    : Colors.grey.shade300,
+                                                width: isSelected ? 2 : 1,
+                                              ),
+                                            ),
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(9),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.stretch,
+                                                children: [
+                                                  Expanded(
+                                                    child:
+                                                        item.imageUrl.isNotEmpty
+                                                        ? Image.network(
+                                                            item.imageUrl,
+                                                            fit: BoxFit.cover,
+                                                            errorBuilder:
+                                                                (
+                                                                  context,
+                                                                  error,
+                                                                  stackTrace,
+                                                                ) => Container(
+                                                                  color: Colors
+                                                                      .grey
+                                                                      .shade200,
+                                                                  child: const Icon(
+                                                                    Icons.image,
+                                                                  ),
+                                                                ),
+                                                          )
+                                                        : Container(
+                                                            color: Colors
+                                                                .grey
+                                                                .shade200,
+                                                            child: const Icon(
+                                                              Icons.image,
+                                                            ),
+                                                          ),
+                                                  ),
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.all(4),
+                                                    child: Text(
+                                                      item.name,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                        fontSize: 11,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          if (isSelected)
+                                            const Positioned(
+                                              top: 4,
+                                              right: 4,
+                                              child: Icon(
+                                                Icons.check_circle,
+                                                color: Color(0xFF2E5BFF),
+                                                size: 18,
+                                              ),
+                                            ),
+                                          if (!item.isClubbable)
+                                            Positioned(
+                                              bottom: 22,
+                                              left: 4,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 4,
+                                                      vertical: 1,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black54,
+                                                  borderRadius:
+                                                      BorderRadius.circular(4),
+                                                ),
+                                                child: const Text(
+                                                  'Solo only',
+                                                  style: TextStyle(
+                                                    fontSize: 8,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: selected.isEmpty
+                                ? null
+                                : () => Navigator.pop(sheetContext, selected),
+                            child: Text(
+                              selected.isEmpty
+                                  ? 'Select at least one item'
+                                  : 'Use ${selected.length} item${selected.length > 1 ? 's' : ''}',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
@@ -2085,16 +2095,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
-  /// Counter a Barter + Price ("Both") offer. Reusing the plain barter
-  /// counter dialog here would silently drop the price side of the deal
-  /// (Condition 2: barter + price difference), so this keeps both the
-  /// barter item fields and the coin amount editable together.
+  /// Counter a Barter + Price ("Both") offer with coins only — the
+  /// responder isn't required to pick an item of their own just to
+  /// negotiate the coin amount (it used to force that, via the same
+  /// item-selection block as the plain barter counter dialog). The barter
+  /// item already on the table from `originalOffer` is kept automatically —
+  /// this dialog only renegotiates the coin amount — so it survives to
+  /// acceptance and isn't lost from trade history the way it used to be
+  /// when this silently downgraded the counter to a coins-only PRICE offer.
   Future<void> _showCounterBothOfferDialog(TradeOffer originalOffer) async {
     // Same reasoning as the pure-barter counter dialog: start empty rather
     // than carrying the previous round's (already-appended) description
     // forward, so notes don't compound across counters.
     final descriptionController = TextEditingController();
-    List<UserItem> selectedItems = [];
     final priceController = TextEditingController(
       text: originalOffer.price != null && originalOffer.price! > 0
           ? (originalOffer.price == originalOffer.price!.roundToDouble()
@@ -2123,7 +2136,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               borderRadius: BorderRadius.circular(14),
               side: BorderSide(color: Colors.grey.shade300, width: 1.2),
             ),
-            title: const Text('Counter Barter + Coins Offer'),
+            title: const Text('Counter with Coins'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2141,49 +2154,58 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                         ),
                       ),
                     ),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final picked = await _pickCounterBarterItems(
-                        selectedItems,
-                      );
-                      if (picked != null) {
-                        setDialogState(() {
-                          selectedItems = picked;
-                          dialogError = null;
-                        });
-                      }
-                    },
-                    icon: const Icon(Icons.add_box_outlined),
-                    label: Text(
-                      selectedItems.isEmpty
-                          ? 'Select items to offer'
-                          : 'Edit selection (${selectedItems.length})',
-                    ),
-                  ),
-                  if (selectedItems.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: selectedItems
-                          .map(
-                            (item) => Chip(
-                              avatar: item.imageUrl.isNotEmpty
-                                  ? CircleAvatar(
-                                      backgroundImage: NetworkImage(
-                                        item.imageUrl,
-                                      ),
-                                    )
-                                  : null,
-                              label: Text(
-                                item.name,
-                                style: const TextStyle(fontSize: 12),
+                  // The barter item(s) already on the table stay part of the
+                  // deal — only the coin amount is being renegotiated here.
+                  // A clubbed offer can hold several items, so show one
+                  // thumbnail per item (not just the first) — same source
+                  // the chat card itself uses.
+                  Builder(
+                    builder: (context) {
+                      final itemImages =
+                          originalOffer.combinedBarterItems.isNotEmpty
+                          ? originalOffer.combinedBarterItems
+                                .map((p) => p.firstImage)
+                                .where((url) => url.isNotEmpty)
+                                .toList()
+                          : originalOffer.barterItemImages;
+
+                      return Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: itemImages.isNotEmpty
+                                  ? itemImages
+                                        .map((url) => _buildOfferItemThumb(url))
+                                        .toList()
+                                  : [_buildOfferItemThumb('')],
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Item stays part of this offer',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade600,
                               ),
                             ),
-                          )
-                          .toList(),
-                    ),
-                  ],
+                            Text(
+                              _offeredItemsLabel(originalOffer),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: descriptionController,
@@ -2249,13 +2271,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               ),
               ElevatedButton(
                 onPressed: () {
-                  if (selectedItems.isEmpty) {
-                    setDialogState(
-                      () => dialogError = 'Select at least one item',
-                    );
-                    return;
-                  }
-
                   final trimmedPrice = priceController.text.trim();
                   if (trimmedPrice.isEmpty) {
                     setDialogState(() => dialogError = 'Enter coins to pay');
@@ -2270,8 +2285,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     return;
                   }
 
-                  final validationError =
-                      _validateOfferPriceAgainstListing(parsed);
+                  final validationError = _validateOfferPriceAgainstListing(
+                    parsed,
+                  );
                   if (validationError != null) {
                     setDialogState(() => dialogError = validationError);
                     return;
@@ -2287,7 +2303,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       ),
     );
 
-    if (result != true || selectedItems.isEmpty) return;
+    if (result != true) return;
 
     final parsedPrice = double.tryParse(priceController.text.trim());
     if (parsedPrice == null) return;
@@ -2307,15 +2323,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       originalOffer: originalOffer,
       offerType: 'BOTH',
       price: parsedPrice,
-      barterItemTitle: _titleForCounterItems(selectedItems),
       barterItemDescription: descriptionController.text.trim().isNotEmpty
           ? descriptionController.text.trim()
           : null,
-      barterItemIds: selectedItems.map((item) => item.id).toList(),
-      barterItemImages: selectedItems
-          .map((item) => item.imageUrl)
-          .where((url) => url.trim().isNotEmpty)
-          .toList(),
+      // The server derives the actual barter item from `originalOffer`
+      // itself (the countering user doesn't own it, so it can't be
+      // re-validated as something they're offering) — these are sent too
+      // so the optimistic local update below renders correctly before the
+      // next refresh confirms the server's copy.
+      barterItemTitle: originalOffer.barterItemTitle,
+      barterItemImages: originalOffer.barterItemImages,
+      barterItemIds: originalOffer.barterProductIds,
+      barterServiceItemIds: originalOffer.barterServiceIds,
+      keepOriginalBarterItems: true,
     );
   }
 
@@ -2326,7 +2346,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     String? barterItemTitle,
     String? barterItemDescription,
     List<String> barterItemIds = const [],
+    List<String> barterServiceItemIds = const [],
     List<String> barterItemImages = const [],
+    bool keepOriginalBarterItems = false,
   }) async {
     if (!_currentChat.isActive ||
         _currentChat.hasAcceptedOffer ||
@@ -2358,7 +2380,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         barterItemTitle: barterItemTitle,
         barterItemDescription: barterItemDescription,
         barterItemIds: barterItemIds,
+        barterServiceItemIds: barterServiceItemIds,
         barterItemImages: barterItemImages,
+        keepOriginalBarterItems: keepOriginalBarterItems,
       );
 
       _socketService.emitOfferCreated(_currentChat.id, counterOffer.toJson());
@@ -2505,7 +2529,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         : _currentChat.initiatorId;
   }
 
-  String get _otherParticipantId => widget.currentUserId == _currentChat.initiatorId
+  String get _otherParticipantId =>
+      widget.currentUserId == _currentChat.initiatorId
       ? _currentChat.responderId
       : _currentChat.initiatorId;
 
@@ -2538,13 +2563,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       if (!mounted) return false;
 
       final refreshedWallet = await _coinService.getWallet();
-      final refreshedBalance =
-          CoinService.parseCoinAmount(refreshedWallet?['balance']);
+      final refreshedBalance = CoinService.parseCoinAmount(
+        refreshedWallet?['balance'],
+      );
       if (refreshedBalance < amount) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'You need ${CoinFormat.amount(amount)} coins to complete this deal.',
+              'You need ${CoinFormat.withUnit(amount)} to complete this deal.',
             ),
             backgroundColor: Colors.orange,
           ),
@@ -2583,7 +2609,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         // Only the participant who actually owes coins should see the
         // "coins will be deducted" prompt — the other side of the deal
         // never gets charged (see _currentUserPaysOnDealComplete).
-        isPriceOffer: _dealRequiresCoinPayment() && _currentUserPaysOnDealComplete(),
+        isPriceOffer:
+            _dealRequiresCoinPayment() && _currentUserPaysOnDealComplete(),
         acceptedPrice: (acceptedOffer != null && acceptedOffer.isBarterOffer)
             ? null
             : (acceptedOffer?.price ?? _currentChat.product?.price),
@@ -2642,9 +2669,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              e.toString().replaceFirst('Exception: ', ''),
-            ),
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
             backgroundColor: Colors.red,
           ),
         );
@@ -2695,7 +2720,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   },
                   decoration: const InputDecoration(
                     labelText: 'Reason',
-                    hintText: 'e.g. Buyer did not show up, item condition '
+                    hintText:
+                        'e.g. Buyer did not show up, item condition '
                         'mismatch...',
                     border: OutlineInputBorder(),
                   ),
@@ -2708,15 +2734,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 child: const Text('Back'),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
                 onPressed: () {
                   final reason = reasonController.text.trim();
                   if (reason.isEmpty) {
-                    setDialogState(
-                      () => dialogError = 'Please enter a reason',
-                    );
+                    setDialogState(() => dialogError = 'Please enter a reason');
                     return;
                   }
                   Navigator.pop(dialogContext, reason);
@@ -2764,9 +2786,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              e.toString().replaceFirst('Exception: ', ''),
-            ),
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
             backgroundColor: Colors.red,
           ),
         );
@@ -3045,10 +3065,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final offer = _currentChat.latestAcceptedOffer;
     if (offer == null) return null;
     if (offer.isBarterOffer || offer.isBothOffer) {
+      // Prefer the resolved products/services (joined) over the free-text
+      // barterItemTitle, which only ever names a single item — otherwise a
+      // multi-item deal (e.g. a product + a service) shows just one name in
+      // the "Deal completed" summary.
+      if (offer.combinedBarterItems.isNotEmpty) {
+        return offer.combinedBarterItems.map((p) => p.title).join(', ');
+      }
       return offer.barterItemTitle;
     }
     if (offer.isPriceOffer && offer.price != null) {
-      return '${CoinFormat.amount(offer.price)} coins';
+      return CoinFormat.withUnit(offer.price);
     }
     return null;
   }
@@ -3079,15 +3106,26 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       }
 
       final rawDate = trimmed.replaceFirst('Date/Time:', '').trim();
-      final parsed = DateTime.tryParse(rawDate);
-      if (parsed == null) {
+      // Regex-extract the wall-clock digits rather than
+      // DateTime.parse(...).toLocal() — that re-interprets them against the
+      // device's timezone, which is what turned a 12:30 booking into 5:30.
+      final match = RegExp(
+        r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})',
+      ).firstMatch(rawDate);
+      if (match == null) {
         return line;
       }
 
+      final wallClock = DateTime(
+        int.parse(match.group(1)!),
+        int.parse(match.group(2)!),
+        int.parse(match.group(3)!),
+        int.parse(match.group(4)!),
+        int.parse(match.group(5)!),
+      );
+
       changed = true;
-      final displayDate = DateFormat(
-        'dd MMM yyyy, h:mm a',
-      ).format(parsed.toLocal());
+      final displayDate = DateFormat('dd MMM yyyy, h:mm a').format(wallClock);
       return 'Date/Time: $displayDate';
     }).toList();
 
@@ -3170,7 +3208,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       case 'DEAL_NOT_COMPLETED':
         return (icon: Icons.cancel_outlined, color: Colors.red.shade600);
       case 'CHAT_STARTED':
-        return (icon: Icons.chat_bubble_outline, color: Colors.blueGrey.shade400);
+        return (
+          icon: Icons.chat_bubble_outline,
+          color: Colors.blueGrey.shade400,
+        );
       case 'ITEM_UNAVAILABLE':
         return (icon: Icons.info_outline, color: Colors.orange.shade700);
       default:
@@ -3202,8 +3243,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (t.contains('accepted')) {
       return (icon: Icons.check_circle_outline, color: Colors.green.shade600);
     }
-    if (t.contains('coins') &&
-        (t.contains('secured') || t.contains('safe'))) {
+    if (t.contains('coins') && (t.contains('secured') || t.contains('safe'))) {
       return (icon: Icons.shield_outlined, color: Colors.blue.shade600);
     }
     if (t.contains('zero-coin')) {
@@ -3230,48 +3270,70 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   // BOTH participants verbatim, so the recipient wrongly sees "sent"
   // instead of "received". Rebuild the label client-side from the
   // structured eventData (madeById, price, offerType, isCounter) so each
-  // viewer sees "You offered X coins" vs "{name} offered you X coins".
-  String _systemMessageDisplayText(ChatMessage message) {
+  // viewer sees "You offered X coins to {name}" vs "{name} offered you X
+  // coins". Returns the headline plus an optional note separately (rather
+  // than one concatenated string) so the caller can render "Note: " in its
+  // own bold style — matching _buildOfferNote's treatment on the offer
+  // banner — instead of it blending into the plain system-message text.
+  ({String headline, String? note}) _systemMessageParts(ChatMessage message) {
     final data = message.eventData;
     if (message.eventType != 'OFFER_PENDING' || data == null) {
-      return message.messageText;
+      return (headline: message.messageText, note: null);
     }
-    if (data['isZeroCoin'] == true) return message.messageText;
+    if (data['isZeroCoin'] == true) {
+      return (headline: message.messageText, note: null);
+    }
 
     final madeById = data['madeById'] as String?;
     final isMine = madeById == widget.currentUserId;
     final isCounter = data['isCounter'] == true;
     final otherName = _getOtherUser().firstName;
     final actorLabel = isCounter
-        ? (isMine ? 'You countered with' : '$otherName countered your offer with')
+        ? (isMine
+              ? 'You countered with'
+              : '$otherName countered your offer with')
         : (isMine ? 'You offered' : '$otherName offered you');
+    // Only the actor's own copy needs the explicit "to {name}" — the
+    // recipient's copy already names the actor at the start of the
+    // sentence ("{name} offered you...").
+    final targetSuffix = isMine ? ' to $otherName' : '';
 
     final offerType = (data['offerType'] as String? ?? '').toUpperCase();
     final barterTitle = (data['barterItemTitle'] as String? ?? '').trim();
     final rawPrice = data['price'];
     double? price;
     if (rawPrice != null) {
-      price = rawPrice is num ? rawPrice.toDouble() : double.tryParse(rawPrice.toString());
+      price = rawPrice is num
+          ? rawPrice.toDouble()
+          : double.tryParse(rawPrice.toString());
     }
-    final amount = price != null ? '${CoinFormat.amount(price)} coins' : null;
+    final amount = price != null ? CoinFormat.withUnit(price) : null;
+
+    // The listing this offer/counter is anchored to — names the product in
+    // the sentence so it reads e.g. "You offered 30 coins to John for Fish
+    // with Meat." even for a coins-only counter with no barter items.
+    final listingData = data['listing'];
+    final listingTitle = listingData is Map
+        ? (listingData['title'] as String? ?? '').trim()
+        : '';
+    final titleSuffix = listingTitle.isNotEmpty ? ' for $listingTitle' : '';
 
     String headline;
     if (offerType == 'BOTH' && amount != null && barterTitle.isNotEmpty) {
-      headline = '$actorLabel $barterTitle + $amount.';
+      headline = '$actorLabel $barterTitle + $amount$targetSuffix$titleSuffix.';
     } else if (offerType == 'PRICE' && amount != null) {
-      headline = '$actorLabel $amount.';
+      headline = '$actorLabel $amount$targetSuffix$titleSuffix.';
     } else if ((offerType == 'BARTER' || offerType == 'BOTH') &&
         barterTitle.isNotEmpty) {
-      headline = '$actorLabel $barterTitle.';
+      headline = '$actorLabel $barterTitle$targetSuffix$titleSuffix.';
     } else {
-      headline = '$actorLabel.';
+      headline = '$actorLabel$targetSuffix$titleSuffix.';
     }
 
     // The offerer's note now rides along with every offer type, not just
     // barter (Point 1) — surface it on the system card too.
     final description = (data['description'] as String? ?? '').trim();
-    if (description.isEmpty) return headline;
-    return '$headline\nNote: $description';
+    return (headline: headline, note: description.isEmpty ? null : description);
   }
 
   // DEAL_COMPLETED_PENDING_OTHER carries a `post` reference in eventData so
@@ -3294,9 +3356,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (message.eventType == 'DEAL_COMPLETED_PENDING_OTHER') {
       final data = message.eventData;
       final rawPost = data?['post'];
-      final post = rawPost is Map
-          ? Map<String, dynamic>.from(rawPost)
-          : null;
+      final post = rawPost is Map ? Map<String, dynamic>.from(rawPost) : null;
       final itemName = (data?['itemName'] as String?)?.trim();
       final actorName = (data?['actorName'] as String?)?.trim();
 
@@ -3328,10 +3388,29 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       }
     }
 
-    return Text(
-      _systemMessageDisplayText(message),
+    final parts = _systemMessageParts(message);
+    final note = parts.note;
+    if (note == null) {
+      return Text(
+        parts.headline,
+        textAlign: TextAlign.center,
+        style: baseStyle,
+      );
+    }
+
+    return Text.rich(
+      TextSpan(
+        style: baseStyle,
+        children: [
+          TextSpan(text: '${parts.headline}\n'),
+          TextSpan(
+            text: 'Note: ',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          TextSpan(text: note),
+        ],
+      ),
       textAlign: TextAlign.center,
-      style: baseStyle,
     );
   }
 
@@ -3351,22 +3430,42 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       // Redundant with the tappable post header card already pinned above
       // the message list — drop it from the timeline instead of showing
       // the same "what this chat is about" info twice.
-      final isChatStarted = message.eventType == 'CHAT_STARTED' ||
+      final isChatStarted =
+          message.eventType == 'CHAT_STARTED' ||
           message.messageText.toLowerCase().contains('chat started');
       if (isChatStarted) return const SizedBox.shrink();
 
-      final style = _eventTypeStyle(message.eventType) ??
+      final style =
+          _eventTypeStyle(message.eventType) ??
           _systemMessageStyle(message.messageText);
       // The two terminal deal outcomes get a bolder card (spec calls them
       // out explicitly by color) so they stand out from the rest of the
       // step-by-step timeline.
-      final isTerminalEvent = message.eventType == 'DEAL_COMPLETED' ||
+      final isTerminalEvent =
+          message.eventType == 'DEAL_COMPLETED' ||
           message.eventType == 'DEAL_NOT_COMPLETED';
       // CHAT_STARTED deep-links to the post detail screen (Point 7) — same
       // target as the header card above, using the chat's own product/
       // service id rather than re-deriving it from eventData.
-      final isTappable = message.eventType == 'CHAT_STARTED' &&
+      final isTappable =
+          message.eventType == 'CHAT_STARTED' &&
           (_currentChat.productId != null || _currentChat.serviceId != null);
+
+      // Offer/counter-offer and acceptance cards carry the listing's image
+      // in eventData now — show a small thumbnail so the product stays
+      // visible on every round of the negotiation timeline, not just the
+      // live banner above.
+      String? listingThumb;
+      if (message.eventType == 'OFFER_PENDING' ||
+          message.eventType == 'OFFER_ACCEPTED') {
+        final listingData = message.eventData?['listing'];
+        if (listingData is Map) {
+          final image = listingData['image'] as String?;
+          if (image != null && image.trim().isNotEmpty) {
+            listingThumb = image;
+          }
+        }
+      }
 
       final card = Container(
         padding: EdgeInsets.symmetric(
@@ -3384,7 +3483,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(style.icon, size: isTerminalEvent ? 17 : 14, color: style.color),
+            if (listingThumb != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: Image.network(
+                  listingThumb,
+                  width: 20,
+                  height: 20,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const SizedBox(width: 20, height: 20),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+            Icon(
+              style.icon,
+              size: isTerminalEvent ? 17 : 14,
+              color: style.color,
+            ),
             const SizedBox(width: 6),
             Flexible(
               child: _buildSystemMessageText(
@@ -3425,8 +3542,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       child: Row(
-        mainAxisAlignment:
-            isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isCurrentUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         children: [
           if (!isCurrentUser)
             CircleAvatar(
@@ -3609,559 +3727,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
-  DateTime? _proposalSlotDateTime(
-    DateTime selectedDate,
-    Map<String, dynamic> slot,
-  ) {
-    final direct = [
-      slot['startDateTime'],
-      slot['appointmentDate'],
-      slot['dateTime'],
-      slot['slotDateTime'],
-    ];
-
-    for (final raw in direct) {
-      if (raw == null) continue;
-      final dt = DateTime.tryParse(raw.toString());
-      if (dt != null) return dt;
-    }
-
-    final time = slot['startTime']?.toString() ?? slot['time']?.toString();
-    return _serviceBookingService.parseTimeOfDay(selectedDate, time);
-  }
-
-  bool _proposalSlotAvailable(Map<String, dynamic> slot) {
-    final available = slot['available'];
-    if (available is bool) return available;
-    return slot['isAvailable'] != false;
-  }
-
-  String _proposalSlotLabel(DateTime selectedDate, Map<String, dynamic> slot) {
-    final dt = _proposalSlotDateTime(selectedDate, slot);
-    final end = slot['endTime']?.toString();
-    if (dt != null) {
-      final startText = DateFormat('h:mm a').format(dt);
-      if (end != null && end.isNotEmpty) {
-        return '$startText - $end';
-      }
-      return startText;
-    }
-
-    return slot['startTime']?.toString() ?? slot['time']?.toString() ?? 'Slot';
-  }
-
-  String? _proposalSlotKey(DateTime selectedDate, Map<String, dynamic> slot) {
-    final dt = _proposalSlotDateTime(selectedDate, slot);
-    if (dt != null) {
-      return dt.toIso8601String();
-    }
-    final raw = slot['startTime']?.toString() ?? slot['time']?.toString();
-    if (raw == null || raw.isEmpty) return null;
-    return '${_serviceBookingService.dateOnly(selectedDate)} $raw';
-  }
-
-  DateTime? _parseProposalTime(DateTime date, String? raw) {
-    if (raw == null || raw.trim().isEmpty) return null;
-    final value = raw.trim();
-
-    // Common backend formats first.
-    final normalized = value.length >= 5 ? value.substring(0, 5) : value;
-    final hhmm = _serviceBookingService.parseTimeOfDay(date, normalized);
-    if (hhmm != null) return hhmm;
-
-    for (final pattern in ['h:mm a', 'hh:mm a']) {
-      try {
-        final parsed = DateFormat(pattern).parseStrict(value.toUpperCase());
-        return DateTime(
-          date.year,
-          date.month,
-          date.day,
-          parsed.hour,
-          parsed.minute,
-        );
-      } catch (_) {
-        // Try next pattern.
-      }
-    }
-
-    return null;
-  }
-
-  bool _matchesWeekDay(DateTime date, dynamic dayValue) {
-    if (dayValue == null) return false;
-
-    if (dayValue is num) {
-      return date.weekday == dayValue.toInt();
-    }
-
-    final dayText = dayValue.toString().trim().toUpperCase();
-    if (dayText.isEmpty) return false;
-
-    final selected = DateFormat('EEEE').format(date).toUpperCase();
-    if (dayText == selected) return true;
-
-    final aliases = {
-      'MON': 'MONDAY',
-      'TUE': 'TUESDAY',
-      'WED': 'WEDNESDAY',
-      'THU': 'THURSDAY',
-      'FRI': 'FRIDAY',
-      'SAT': 'SATURDAY',
-      'SUN': 'SUNDAY',
-    };
-
-    return aliases[dayText] == selected;
-  }
-
-  List<Map<String, dynamic>> _buildSlotsFromWeeklyAvailability(
-    DateTime date,
-    List<Map<String, dynamic>> weekly,
-    int fallbackDuration,
-  ) {
-    final slots = <Map<String, dynamic>>[];
-
-    for (final row in weekly) {
-      if (row['isAvailable'] == false || row['available'] == false) {
-        continue;
-      }
-      if (!_matchesWeekDay(date, row['dayOfWeek'])) {
-        continue;
-      }
-
-      final start = _parseProposalTime(date, row['startTime']?.toString());
-      final end = _parseProposalTime(date, row['endTime']?.toString());
-      if (start == null || end == null || !end.isAfter(start)) {
-        continue;
-      }
-
-      final rawDuration = row['slotDurationMinutes'];
-      final slotDuration = rawDuration is int
-          ? rawDuration
-          : int.tryParse(rawDuration?.toString() ?? '') ?? fallbackDuration;
-      if (slotDuration <= 0) continue;
-
-      var pointer = start;
-      while (pointer
-              .add(Duration(minutes: slotDuration))
-              .isAtSameMomentAs(end) ||
-          pointer.add(Duration(minutes: slotDuration)).isBefore(end)) {
-        final slotEnd = pointer.add(Duration(minutes: slotDuration));
-        slots.add({
-          'startTime': DateFormat('HH:mm').format(pointer),
-          'endTime': DateFormat('HH:mm').format(slotEnd),
-          'available': true,
-          'slotDurationMinutes': slotDuration,
-          'startDateTime': pointer.toIso8601String(),
-        });
-        pointer = slotEnd;
-      }
-    }
-
-    return slots;
-  }
-
-  Future<void> _openServiceProposalEditor(TradeOffer sourceOffer) async {
-    final serviceId = _currentChat.serviceId;
-    if (serviceId == null || serviceId.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to edit slot: service details are missing.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    DateTime selectedDate = DateTime.now();
-    List<Map<String, dynamic>> slots = [];
-    Map<String, dynamic>? selectedSlot;
-    String? slotsUnavailableReason;
-    bool loadingSlots = false;
-    bool sendingProposal = false;
-    bool initialized = false;
-    String location = '';
-    int duration = 30;
-    String notes = '';
-    List<Map<String, dynamic>> weeklyAvailability = [];
-
-    try {
-      final detail = await _serviceBookingService.getServiceDetail(serviceId);
-      final data = detail['data'];
-      if (data is Map<String, dynamic>) {
-        final service = data['service'] is Map<String, dynamic>
-            ? Map<String, dynamic>.from(data['service'])
-            : data;
-        location = service['location']?.toString() ?? '';
-        if (service['availabilitySlots'] is List) {
-          weeklyAvailability = (service['availabilitySlots'] as List)
-              .whereType<Map>()
-              .map((row) => Map<String, dynamic>.from(row))
-              .toList();
-        }
-      }
-    } catch (_) {
-      // Keep defaults when detail fetch fails.
-    }
-
-    Future<void> loadSlotsForDate(
-      DateTime date,
-      void Function(void Function()) setSheetState,
-    ) async {
-      setSheetState(() {
-        selectedDate = DateTime(date.year, date.month, date.day);
-        loadingSlots = true;
-        slots = const [];
-        selectedSlot = null;
-        slotsUnavailableReason = null;
-      });
-
-      try {
-        final response = await _serviceBookingService.getAvailableSlots(
-          serviceId: serviceId,
-          date: _serviceBookingService.dateOnly(selectedDate),
-        );
-
-        List<Map<String, dynamic>> loadedSlots = [];
-        String? unavailableReason;
-
-        final data = response['data'];
-        if (data is List) {
-          if (data.isNotEmpty && data.first is String) {
-            loadedSlots = data
-                .whereType<String>()
-                .map(
-                  (t) => <String, dynamic>{
-                    'startTime': t,
-                    'available': true,
-                    'slotDurationMinutes': duration,
-                  },
-                )
-                .toList();
-          } else {
-            loadedSlots = data
-                .whereType<Map>()
-                .map((slot) => Map<String, dynamic>.from(slot))
-                .toList();
-          }
-        } else if (data is Map<String, dynamic>) {
-          final source =
-              data['slots'] ?? data['availableSlots'] ?? data['data'];
-          if (source is List) {
-            if (source.isNotEmpty && source.first is String) {
-              loadedSlots = source
-                  .whereType<String>()
-                  .map(
-                    (t) => <String, dynamic>{
-                      'startTime': t,
-                      'available': true,
-                      'slotDurationMinutes': duration,
-                    },
-                  )
-                  .toList();
-            } else {
-              loadedSlots = source
-                  .whereType<Map>()
-                  .map((slot) => Map<String, dynamic>.from(slot))
-                  .toList();
-            }
-          }
-          unavailableReason = data['message']?.toString();
-
-          if (loadedSlots.isEmpty && data['availabilitySlots'] is List) {
-            final fromResponseWeekly = (data['availabilitySlots'] as List)
-                .whereType<Map>()
-                .map((row) => Map<String, dynamic>.from(row))
-                .toList();
-            loadedSlots = _buildSlotsFromWeeklyAvailability(
-              selectedDate,
-              fromResponseWeekly,
-              duration,
-            );
-          }
-        }
-
-        if (loadedSlots.isEmpty && weeklyAvailability.isNotEmpty) {
-          loadedSlots = _buildSlotsFromWeeklyAvailability(
-            selectedDate,
-            weeklyAvailability,
-            duration,
-          );
-        }
-
-        final now = DateTime.now();
-        loadedSlots = loadedSlots.where((slot) {
-          if (!_proposalSlotAvailable(slot)) return false;
-          final start = _proposalSlotDateTime(selectedDate, slot);
-          if (start == null) return false;
-          return start.isAfter(now);
-        }).toList();
-
-        setSheetState(() {
-          slots = loadedSlots;
-          slotsUnavailableReason = unavailableReason;
-          loadingSlots = false;
-        });
-      } catch (e) {
-        setSheetState(() {
-          loadingSlots = false;
-          slots = const [];
-          slotsUnavailableReason = _serviceBookingService.extractMessage(e);
-        });
-      }
-    }
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            if (!initialized) {
-              initialized = true;
-              Future.microtask(
-                () => loadSlotsForDate(selectedDate, setSheetState),
-              );
-            }
-
-            return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  16,
-                  16,
-                  MediaQuery.of(sheetContext).viewInsets.bottom + 16,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Edit Slot & Send Return Proposal',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: loadingSlots
-                                ? null
-                                : () async {
-                                    final picked = await showDatePicker(
-                                      context: sheetContext,
-                                      initialDate: selectedDate,
-                                      firstDate: DateTime.now(),
-                                      lastDate: DateTime.now().add(
-                                        const Duration(days: 60),
-                                      ),
-                                    );
-                                    if (picked != null) {
-                                      await loadSlotsForDate(
-                                        picked,
-                                        setSheetState,
-                                      );
-                                    }
-                                  },
-                            icon: const Icon(Icons.calendar_today),
-                            label: Text(
-                              DateFormat('EEE, MMM d').format(selectedDate),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Available Slots',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (loadingSlots)
-                      const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    else if (slots.isEmpty)
-                      Text(
-                        slotsUnavailableReason ??
-                            'No slots available for this date',
-                        style: const TextStyle(color: Colors.black54),
-                      )
-                    else
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: slots.map((slot) {
-                          final selected =
-                              selectedSlot != null &&
-                              _proposalSlotKey(selectedDate, selectedSlot!) ==
-                                  _proposalSlotKey(selectedDate, slot);
-                          return ChoiceChip(
-                            label: Text(_proposalSlotLabel(selectedDate, slot)),
-                            selected: selected,
-                            onSelected: (_) {
-                              setSheetState(() {
-                                selectedSlot = slot;
-                                final rawDuration = slot['slotDurationMinutes'];
-                                duration = rawDuration is int
-                                    ? rawDuration
-                                    : int.tryParse(
-                                            rawDuration?.toString() ?? '',
-                                          ) ??
-                                          duration;
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Notes (optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (value) => notes = value,
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: (sendingProposal || selectedSlot == null)
-                            ? null
-                            : () async {
-                                final chosenSlot = selectedSlot;
-                                if (chosenSlot == null) return;
-
-                                final slotDateTime = _proposalSlotDateTime(
-                                  selectedDate,
-                                  chosenSlot,
-                                );
-                                if (slotDateTime == null) {
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Unable to resolve selected slot date/time',
-                                      ),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                  return;
-                                }
-
-                                setSheetState(() => sendingProposal = true);
-                                try {
-                                  final displayDate = DateFormat(
-                                    'dd MMM yyyy, h:mm a',
-                                  ).format(slotDateTime.toLocal());
-
-                                  final lines = <String>[
-                                    'Return service proposal',
-                                    'Date/Time: $displayDate',
-                                    'Duration: $duration minutes',
-                                  ];
-
-                                  final trimmedLocation = location.trim();
-                                  if (trimmedLocation.isNotEmpty) {
-                                    lines.add('Location: $trimmedLocation');
-                                  }
-
-                                  final trimmedNotes = notes.trim();
-                                  if (trimmedNotes.isNotEmpty) {
-                                    lines.add('Notes: $trimmedNotes');
-                                  }
-
-                                  final isSourcePrice =
-                                      sourceOffer.isPriceOffer;
-                                  final counterOffer =
-                                      await _createCounterOffer(
-                                        originalOffer: sourceOffer,
-                                        offerType: isSourcePrice
-                                            ? 'PRICE'
-                                            : 'BARTER',
-                                        price: isSourcePrice
-                                            ? sourceOffer.price
-                                            : null,
-                                        barterItemTitle: isSourcePrice
-                                            ? null
-                                            : (sourceOffer.barterItemTitle ??
-                                                  'Service Proposal'),
-                                        barterItemDescription: isSourcePrice
-                                            ? null
-                                            : sourceOffer.barterItemDescription,
-                                      );
-
-                                  if (counterOffer == null) {
-                                    return;
-                                  }
-
-                                  final proposalMessage =
-                                      await _chatService.sendMessage(
-                                    chatId: _currentChat.id,
-                                    messageText: lines.join('\n'),
-                                  );
-                                  _socketService.emitMessageCreated(
-                                    _currentChat.id,
-                                    proposalMessage.id,
-                                  );
-
-                                  if (!sheetContext.mounted) return;
-                                  Navigator.pop(sheetContext);
-                                } catch (e) {
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'Failed to send return proposal: ${e.toString()}',
-                                      ),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                } finally {
-                                  if (sheetContext.mounted) {
-                                    setSheetState(
-                                      () => sendingProposal = false,
-                                    );
-                                  }
-                                }
-                              },
-                        icon: sendingProposal
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.send),
-                        label: Text(
-                          sendingProposal
-                              ? 'Sending...'
-                              : 'Send Return Proposal',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (!mounted) return;
-    await _refreshChat();
-  }
+  // Rescheduling an already-booked appointment now happens post-acceptance
+  // via AppointmentsDashboardScreen (real PATCH .../reschedule against the
+  // provider's saved availability) — services never support countering a
+  // pending offer, so the old "Reschedule Slot" button here (which actually
+  // submitted via the counter-offer endpoint) has been removed.
 
   Widget _buildOfferItemThumb(String imageUrl) {
     return Container(
@@ -4207,17 +3777,79 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
+  // The booked slot on a scheduled (Pure Coins) service offer — shown on
+  // both offer banners once the offer carries a serviceAppointment. Renders
+  // the server's wall-clock slotDate/slotTime as-is — never derived via
+  // DateTime.toLocal()/toUtc(), which is what previously shifted a 12:30
+  // booking to display as 5:30.
+  Widget _buildOfferAppointmentInfo(ServiceAppointmentSnapshot appointment) {
+    final formattedDate = appointment.displayDateTime;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.indigo.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.event_available, size: 16, color: Colors.indigo),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  formattedDate,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (appointment.duration != null)
+                  Text(
+                    '${appointment.duration} minutes'
+                    '${appointment.location != null && appointment.location!.trim().isNotEmpty ? ' • ${appointment.location}' : ''}',
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700),
+                  ),
+                if (appointment.rescheduleCount > 0)
+                  Text(
+                    'Rescheduled',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.orange.shade800,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBarterExchangePreview({
     required String myImage,
     required String myLabel,
     String? myName,
     String? myPriceLabel,
     VoidCallback? onMyTap,
+    // The actually-offered products for this side, when known — renders one
+    // thumbnail per product instead of a single image so a multi-item offer
+    // doesn't collapse down to just its first item. Falls back to the
+    // single myImage/myName/myPriceLabel when null/empty (free-text-only
+    // offers, or a side that's always a single listing).
+    List<BarterProductInfo>? myItems,
     required String theirImage,
     required String theirLabel,
     String? theirName,
     String? theirPriceLabel,
     VoidCallback? onTheirTap,
+    List<BarterProductInfo>? theirItems,
   }) {
     Widget side({
       required String image,
@@ -4239,10 +3871,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             const SizedBox(height: 4),
             Text(
               name,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -4269,30 +3898,98 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       );
     }
 
+    Widget multiSide({
+      required List<BarterProductInfo> items,
+      required String label,
+      String? priceLabel,
+    }) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 64,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const ClampingScrollPhysics(),
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 6),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                final thumb = _buildOfferItemThumb(item.firstImage);
+                if (item.id.isEmpty || _isOpeningPostDetail) return thumb;
+                return InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => _openBarterItemDetail(item.id),
+                  child: thumb,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            items.length == 1
+                ? items.first.title
+                : items.map((p) => p.title).join(', '),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (priceLabel != null && priceLabel.trim().isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              priceLabel,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.green.shade700,
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: side(
-            image: myImage,
-            label: myLabel,
-            name: myName,
-            priceLabel: myPriceLabel,
-            onTap: onMyTap,
-          ),
+          child: myItems != null && myItems.isNotEmpty
+              ? multiSide(
+                  items: myItems,
+                  label: myLabel,
+                  priceLabel: myPriceLabel,
+                )
+              : side(
+                  image: myImage,
+                  label: myLabel,
+                  name: myName,
+                  priceLabel: myPriceLabel,
+                  onTap: onMyTap,
+                ),
         ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 8),
           child: Icon(Icons.swap_horiz, color: Colors.grey),
         ),
         Expanded(
-          child: side(
-            image: theirImage,
-            label: theirLabel,
-            name: theirName,
-            priceLabel: theirPriceLabel,
-            onTap: onTheirTap,
-          ),
+          child: theirItems != null && theirItems.isNotEmpty
+              ? multiSide(
+                  items: theirItems,
+                  label: theirLabel,
+                  priceLabel: theirPriceLabel,
+                )
+              : side(
+                  image: theirImage,
+                  label: theirLabel,
+                  name: theirName,
+                  priceLabel: theirPriceLabel,
+                  onTap: onTheirTap,
+                ),
         ),
       ],
     );
@@ -4374,7 +4071,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                         height: 48,
                         color: Colors.grey.shade200,
                         child: Icon(
-                          isService ? Icons.build_circle : Icons.inventory_2_outlined,
+                          isService
+                              ? Icons.build_circle
+                              : Icons.inventory_2_outlined,
                           size: 20,
                           color: Colors.grey.shade500,
                         ),
@@ -4402,7 +4101,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                           const CoinIcon(size: 13, iconSize: 8),
                           const SizedBox(width: 3),
                           Text(
-                            '${CoinFormat.amount(price)} coins',
+                            CoinFormat.withUnit(price),
                             style: TextStyle(
                               fontSize: 11.5,
                               color: Colors.grey.shade600,
@@ -4421,7 +4120,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               else
-                Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade400),
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: Colors.grey.shade400,
+                ),
             ],
           ),
         ),
@@ -4494,16 +4197,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     visibleOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final latestOffer = visibleOffers.last;
     final isIncoming = latestOffer.madeById != widget.currentUserId;
-    final isServiceChat =
-        (_currentChat.serviceId != null &&
-            _currentChat.serviceId!.isNotEmpty) ||
-        _currentChat.service != null;
+    final isServiceChat = _isServiceChat;
 
     if (!isIncoming) return const SizedBox();
-
-    if (latestOffer.barterProductIds.isNotEmpty) {
-      _ensureBarterItemLoaded(latestOffer.barterProductIds.first);
-    }
 
     final senderName = _getOtherUser().firstName;
     final statusText = latestOffer.offerStatus.value;
@@ -4547,21 +4243,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           if (latestOffer.isPriceOffer) ...[
             Row(
               children: [
-                _buildOfferItemThumb(_currentChat.postImage),
+                _buildOfferItemThumb(
+                  latestOffer.listing?.image ?? _currentChat.postImage,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _currentChat.postTitle,
+                        latestOffer.listing?.title ?? _currentChat.postTitle,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
+                      if ((latestOffer.listing?.price ?? _listingPrice) != null)
+                        Text(
+                          'Actual: ${CoinFormat.withUnit(latestOffer.listing?.price ?? _listingPrice)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
                       Text(
-                        'Price: ${CoinFormat.amount(latestOffer.price)} coins',
+                        'Offer: ${CoinFormat.withUnit(latestOffer.price)}',
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ],
@@ -4581,11 +4287,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ),
             const SizedBox(height: 10),
             _buildBarterExchangePreview(
-              myImage: _currentChat.postImage,
+              myImage: latestOffer.listing?.image ?? _currentChat.postImage,
               myLabel: isServiceChat ? 'Your service' : 'Your product',
-              myName: _currentChat.postTitle,
-              myPriceLabel: _listingPrice != null
-                  ? '${CoinFormat.amount(_listingPrice)} coins'
+              myName: latestOffer.listing?.title ?? _currentChat.postTitle,
+              myPriceLabel: (latestOffer.listing?.price ?? _listingPrice) != null
+                  ? CoinFormat.withUnit(latestOffer.listing?.price ?? _listingPrice)
                   : null,
               onMyTap: _isOpeningPostDetail ? null : _openPostDetail,
               theirImage: latestOffer.barterItemImages.isNotEmpty
@@ -4593,26 +4299,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   : '',
               theirLabel: '$senderName offers',
               theirName: latestOffer.barterItemTitle,
-              theirPriceLabel: latestOffer.barterProductIds.isNotEmpty
-                  ? () {
-                      final post = _barterItemPostCache[latestOffer
-                          .barterProductIds
-                          .first];
-                      return post != null
-                          ? '${CoinFormat.amount(post.price)} coins'
-                          : null;
-                    }()
+              theirItems: latestOffer.combinedBarterItems,
+              theirPriceLabel: latestOffer.combinedBarterItems.isNotEmpty
+                  ? CoinFormat.withUnit(latestOffer.combinedBarterItemsTotalValue)
                   : null,
-              onTheirTap: latestOffer.barterProductIds.isNotEmpty &&
+              onTheirTap:
+                  latestOffer.combinedBarterItems.length == 1 &&
                       !_isOpeningPostDetail
                   ? () => _openBarterItemDetail(
-                        latestOffer.barterProductIds.first,
-                      )
+                      latestOffer.combinedBarterItems.first.id,
+                    )
                   : null,
             ),
             const SizedBox(height: 10),
             Text(
-              '$senderName is offering: ${latestOffer.barterItemTitle ?? 'Unknown'}',
+              '$senderName is offering: ${_offeredItemsLabel(latestOffer)}',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             if (latestOffer.barterItemDescription != null &&
@@ -4622,99 +4323,85 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  '+ ${CoinFormat.amount(latestOffer.price)} coins added',
+                  '+ ${CoinFormat.withUnit(latestOffer.price)} added',
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     color: Colors.green,
                   ),
                 ),
               ),
+            if (latestOffer.isBothOffer &&
+                latestOffer.combinedBarterItems.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  'Total offer value: ${CoinFormat.withUnit(latestOffer.offerTotalValue)}',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                ),
+              ),
           ],
+          if (latestOffer.serviceAppointment != null)
+            _buildOfferAppointmentInfo(latestOffer.serviceAppointment!),
 
           if (latestOffer.isPending &&
               !_currentChat.hasAcceptedOffer &&
               !_isBlocked) ...[
             const SizedBox(height: 12),
-            if (isServiceChat)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed:
-                      _isOfferActionInProgress &&
-                          _processingOfferId == latestOffer.id
-                      ? null
-                      : () => _acceptOffer(latestOffer),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed:
+                        _isOfferActionInProgress &&
+                            _processingOfferId == latestOffer.id
+                        ? null
+                        : () => _rejectOffer(latestOffer),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                    ),
+                    child:
+                        _isOfferActionInProgress &&
+                            _processingOfferId == latestOffer.id
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Reject'),
                   ),
-                  child:
-                      _isOfferActionInProgress &&
-                          _processingOfferId == latestOffer.id
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Accept'),
                 ),
-              )
-            else
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed:
-                          _isOfferActionInProgress &&
-                              _processingOfferId == latestOffer.id
-                          ? null
-                          : () => _rejectOffer(latestOffer),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                      ),
-                      child:
-                          _isOfferActionInProgress &&
-                              _processingOfferId == latestOffer.id
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Reject'),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed:
+                        _isOfferActionInProgress &&
+                            _processingOfferId == latestOffer.id
+                        ? null
+                        : () => _acceptOffer(latestOffer),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
                     ),
+                    child:
+                        _isOfferActionInProgress &&
+                            _processingOfferId == latestOffer.id
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Accept'),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed:
-                          _isOfferActionInProgress &&
-                              _processingOfferId == latestOffer.id
-                          ? null
-                          : () => _acceptOffer(latestOffer),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                      ),
-                      child:
-                          _isOfferActionInProgress &&
-                              _processingOfferId == latestOffer.id
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Accept'),
-                    ),
-                  ),
-                ],
-              ),
-            // Zero-coin offers are a simple accept/reject — no coins or
-            // barter value to negotiate, so countering doesn't apply.
-            if (!latestOffer.isZeroCoin) ...[
+                ),
+              ],
+            ),
+            // Server-authoritative: true for products on a Price/Both offer,
+            // and — for services — specifically when the pending offer is
+            // Barter/Service + Coins (BOTH). A service's Pure Coins and pure
+            // barter offers stay accept/reject only; countering those 400s.
+            if (_currentChat.canCounterOffer) ...[
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
@@ -4723,13 +4410,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       _isOfferActionInProgress &&
                           _processingOfferId == latestOffer.id
                       ? null
-                      : isServiceChat
-                      ? () => _openServiceProposalEditor(latestOffer)
                       : () => _showCounterOfferDialog(latestOffer),
-                  icon: Icon(
-                    isServiceChat ? Icons.edit_calendar : Icons.swap_horiz,
-                  ),
-                  label: Text(isServiceChat ? 'Edit Slot' : 'Counter Offer'),
+                  icon: const Icon(Icons.swap_horiz),
+                  label: const Text('Counter Offer'),
                 ),
               ),
             ],
@@ -4756,13 +4439,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     myOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final latestOffer = myOffers.last;
-    if (latestOffer.barterProductIds.isNotEmpty) {
-      _ensureBarterItemLoaded(latestOffer.barterProductIds.first);
-    }
-    final isServiceChat =
-        (_currentChat.serviceId != null &&
-            _currentChat.serviceId!.isNotEmpty) ||
-        _currentChat.service != null;
+    final isServiceChat = _isServiceChat;
     final recipientName = _getOtherUser().firstName;
 
     final statusText = latestOffer.offerStatus.value;
@@ -4822,21 +4499,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           if (latestOffer.isPriceOffer) ...[
             Row(
               children: [
-                _buildOfferItemThumb(_currentChat.postImage),
+                _buildOfferItemThumb(
+                  latestOffer.listing?.image ?? _currentChat.postImage,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _currentChat.postTitle,
+                        latestOffer.listing?.title ?? _currentChat.postTitle,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
+                      if ((latestOffer.listing?.price ?? _listingPrice) != null)
+                        Text(
+                          'Actual: ${CoinFormat.withUnit(latestOffer.listing?.price ?? _listingPrice)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
                       Text(
-                        'Price: ${CoinFormat.amount(latestOffer.price)} coins',
+                        'Offer: ${CoinFormat.withUnit(latestOffer.price)}',
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ],
@@ -4854,35 +4541,30 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   : '',
               myLabel: 'You offer',
               myName: latestOffer.barterItemTitle,
-              myPriceLabel: latestOffer.barterProductIds.isNotEmpty
-                  ? () {
-                      final post = _barterItemPostCache[latestOffer
-                          .barterProductIds
-                          .first];
-                      return post != null
-                          ? '${CoinFormat.amount(post.price)} coins'
-                          : null;
-                    }()
+              myItems: latestOffer.combinedBarterItems,
+              myPriceLabel: latestOffer.combinedBarterItems.isNotEmpty
+                  ? CoinFormat.withUnit(latestOffer.combinedBarterItemsTotalValue)
                   : null,
-              onMyTap: latestOffer.barterProductIds.isNotEmpty &&
+              onMyTap:
+                  latestOffer.combinedBarterItems.length == 1 &&
                       !_isOpeningPostDetail
                   ? () => _openBarterItemDetail(
-                        latestOffer.barterProductIds.first,
-                      )
+                      latestOffer.combinedBarterItems.first.id,
+                    )
                   : null,
-              theirImage: _currentChat.postImage,
+              theirImage: latestOffer.listing?.image ?? _currentChat.postImage,
               theirLabel: isServiceChat
                   ? '$recipientName\'s service'
                   : '$recipientName\'s product',
-              theirName: _currentChat.postTitle,
-              theirPriceLabel: _listingPrice != null
-                  ? '${CoinFormat.amount(_listingPrice)} coins'
+              theirName: latestOffer.listing?.title ?? _currentChat.postTitle,
+              theirPriceLabel: (latestOffer.listing?.price ?? _listingPrice) != null
+                  ? CoinFormat.withUnit(latestOffer.listing?.price ?? _listingPrice)
                   : null,
               onTheirTap: _isOpeningPostDetail ? null : _openPostDetail,
             ),
             const SizedBox(height: 10),
             Text(
-              'You are offering: ${latestOffer.barterItemTitle ?? 'Unknown'}',
+              'You are offering: ${_offeredItemsLabel(latestOffer)}',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             if (latestOffer.barterItemDescription != null &&
@@ -4892,17 +4574,41 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  '+ ${CoinFormat.amount(latestOffer.price)} coins added',
+                  '+ ${CoinFormat.withUnit(latestOffer.price)} added',
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     color: Colors.green,
                   ),
                 ),
               ),
+            if (latestOffer.isBothOffer &&
+                latestOffer.combinedBarterItems.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  'Total offer value: ${CoinFormat.withUnit(latestOffer.offerTotalValue)}',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                ),
+              ),
           ],
+          if (latestOffer.serviceAppointment != null)
+            _buildOfferAppointmentInfo(latestOffer.serviceAppointment!),
         ],
       ),
     );
+  }
+
+  // Offered-item display name for the offer banners — prefers the resolved
+  // barter items (real product/service titles, combined) over the offerer's
+  // free-text barterItemTitle, which is only a fallback for older offers.
+  // Must include BOTH products and services: a service listing's barter side
+  // can carry either or both (see combinedBarterItems), so reading only
+  // barterProducts silently dropped any offered service from this label.
+  String _offeredItemsLabel(TradeOffer offer) {
+    if (offer.combinedBarterItems.isNotEmpty) {
+      return offer.combinedBarterItems.map((p) => p.title).join(', ');
+    }
+    return offer.barterItemTitle ?? 'Unknown';
   }
 
   Widget _buildDealCompletionBanner() {
@@ -4994,7 +4700,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
             isBlocked
                 ? ListTile(
-                    leading: const Icon(Icons.check_circle_outline, color: Colors.green),
+                    leading: const Icon(
+                      Icons.check_circle_outline,
+                      color: Colors.green,
+                    ),
                     title: const Text('Unblock User'),
                     subtitle: Text('Unblock ${otherUser.firstName}'),
                     onTap: () {
@@ -5135,11 +4844,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                             _buildPostHeaderCard(),
                             if (_currentChat.listingUnavailable)
                               _buildListingUnavailableBanner(),
-                            ..._buildOfferBannersInOrder(),
                             ..._sortedMessages.map(_buildMessageBubble),
-                            // Current deal status belongs at the end of the
-                            // timeline (chronologically "now"), not pinned
-                            // above the whole conversation history.
+                            // The actionable offer card (Accept/Reject/
+                            // Counter) reflects the CURRENT negotiation
+                            // state, so — like deal status below — it
+                            // belongs at the end of the timeline next to the
+                            // composer, not pinned above the whole
+                            // conversation history where it reads as if it
+                            // happened before everything shown beneath it.
+                            ..._buildOfferBannersInOrder(),
                             if (_currentChat.hasDealVerification)
                               DealVerificationPanel(
                                 key: ValueKey(_currentChat.id),
@@ -5149,6 +4862,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                                 offererName: _dealOffererName,
                                 receiverName: _dealReceiverName,
                                 offeredItemLabel: _dealOfferedItemLabel,
+                                otherUserName: _getOtherUser().firstName,
                                 onChatShouldRefresh:
                                     _refreshChatWithFullScreenLoader,
                               )
@@ -5257,11 +4971,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               color: Colors.orange.shade50,
               child: Row(
                 children: [
-                  Icon(Icons.hourglass_top, size: 14, color: Colors.orange.shade800),
+                  Icon(
+                    Icons.hourglass_top,
+                    size: 14,
+                    color: Colors.orange.shade800,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'Waiting for ${_getOtherUser().firstName} to respond to your offer.',
-                    style: TextStyle(fontSize: 11.5, color: Colors.orange.shade900),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: Colors.orange.shade900,
+                    ),
                   ),
                 ],
               ),
@@ -5287,9 +5008,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.request_page, color: Colors.orange),
-                    onPressed: !_isPreparingOffer
-                        ? _showMakeOfferDialog
-                        : null,
+                    onPressed: !_isPreparingOffer ? _showMakeOfferDialog : null,
                   ),
                 Expanded(
                   child: TextField(

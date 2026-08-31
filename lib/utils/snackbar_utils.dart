@@ -199,6 +199,25 @@ class SnackbarUtils {
     );
   }
 
+  /// A simple red floating toast for a form-validation message (e.g. "please
+  /// enter an amount") — unlike [showError], this never opens the heavier
+  /// modal sheet, which is meant for real server/API errors, not something
+  /// the user can immediately fix by looking at the field they're editing.
+  static void showErrorToast(BuildContext context, String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        duration: const Duration(seconds: 3),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   /// Inline-friendly validation / form hints (floating toast, not a modal sheet).
   static void showValidation(BuildContext context, String message) {
     final messenger = ScaffoldMessenger.of(context);

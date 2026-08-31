@@ -22,6 +22,9 @@ class DealVerificationPanel extends StatefulWidget {
   final String? offererName;
   final String? receiverName;
   final String? offeredItemLabel;
+  // The other chat participant's first name — used in place of the generic
+  // "the other user" wording so waiting/reassurance copy names them directly.
+  final String? otherUserName;
 
   const DealVerificationPanel({
     super.key,
@@ -32,6 +35,7 @@ class DealVerificationPanel extends StatefulWidget {
     this.offererName,
     this.receiverName,
     this.offeredItemLabel,
+    this.otherUserName,
   });
 
   @override
@@ -167,36 +171,64 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
 
   Future<void> _confirmClose() async {
     final reasonController = TextEditingController();
+    final prompt = _verification?.closeDealPrompt;
 
     final reason = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Deal Not Completed'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Let the other person know why this deal fell through. '
-              'Any secured coins are refunded and the item goes back on '
-              'the marketplace immediately.',
-              style: TextStyle(fontSize: 13, color: Colors.black54),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: reasonController,
-              autofocus: true,
-              maxLines: 3,
-              maxLength: 300,
-              decoration: const InputDecoration(
-                labelText: 'Reason (optional)',
-                hintText:
-                    'e.g. Buyer did not show up, item condition '
-                    'mismatch...',
-                border: OutlineInputBorder(),
+        title: Text(prompt?.title ?? 'Deal Not Completed'),
+        content: StatefulBuilder(
+          builder: (context, setDialogState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                prompt?.helperText ??
+                    'Let the other person know why this deal fell through. '
+                        'Any secured coins are refunded and the item goes '
+                        'back on the marketplace immediately.',
+                style: const TextStyle(fontSize: 13, color: Colors.black54),
               ),
-            ),
-          ],
+              if (prompt != null && prompt.suggestions.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: prompt.suggestions
+                      .map(
+                        (suggestion) => ActionChip(
+                          label: Text(
+                            suggestion,
+                            style: const TextStyle(fontSize: 11.5),
+                          ),
+                          onPressed: () => setDialogState(() {
+                            reasonController.text = suggestion;
+                            reasonController.selection =
+                                TextSelection.collapsed(
+                                  offset: reasonController.text.length,
+                                );
+                          }),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonController,
+                autofocus: true,
+                maxLines: 3,
+                maxLength: prompt?.maxLength ?? 500,
+                decoration: InputDecoration(
+                  labelText: prompt?.required == true
+                      ? 'Reason'
+                      : 'Reason (optional)',
+                  hintText: prompt?.placeholder,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -369,7 +401,9 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
               child: Text(
                 payment.message ??
                     'Your ${CoinFormat.withLabel(payment.amount)} are safe and only '
-                        'transferred to the other user when the deal is completed.',
+                        'transferred to '
+                        '${widget.otherUserName?.trim().isNotEmpty == true ? widget.otherUserName : 'the other user'} '
+                        'when the deal is completed.',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF1F2937)),
               ),
             ),
@@ -420,7 +454,8 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'You marked the deal completed — waiting for the other user.',
+              'You marked the deal completed — waiting for '
+              '${widget.otherUserName?.trim().isNotEmpty == true ? widget.otherUserName : 'the other user'}.',
               style: TextStyle(
                 fontSize: 12.5,
                 color: Colors.green.shade800,
@@ -460,7 +495,8 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
     final receiverName = widget.receiverName;
     final offeredItemLabel = widget.offeredItemLabel;
     final itemName = widget.itemName;
-    final hasExchangeSummary = offererName != null &&
+    final hasExchangeSummary =
+        offererName != null &&
         receiverName != null &&
         offeredItemLabel != null &&
         offeredItemLabel.trim().isNotEmpty;
@@ -475,7 +511,7 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Deal completed ✓',
+                'Deal completed',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
               ),
               if (hasExchangeSummary) ...[
@@ -484,7 +520,10 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
                   itemName != null && itemName.trim().isNotEmpty
                       ? '$offererName gave "$offeredItemLabel" to $receiverName for "$itemName".'
                       : '$offererName gave "$offeredItemLabel" to $receiverName.',
-                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF374151)),
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF374151),
+                  ),
                 ),
               ],
             ],

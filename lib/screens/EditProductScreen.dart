@@ -14,6 +14,7 @@ import '../services/location_service.dart';
 import '../services/my_posts_service.dart';
 import '../utils/error_message_utils.dart';
 import '../utils/validators.dart';
+import 'service/ServiceAvailabilityScreen.dart';
 
 class EditProductScreen extends StatefulWidget {
   final MyPost post;
@@ -63,6 +64,12 @@ class _EditProductScreenState extends State<EditProductScreen> {
   late bool _isListed;
   late bool _canBeClubbed;
   late List<String> _images;
+  double? _selectedLatitude;
+  double? _selectedLongitude;
+  // Set when the user picks a new weekly schedule via "Manage Availability"
+  // — held locally and sent as part of the single _saveChanges() PUT rather
+  // than saved separately, so a service edit is one save action.
+  List<Map<String, dynamic>>? _pendingAvailabilitySlots;
 
   List<Map<String, dynamic>> _mainCategories = [];
   List<Map<String, dynamic>> _subCategories = [];
@@ -101,6 +108,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
     _postType = widget.post.type;
     _isListed = widget.post.isListed;
     _canBeClubbed = widget.post.isClubbable;
+    _selectedLatitude = widget.post.latitude;
+    _selectedLongitude = widget.post.longitude;
     _images = List.from(widget.post.images.take(_maxPostImages));
     _initializeTimelineFields();
     _validateStatus();
@@ -609,6 +618,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
         _locationController.text = (address != null && address.isNotEmpty)
             ? address
             : '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+        _selectedLatitude = position.latitude;
+        _selectedLongitude = position.longitude;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -667,6 +678,29 @@ class _EditProductScreenState extends State<EditProductScreen> {
     });
   }
 
+  Future<void> _openManageAvailability() async {
+    final result = await Navigator.push<List<Map<String, dynamic>>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ServiceAvailabilityScreen(
+          serviceId: widget.post.id,
+          pickerMode: true,
+          initialAvailabilitySlots: _pendingAvailabilitySlots,
+        ),
+      ),
+    );
+
+    if (result == null || !mounted) return;
+    setState(() => _pendingAvailabilitySlots = result);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Availability updated — tap Save to apply your changes.',
+        ),
+      ),
+    );
+  }
+
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -676,6 +710,21 @@ class _EditProductScreenState extends State<EditProductScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select a category'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Sub-category is mandatory whenever the selected category actually has
+    // sub-categories to choose from — the dropdown itself is only rendered
+    // in that case, so this mirrors the UI rather than blocking edits on
+    // categories that have none.
+    if (_subCategories.isNotEmpty &&
+        (_selectedSubCategoryId == null || _selectedSubCategoryId!.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a sub category'),
           backgroundColor: Colors.red,
         ),
       );
@@ -756,6 +805,15 @@ class _EditProductScreenState extends State<EditProductScreen> {
       requestData['price'] = double.parse(_priceController.text.trim());
 
       requestData['location'] = _locationController.text.trim();
+      if (_selectedLatitude != null) {
+        requestData['latitude'] = _selectedLatitude;
+      }
+      if (_selectedLongitude != null) {
+        requestData['longitude'] = _selectedLongitude;
+      }
+      if (_postType == 'service' && _pendingAvailabilitySlots != null) {
+        requestData['availabilitySlots'] = _pendingAvailabilitySlots;
+      }
 
       debugPrint('📦 Sending update request with type: $_postType');
       debugPrint('📦 Request data: $requestData');
@@ -986,6 +1044,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                       if (_subCategories.isNotEmpty)
                         _buildDropdownField(
                           label: 'Sub Category',
+                          isRequired: true,
                           value: _selectedSubCategoryId,
                           items: _subCategories.map<DropdownMenuItem<String>>((
                             category,
@@ -1101,6 +1160,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
                           });
                         },
                       ),
+
+                      if (_postType == 'service') ...[
+                        const SizedBox(height: 16),
+                        _buildManageAvailabilitySection(),
+                      ],
 
                       const SizedBox(height: 16),
 
@@ -1463,6 +1527,53 @@ class _EditProductScreenState extends State<EditProductScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildManageAvailabilitySection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Availability Slots',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Edit the weekly time slots customers can book for this service.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: _openManageAvailability,
+            icon: const Icon(Icons.schedule, size: 18),
+            label: const Text('Edit'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.deepPurple,
+              side: const BorderSide(color: Colors.deepPurple),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -4,10 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:yempover_app/main.dart' as app;
 import 'package:yempover_app/payment/SubscriptionScreen.dart';
-import 'package:yempover_app/screens/LoginScreen.dart';
-import 'package:yempover_app/services/profile_session_manager.dart';
-import 'package:yempover_app/services/token_service.dart';
-import 'package:yempover_app/utils/blocked_users_cache.dart';
+import 'package:yempover_app/utils/session_manager.dart';
 
 /// Central gate for the "you need an active subscription" flow.
 ///
@@ -77,12 +74,6 @@ class SubscriptionGate {
 
   static Future<void> _logout(BuildContext dialogContext) async {
     Navigator.of(dialogContext, rootNavigator: true).pop();
-    await TokenService().clearTokens();
-    ProfileSessionManager.instance.clearSession();
-    BlockedUsersCache.instance.reset();
-    app.rootNavigatorKey.currentState?.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
+    await SessionManager.forceLogout();
   }
 }

@@ -21,6 +21,9 @@ enum OfferSubmissionMode { price, barter, both }
 class OfferDescriptionScreen extends StatefulWidget {
   final Post post;
   final List<UserItem> selectedItems;
+  // Services offered in exchange (service-for-barter direct flow) —
+  // alongside or instead of selectedItems (products).
+  final List<UserItem> selectedServiceItems;
   final List<UserItem> selectedBundleItems;
   final String currentUserId;
   final bool isService;
@@ -34,6 +37,7 @@ class OfferDescriptionScreen extends StatefulWidget {
     super.key,
     required this.post,
     required this.selectedItems,
+    this.selectedServiceItems = const [],
     this.selectedBundleItems = const [],
     required this.currentUserId,
     this.isService = false,
@@ -79,25 +83,103 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
     }
   }
 
+  // "+N more" in the Offer Summary card only shows the first 2 selected
+  // items inline — this lists every selected item (image, name, value) so
+  // the rest aren't hidden with no way to see what they are.
+  void _showAllSelectedItemsDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Items you\'re offering'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: _allSelectedItems.length,
+            separatorBuilder: (_, _) => const Divider(height: 16),
+            itemBuilder: (context, index) {
+              final item = _allSelectedItems[index];
+              return Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: item.imageUrl.isNotEmpty
+                        ? SafeNetworkImage(
+                            url: item.imageUrl,
+                            width: 36,
+                            height: 36,
+                            fit: BoxFit.cover,
+                          )
+                        : Container(
+                            width: 36,
+                            height: 36,
+                            color: Colors.grey.shade200,
+                            child: const Icon(
+                              Icons.image,
+                              size: 18,
+                              color: Colors.grey,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.name, style: const TextStyle(fontSize: 13)),
+                        if (item.value > 0)
+                          Text(
+                            CoinFormat.withLabel(item.value),
+                            style: TextStyle(
+                              color: Colors.green.shade700,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Products + services together, in that order, for the free-text
+  // title/images snapshot — barterProducts/barterServices (resolved
+  // server-side from the id lists) are what's actually rendered in the
+  // chat, this is just the legacy fallback text/images.
+  List<UserItem> get _allSelectedItems => [
+    ...widget.selectedItems,
+    ...widget.selectedServiceItems,
+  ];
+
   String _buildOfferTitle() {
-    if (widget.selectedItems.isEmpty) {
+    final items = _allSelectedItems;
+    if (items.isEmpty) {
       return 'Offer for ${widget.post.title}';
     }
 
-    if (widget.selectedItems.length == 1) {
-      return widget.selectedItems.first.name;
+    if (items.length == 1) {
+      return items.first.name;
     }
 
-    final firstTwo = widget.selectedItems
-        .take(2)
-        .map((item) => item.name)
-        .join(', ');
-    final remaining = widget.selectedItems.length - 2;
+    final firstTwo = items.take(2).map((item) => item.name).join(', ');
+    final remaining = items.length - 2;
     return remaining > 0 ? '$firstTwo +$remaining more' : firstTwo;
   }
 
   List<String> _buildOfferImages() {
-    return widget.selectedItems
+    return _allSelectedItems
         .map((item) => item.imageUrl)
         .where((url) => url.trim().isNotEmpty)
         .toList();
@@ -215,7 +297,8 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
 
     if (_requiresBarterItems &&
         !widget.isZeroCoin &&
-        widget.selectedItems.isEmpty) {
+        widget.selectedItems.isEmpty &&
+        widget.selectedServiceItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select at least one item for barter'),
@@ -282,9 +365,15 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           chat.serviceId != null &&
           chat.serviceId != widget.post.id;
 
-      if (chat.hasAcceptedOffer ||
+      // An accepted offer only blocks a new one while its deal is still in
+      // flight (mirrors the backend's makeOffer gate) — once the deal has
+      // completed, that offer is settled history, not a live block. This
+      // matters most for services: unlike a product (sold once, caught by
+      // isChatItemSold below), a service stays live for repeat business
+      // after a completed deal, so a completed chat alone must not block a
+      // fresh barter/coins offer on it.
+      if ((chat.hasAcceptedOffer && !chat.isCompleted) ||
           chat.isArchived ||
-          chat.isCompleted ||
           chat.isCancelled ||
           isChatItemSold ||
           isMismatchedProductChat ||
@@ -323,6 +412,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           barterItemDescription: _buildOfferDescription(),
           barterItemImages: _buildOfferImages(),
           barterItemIds: widget.selectedItems.map((item) => item.id).toList(),
+          barterServiceItemIds: widget.selectedServiceItems
+              .map((item) => item.id)
+              .toList(),
         );
       } else {
         createdOffer = await _chatService.createBothOffer(
@@ -332,6 +424,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           barterItemDescription: _buildOfferDescription(),
           barterItemImages: _buildOfferImages(),
           barterItemIds: widget.selectedItems.map((item) => item.id).toList(),
+          barterServiceItemIds: widget.selectedServiceItems
+              .map((item) => item.id)
+              .toList(),
         );
       }
 
@@ -588,7 +683,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                     Padding(
                                       padding: const EdgeInsets.only(top: 2),
                                       child: Text(
-                                        '${CoinFormat.amount(widget.post.price)} coins',
+                                        CoinFormat.withLabel(widget.post.price),
                                         style: TextStyle(
                                           color: Colors.green.shade700,
                                           fontSize: 11,
@@ -629,7 +724,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                             ),
                             const SizedBox(height: 4),
                             if (_requiresBarterItems) ...[
-                              if (widget.isZeroCoin && widget.selectedItems.isEmpty)
+                              if (widget.isZeroCoin && _allSelectedItems.isEmpty)
                                 Text(
                                   'No item — asking for zero coins',
                                   style: TextStyle(
@@ -638,7 +733,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                     fontStyle: FontStyle.italic,
                                   ),
                                 ),
-                              ...widget.selectedItems
+                              ..._allSelectedItems
                                   .take(2)
                                   .map(
                                     (item) => Padding(
@@ -684,7 +779,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                                 ),
                                                 if (item.value > 0)
                                                   Text(
-                                                    '${CoinFormat.amount(item.value)} coins',
+                                                    CoinFormat.withLabel(item.value),
                                                     style: TextStyle(
                                                       color:
                                                           Colors.green.shade700,
@@ -700,15 +795,19 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                       ),
                                     ),
                                   ),
-                              if (widget.selectedItems.length > 2)
+                              if (_allSelectedItems.length > 2)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    '+ ${widget.selectedItems.length - 2} more',
-                                    style: TextStyle(
-                                      color: Colors.blue.shade700,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
+                                  child: InkWell(
+                                    onTap: _showAllSelectedItemsDialog,
+                                    child: Text(
+                                      '+ ${_allSelectedItems.length - 2} more',
+                                      style: TextStyle(
+                                        color: Colors.blue.shade700,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        decoration: TextDecoration.underline,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -729,7 +828,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 4),
                                   child: Text(
-                                    '+ ${_priceController.text.trim().isEmpty ? '0' : _priceController.text.trim()} coins',
+                                    '+ ${CoinFormat.withUnit(double.tryParse(_priceController.text.trim()) ?? 0)}',
                                     style: TextStyle(
                                       color: Colors.green.shade700,
                                       fontSize: 12,
@@ -741,7 +840,12 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                               Text(
                                 _priceController.text.trim().isEmpty
                                     ? 'Enter a price below'
-                                    : '${_priceController.text.trim()} coins',
+                                    : CoinFormat.withUnit(
+                                        double.tryParse(
+                                              _priceController.text.trim(),
+                                            ) ??
+                                            0,
+                                      ),
                                 style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -769,7 +873,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text(
-                    'Listed at ${CoinFormat.amount(widget.post.price)} coins — enter the amount you want to offer.',
+                    'Listed at ${CoinFormat.withLabel(widget.post.price)} — enter the amount you want to offer.',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ),

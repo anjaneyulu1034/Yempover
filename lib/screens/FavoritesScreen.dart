@@ -608,9 +608,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                             ),
                             const SizedBox(height: 4),
                             CoinPriceLabel(
-                              text: favorite.price > 0
-                                  ? '${CoinFormat.amount(favorite.price)} coins'
-                                  : 'Free',
+                              text: CoinFormat.withLabel(favorite.price),
                               iconSize: 18,
                               style: TextStyle(
                                 fontSize: 18,

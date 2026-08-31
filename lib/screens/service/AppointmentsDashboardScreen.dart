@@ -35,7 +35,49 @@ class _AppointmentsDashboardScreenState
   List<Map<String, dynamic>> _providerAppointments = [];
   List<Map<String, dynamic>> _clientAppointments = [];
 
-  final DateFormat _dateFormat = DateFormat('MMM d, yyyy • h:mm a');
+  // Formats a slot for display from the server's own wall-clock date/time
+  // strings (or a regex extraction of a raw ISO string as fallback) — never
+  // via DateTime.parse(...).toLocal()/.toUtc(), which re-interprets the
+  // digits against the device's timezone and is what previously turned a
+  // 12:30 booking into 5:30.
+  String _formatSlot({String? date, String? time, String? fallbackIso}) {
+    var d = (date != null && date.isNotEmpty) ? date : null;
+    var t = (time != null && time.isNotEmpty) ? time : null;
+    if (d == null && fallbackIso != null) {
+      d = RegExp(r'^(\d{4}-\d{2}-\d{2})').firstMatch(fallbackIso)?.group(1);
+    }
+    if (t == null && fallbackIso != null) {
+      t = RegExp(r'T(\d{2}:\d{2})').firstMatch(fallbackIso)?.group(1);
+    }
+    if (d == null) return fallbackIso ?? '-';
+
+    final dateParts = d.split('-');
+    if (dateParts.length != 3) return fallbackIso ?? d;
+    final year = int.tryParse(dateParts[0]);
+    final month = int.tryParse(dateParts[1]);
+    final day = int.tryParse(dateParts[2]);
+    if (year == null || month == null || day == null || month < 1 || month > 12) {
+      return fallbackIso ?? d;
+    }
+
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final dateText = '${months[month - 1]} $day, $year';
+    if (t == null) return dateText;
+
+    final timeParts = t.split(':');
+    if (timeParts.length != 2) return dateText;
+    final hour = int.tryParse(timeParts[0]);
+    final minute = int.tryParse(timeParts[1]);
+    if (hour == null || minute == null) return dateText;
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+    final timeText = '$displayHour:${minute.toString().padLeft(2, '0')} $period';
+
+    return '$dateText • $timeText';
+  }
 
   @override
   void initState() {
@@ -112,6 +154,7 @@ class _AppointmentsDashboardScreenState
   Future<void> _handleAction({
     required String appointmentId,
     required String action,
+    String? reason,
   }) async {
     try {
       switch (action) {
@@ -120,6 +163,9 @@ class _AppointmentsDashboardScreenState
           break;
         case 'cancel':
           await _service.cancelAppointment(appointmentId);
+          break;
+        case 'reject':
+          await _service.rejectAppointment(appointmentId, reason: reason);
           break;
         case 'complete':
           await _service.completeAppointment(appointmentId);
@@ -338,6 +384,8 @@ class _AppointmentsDashboardScreenState
         return 'confirmed';
       case 'cancel':
         return 'cancelled';
+      case 'reject':
+        return 'rejected';
       case 'complete':
         return 'completed';
       case 'no-show':
@@ -347,10 +395,46 @@ class _AppointmentsDashboardScreenState
     }
   }
 
-  List<String> _providerActions(String status) {
+  // Preferred order regardless of which are actually available.
+  static const List<String> _actionOrder = [
+    'confirm',
+    'reject',
+    'reschedule',
+    'cancel',
+    'complete',
+    'no-show',
+  ];
+
+  // Drives button visibility off the server's `actions` object when present
+  // (the source of truth — it already accounts for who's viewing and what
+  // status allows). Falls back to the old hardcoded status-based rules only
+  // for appointments loaded before this field existed.
+  List<String> _actionsForItem(Map<String, dynamic> item, bool isProvider) {
+    final actions = item['actions'];
+    if (actions is Map) {
+      const keyForAction = {
+        'confirm': 'canConfirm',
+        'reject': 'canReject',
+        'reschedule': 'canReschedule',
+        'cancel': 'canCancel',
+        'complete': 'canComplete',
+        'no-show': 'canMarkNoShow',
+      };
+      return _actionOrder
+          .where((action) => actions[keyForAction[action]] == true)
+          .toList();
+    }
+
+    final status = item['status']?.toString() ?? 'UNKNOWN';
+    return isProvider
+        ? _legacyProviderActions(status)
+        : _legacyClientActions(status);
+  }
+
+  List<String> _legacyProviderActions(String status) {
     switch (status) {
       case 'REQUESTED':
-        return ['confirm', 'cancel'];
+        return ['confirm', 'reject'];
       case 'CONFIRMED':
         return ['complete', 'no-show', 'cancel'];
       default:
@@ -358,7 +442,7 @@ class _AppointmentsDashboardScreenState
     }
   }
 
-  List<String> _clientActions(String status) {
+  List<String> _legacyClientActions(String status) {
     if (status == 'REQUESTED' || status == 'CONFIRMED') {
       return ['cancel'];
     }
@@ -368,6 +452,7 @@ class _AppointmentsDashboardScreenState
   bool _isTerminalStatus(String status) {
     return status == 'CANCELLED_BY_CLIENT' ||
         status == 'CANCELLED_BY_SERVICE_PROVIDER' ||
+        status == 'REJECTED_BY_SERVICE_PROVIDER' ||
         status == 'COMPLETED' ||
         status == 'NO_SHOW';
   }
@@ -384,6 +469,7 @@ class _AppointmentsDashboardScreenState
         return Colors.deepOrange;
       case 'CANCELLED_BY_CLIENT':
       case 'CANCELLED_BY_SERVICE_PROVIDER':
+      case 'REJECTED_BY_SERVICE_PROVIDER':
         return Colors.red;
       default:
         return Colors.grey;
@@ -403,6 +489,8 @@ class _AppointmentsDashboardScreenState
       case 'CANCELLED_BY_CLIENT':
       case 'CANCELLED_BY_SERVICE_PROVIDER':
         return Icons.cancel;
+      case 'REJECTED_BY_SERVICE_PROVIDER':
+        return Icons.block;
       default:
         return Icons.help;
     }
@@ -414,6 +502,10 @@ class _AppointmentsDashboardScreenState
         return 'Confirm';
       case 'cancel':
         return 'Cancel';
+      case 'reject':
+        return 'Reject';
+      case 'reschedule':
+        return 'Reschedule Slot';
       case 'complete':
         return 'Complete';
       case 'no-show':
@@ -429,6 +521,10 @@ class _AppointmentsDashboardScreenState
         return Colors.green;
       case 'cancel':
         return Colors.red;
+      case 'reject':
+        return Colors.red;
+      case 'reschedule':
+        return Colors.indigo;
       case 'complete':
         return Colors.blue;
       case 'no-show':
@@ -610,20 +706,31 @@ class _AppointmentsDashboardScreenState
             ? serviceInfo['title']?.toString() ?? 'Service'
             : item['serviceTitle']?.toString() ?? 'Service';
 
-        final appointmentDate = item['appointmentDate']?.toString();
-        String formattedDate = '-';
-        if (appointmentDate != null) {
-          try {
-            final date = DateTime.parse(appointmentDate);
-            formattedDate = _dateFormat.format(date.toLocal());
-          } catch (e) {
-            formattedDate = appointmentDate;
-          }
-        }
+        // Prefer the server's own wall-clock slotDate/slotTime when present
+        // (decorated appointment list rows carry these); fall back to a
+        // regex extraction of the raw appointmentDate string otherwise.
+        // Never DateTime.parse(...).toLocal() this — that re-interprets the
+        // digits against the device's timezone and is exactly what used to
+        // turn a 12:30 booking into 5:30.
+        final formattedDate = _formatSlot(
+          date: item['slotDate']?.toString(),
+          time: item['slotTime']?.toString(),
+          fallbackIso: item['appointmentDate']?.toString(),
+        );
 
-        final actions = isProvider
-            ? _providerActions(status)
-            : _clientActions(status);
+        final actions = _actionsForItem(item, isProvider);
+        final statusLabel = item['statusLabel']?.toString() ?? status;
+        final wasRescheduled = item['wasRescheduled'] == true;
+        final previousAppointmentDate = item['previousAppointmentDate']
+            ?.toString();
+        String? previousFormattedDate;
+        if (wasRescheduled &&
+            previousAppointmentDate != null &&
+            previousAppointmentDate.isNotEmpty) {
+          previousFormattedDate = _formatSlot(
+            fallbackIso: previousAppointmentDate,
+          );
+        }
 
         return Container(
           margin: const EdgeInsets.only(bottom: 16),
@@ -673,7 +780,7 @@ class _AppointmentsDashboardScreenState
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          status,
+                          statusLabel,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: _getStatusColor(status),
@@ -681,6 +788,26 @@ class _AppointmentsDashboardScreenState
                           ),
                         ),
                       ),
+                      if (wasRescheduled)
+                        Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.indigo.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'Rescheduled',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.indigo,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                       if (actions.isEmpty && _isTerminalStatus(status))
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -784,6 +911,15 @@ class _AppointmentsDashboardScreenState
                                     fontSize: 14,
                                   ),
                                 ),
+                                if (previousFormattedDate != null)
+                                  Text(
+                                    'Previously: $previousFormattedDate',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[500],
+                                      decoration: TextDecoration.lineThrough,
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
@@ -886,9 +1022,10 @@ class _AppointmentsDashboardScreenState
                                     child: ElevatedButton(
                                       onPressed: appointmentId.isEmpty
                                           ? null
-                                          : () => _showActionDialog(
+                                          : () => _dispatchAction(
                                               action,
                                               appointmentId,
+                                              item,
                                             ),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: _getActionColor(
@@ -973,6 +1110,10 @@ class _AppointmentsDashboardScreenState
         return Icons.check;
       case 'cancel':
         return Icons.close;
+      case 'reject':
+        return Icons.block;
+      case 'reschedule':
+        return Icons.edit_calendar;
       case 'complete':
         return Icons.done_all;
       case 'no-show':
@@ -1012,6 +1153,450 @@ class _AppointmentsDashboardScreenState
           ),
         ],
       ),
+    );
+  }
+
+  void _dispatchAction(
+    String action,
+    String appointmentId,
+    Map<String, dynamic> item,
+  ) {
+    switch (action) {
+      case 'reject':
+        _showRejectDialog(appointmentId);
+        break;
+      case 'reschedule':
+        _openReschedulePicker(item);
+        break;
+      default:
+        _showActionDialog(action, appointmentId);
+    }
+  }
+
+  void _showRejectDialog(String appointmentId) {
+    final reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Reject Booking Request'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Let the client know why you're declining this request.",
+              style: TextStyle(fontSize: 13, color: Colors.black54),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              autofocus: true,
+              maxLines: 3,
+              maxLength: 500,
+              decoration: const InputDecoration(
+                labelText: 'Reason (optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Back'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final reason = reasonController.text.trim();
+              Navigator.pop(dialogContext);
+              _handleAction(
+                appointmentId: appointmentId,
+                action: 'reject',
+                reason: reason.isEmpty ? null : reason,
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static const List<String> _weekdayNames = [
+    'MONDAY',
+    'TUESDAY',
+    'WEDNESDAY',
+    'THURSDAY',
+    'FRIDAY',
+    'SATURDAY',
+    'SUNDAY',
+  ];
+
+  // Only shows/allows dates+times the provider actually saved as available
+  // (via GET .../reschedule-options) — the server is the source of truth,
+  // so the picker never offers a slot that would 400. Rebuilt around the
+  // real single-day response shape: {current, weeklyAvailability,
+  // specialDates, availability:{slotDetails,...}} — the date picker is
+  // built locally from weeklyAvailability + specialDates, and a fresh call
+  // is made each time the user picks a different date.
+  Future<void> _openReschedulePicker(Map<String, dynamic> item) async {
+    final appointmentId = item['id']?.toString() ?? '';
+    if (appointmentId.isEmpty) return;
+
+    bool initialized = false;
+    bool loading = true;
+    String? loadError;
+    Map<String, dynamic>? current;
+    List<Map<String, dynamic>> weeklyAvailability = [];
+    List<Map<String, dynamic>> specialDates = [];
+    Map<String, dynamic>? availability;
+    DateTime? selectedDate;
+    String? selectedSlot;
+    int? duration;
+    bool submitting = false;
+    final notesController = TextEditingController();
+    final dayFormat = DateFormat('EEE, MMM d');
+
+    bool isDateSelectable(DateTime date) {
+      final dateKey = _service.dateOnly(date);
+      for (final special in specialDates) {
+        if ((special['date']?.toString() ?? '').startsWith(dateKey)) {
+          return special['isAvailable'] == true;
+        }
+      }
+      final dayName = _weekdayNames[date.weekday - 1];
+      return weeklyAvailability.any(
+        (d) => d['dayOfWeek'] == dayName && d['isAvailable'] == true,
+      );
+    }
+
+    Future<void> loadForDate(
+      DateTime? date,
+      void Function(void Function()) setSheetState,
+    ) async {
+      setSheetState(() => loading = true);
+      try {
+        final response = await _service.getRescheduleOptionsForAppointment(
+          appointmentId,
+          date: date != null ? _service.dateOnly(date) : null,
+        );
+        final data = response['data'];
+        final map = data is Map ? Map<String, dynamic>.from(data) : {};
+        final currentMap = map['current'] is Map
+            ? Map<String, dynamic>.from(map['current'])
+            : null;
+        final availabilityMap = map['availability'] is Map
+            ? Map<String, dynamic>.from(map['availability'])
+            : null;
+        final weekly = (map['weeklyAvailability'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        final special = (map['specialDates'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+
+        DateTime resolvedDate = date ?? DateTime.now();
+        if (date == null) {
+          final selectedDateStr = map['selectedDate']?.toString();
+          if (selectedDateStr != null) {
+            try {
+              resolvedDate = DateTime.parse(selectedDateStr);
+            } catch (_) {}
+          }
+        }
+
+        setSheetState(() {
+          current ??= currentMap;
+          weeklyAvailability = weekly;
+          specialDates = special;
+          availability = availabilityMap;
+          selectedDate = resolvedDate;
+          duration ??= currentMap?['durationMinutes'] is num
+              ? (currentMap!['durationMinutes'] as num).toInt()
+              : null;
+          // Pre-select the currently-held slot (isCurrent) the first time
+          // through, or the just-picked date's own slot if it carries one.
+          final slotDetails =
+              (availabilityMap?['slotDetails'] as List?)
+                  ?.whereType<Map>()
+                  .toList() ??
+              const [];
+          final currentSlot = slotDetails.firstWhere(
+            (s) => s['isCurrent'] == true,
+            orElse: () => const {},
+          );
+          if (currentSlot.isNotEmpty) {
+            selectedSlot = currentSlot['time']?.toString();
+          } else if (date != null) {
+            // A fresh date the user picked has no "current" slot to default
+            // to — clear any stale selection from the previous day.
+            selectedSlot = null;
+          } else {
+            selectedSlot = currentMap?['time']?.toString();
+          }
+          loading = false;
+          loadError = null;
+        });
+      } catch (e) {
+        setSheetState(() {
+          loading = false;
+          loadError = _service.extractMessage(e);
+        });
+      }
+    }
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            if (!initialized) {
+              initialized = true;
+              Future.microtask(() => loadForDate(null, setSheetState));
+            }
+
+            final slotDetails =
+                (availability?['slotDetails'] as List?)
+                    ?.whereType<Map>()
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList() ??
+                const <Map<String, dynamic>>[];
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Reschedule Slot',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Only days and times the provider has saved as available are shown.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 16),
+                    if (loading && current == null)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (weeklyAvailability.isEmpty && specialDates.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Text(
+                          loadError ??
+                              'The provider has not saved any availability yet.',
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      )
+                    else ...[
+                      const Text(
+                        'Date',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: () async {
+                          final now = DateTime.now();
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: selectedDate ?? now,
+                            firstDate: now,
+                            lastDate: now.add(const Duration(days: 60)),
+                            selectableDayPredicate: isDateSelectable,
+                          );
+                          if (picked == null) return;
+                          await loadForDate(picked, setSheetState);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.calendar_month,
+                                size: 18,
+                                color: Colors.indigo,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                selectedDate != null
+                                    ? dayFormat.format(selectedDate!)
+                                    : 'Pick a date',
+                                style: const TextStyle(fontSize: 13.5),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Time',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 8),
+                      if (loading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (slotDetails.isEmpty)
+                        Text(
+                          availability?['reason']?.toString() ??
+                              'No free slots on this day.',
+                          style: const TextStyle(color: Colors.red),
+                        )
+                      else
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: slotDetails.map((slot) {
+                            final time = slot['time']?.toString() ?? '';
+                            final status = slot['status']?.toString() ?? '';
+                            final isCurrent = slot['isCurrent'] == true;
+                            final isBookable =
+                                slot['isBookable'] == true || isCurrent;
+                            final isSelected = selectedSlot == time;
+                            final label = isCurrent ? '$time (current)' : time;
+                            return Tooltip(
+                              message: !isBookable
+                                  ? (slot['reason']?.toString() ??
+                                        (status.isNotEmpty
+                                            ? status
+                                            : 'Not available'))
+                                  : '',
+                              child: ChoiceChip(
+                                label: Text(
+                                  label,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: !isBookable ? Colors.grey : null,
+                                  ),
+                                ),
+                                selected: isSelected,
+                                onSelected: !isBookable
+                                    ? null
+                                    : (_) => setSheetState(
+                                        () => selectedSlot = time,
+                                      ),
+                                backgroundColor: !isBookable
+                                    ? Colors.grey.shade100
+                                    : null,
+                                selectedColor: Colors.indigo.withValues(
+                                  alpha: 0.15,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: notesController,
+                        maxLines: 2,
+                        maxLength: 500,
+                        decoration: const InputDecoration(
+                          labelText: 'Reason (optional)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed:
+                              (selectedDate == null ||
+                                  selectedSlot == null ||
+                                  submitting)
+                              ? null
+                              : () async {
+                                  setSheetState(() => submitting = true);
+                                  try {
+                                    final response = await _service
+                                        .rescheduleAppointment(
+                                          appointmentId,
+                                          appointmentDate: _service.dateOnly(
+                                            selectedDate!,
+                                          ),
+                                          appointmentTime: selectedSlot!,
+                                          duration: duration,
+                                          reason: notesController.text.trim(),
+                                        );
+                                    if (!mounted) return;
+                                    Navigator.pop(sheetContext);
+                                    final appointmentData = response['data'];
+                                    final appt = appointmentData is Map
+                                        ? appointmentData['appointment']
+                                        : null;
+                                    final requiresReconfirmation =
+                                        appt is Map &&
+                                        appt['requiresReconfirmation'] == true;
+                                    SnackbarUtils.showSuccess(
+                                      context,
+                                      requiresReconfirmation
+                                          ? 'Slot rescheduled — the booking is back to Pending for the provider to re-confirm.'
+                                          : 'Slot rescheduled successfully',
+                                    );
+                                    _loadAll();
+                                  } catch (e) {
+                                    setSheetState(() => submitting = false);
+                                    if (!mounted) return;
+                                    SnackbarUtils.showError(
+                                      context,
+                                      _service.extractMessage(e),
+                                    );
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.indigo,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(double.infinity, 46),
+                          ),
+                          child: submitting
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Confirm Reschedule'),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -7,12 +7,18 @@ class ServiceAvailabilityScreen extends StatefulWidget {
   final String serviceId;
   final bool isInitialSetup;
   final List<Map<String, dynamic>>? initialAvailabilitySlots;
+  // When true, "Save" doesn't hit the network — it just pops with the
+  // picked slots (List<Map<String, dynamic>>) so the caller can bundle them
+  // into its own single create/update call instead of this screen saving
+  // them separately.
+  final bool pickerMode;
 
   const ServiceAvailabilityScreen({
     super.key,
-    required this.serviceId,
+    this.serviceId = '',
     this.isInitialSetup = false,
     this.initialAvailabilitySlots,
+    this.pickerMode = false,
   });
 
   @override
@@ -38,7 +44,9 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
   }
 
   Future<bool> _handleWillPop() async {
-    if (!widget.isInitialSetup || _published) return true;
+    if (widget.pickerMode || !widget.isInitialSetup || _published) {
+      return true;
+    }
 
     SnackbarUtils.showInfo(
       context,
@@ -252,6 +260,11 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
       }
     }
 
+    if (widget.pickerMode) {
+      Navigator.pop(context, _days);
+      return;
+    }
+
     setState(() => _savingAvailability = true);
 
     try {
@@ -308,7 +321,8 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
             style: TextStyle(fontWeight: FontWeight.w600),
           ),
           centerTitle: true,
-          automaticallyImplyLeading: !widget.isInitialSetup || _published,
+          automaticallyImplyLeading:
+              widget.pickerMode || !widget.isInitialSetup || _published,
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
           ),

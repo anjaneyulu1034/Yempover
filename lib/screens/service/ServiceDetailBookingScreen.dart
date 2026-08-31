@@ -38,6 +38,9 @@ class _ServiceDetailBookingScreenState
   bool _loggedIn = false;
   String? _error;
   String? _currentUserId;
+  // Inline error shown right under the coin-amount field, so the field
+  // itself flags what's wrong instead of only a passing toast message.
+  String? _quoteError;
 
   Map<String, dynamic>? _serviceData;
   List<Map<String, dynamic>> _slots = [];
@@ -234,12 +237,31 @@ class _ServiceDetailBookingScreenState
       final response = await _service.getAvailableSlots(
         serviceId: widget.serviceId,
         date: _service.dateOnly(_selectedDate),
+        duration: _duration,
       );
       final data = response['data'];
       List<Map<String, dynamic>> slots = [];
       String? unavailableReason;
 
-      if (data is List) {
+      // Prefer the rich slotDetails shape (status/isBookable/isCurrent/
+      // reason per slot) when present — normalize its `time` key to
+      // `startTime` and `isBookable` to `available` so the rest of this
+      // screen's slot helpers (_slotAvailable, _slotLabel, _slotReason) work
+      // unchanged against either shape.
+      if (data is Map<String, dynamic> && data['slotDetails'] is List) {
+        slots = (data['slotDetails'] as List).whereType<Map>().map((e) {
+          final slot = Map<String, dynamic>.from(e);
+          slot['startTime'] ??= slot['time'];
+          slot['available'] ??= slot['isBookable'];
+          return slot;
+        }).toList();
+        if (data['available'] == false) {
+          unavailableReason =
+              data['reason']?.toString() ??
+              data['message']?.toString() ??
+              'No slots available on this date';
+        }
+      } else if (data is List) {
         if (data.isNotEmpty && data.first is String) {
           slots = data
               .whereType<String>()
@@ -411,6 +433,11 @@ class _ServiceDetailBookingScreenState
     return DateTime.tryParse(raw)?.toLocal();
   }
 
+  // Never DateTime.parse(...).toLocal() a slot timestamp — that
+  // re-interprets the digits against the device's timezone (exactly what
+  // turned a 12:30 booking into 5:30). Regex-extract the wall-clock time
+  // straight out of the string's text instead, or fall back to the plain
+  // "HH:mm" field and build the DateTime directly from components.
   DateTime? _slotDateTime(Map<String, dynamic> slot) {
     final dateTimeCandidates = [
       slot['startDateTime'],
@@ -421,8 +448,18 @@ class _ServiceDetailBookingScreenState
 
     for (final raw in dateTimeCandidates) {
       if (raw == null) continue;
-      final parsed = DateTime.tryParse(raw.toString());
-      if (parsed != null) return parsed.toLocal();
+      final match = RegExp(r'T(\d{2}):(\d{2})').firstMatch(raw.toString());
+      if (match == null) continue;
+      final hour = int.tryParse(match.group(1)!);
+      final minute = int.tryParse(match.group(2)!);
+      if (hour == null || minute == null) continue;
+      return DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+        hour,
+        minute,
+      );
     }
 
     final time = slot['startTime']?.toString() ?? slot['time']?.toString();
@@ -639,9 +676,11 @@ class _ServiceDetailBookingScreenState
     final eveningCount =
         _slotsForPeriod(_SlotPeriod.evening).where(_slotAvailable).length;
 
-    final periodSlots = _slotsForPeriod(_selectedSlotPeriod)
-        .where(_slotAvailable)
-        .toList()
+    // Show every slot for the period, not just the bookable ones — a slot
+    // someone else already has confirmed should still be visible, just
+    // disabled and greyed out (see _buildSlotChip), instead of disappearing
+    // from the grid as if it never existed.
+    final periodSlots = _slotsForPeriod(_selectedSlotPeriod).toList()
       ..sort((a, b) {
         final ad = _slotDateTime(a);
         final bd = _slotDateTime(b);
@@ -722,25 +761,32 @@ class _ServiceDetailBookingScreenState
     }
 
     if (!_isLookingForService && _selectedSlot == null) {
-      SnackbarUtils.showError(context, 'Please select a time slot');
+      SnackbarUtils.showErrorToast(context, 'Please select a time slot');
       return;
     }
 
-    if (_isLookingForService) {
-      final quoteText = _quoteController.text.trim();
-      final quote = double.tryParse(quoteText);
-      if (quote == null || quote <= 0) {
-        SnackbarUtils.showError(context, 'Please enter your quote price');
-        return;
-      }
-      if (quoteText.length > Validators.maxAmountLength) {
-        SnackbarUtils.showError(context, 'Quote price is too large');
-        return;
-      }
+    // Free-form coin entry for both booking flows — required, positive, and
+    // never checked against the listing price (the provider decides
+    // whether it's enough). These are simple form-validation issues the user
+    // can fix right on the field, so they get a quick red toast plus the
+    // field's own inline error text, not the heavier "Something Went Wrong"
+    // modal sheet (that's reserved for real server/API failures).
+    final quoteText = _quoteController.text.trim();
+    final quote = double.tryParse(quoteText);
+    if (quote == null || quote <= 0) {
+      setState(() => _quoteError = 'Please enter the amount you want to offer');
+      SnackbarUtils.showErrorToast(context, 'Please enter the amount you want to offer');
+      return;
     }
+    if (quoteText.length > Validators.maxAmountLength) {
+      setState(() => _quoteError = 'Amount is too large');
+      SnackbarUtils.showErrorToast(context, 'Amount is too large');
+      return;
+    }
+    setState(() => _quoteError = null);
 
     if (!_isValid) {
-      SnackbarUtils.showError(context, _invalidReason);
+      SnackbarUtils.showErrorToast(context, _invalidReason);
       return;
     }
 
@@ -796,10 +842,6 @@ class _ServiceDetailBookingScreenState
             : int.tryParse(rawDuration?.toString() ?? '') ?? _duration;
       }
 
-      final displayDate = DateFormat(
-        'dd MMM yyyy, h:mm a',
-      ).format(dateTime.toLocal());
-
       final responderId = _serviceOwnerId;
       if (responderId == null || responderId.isEmpty) {
         throw Exception('Unable to find service owner for chat initiation.');
@@ -815,45 +857,34 @@ class _ServiceDetailBookingScreenState
         serviceId: widget.serviceId,
       );
 
-      final quotedPrice = _isLookingForService
-          ? double.tryParse(_quoteController.text.trim())
-          : double.tryParse((_serviceData?['price'] ?? '').toString());
+      // Free-form coin entry, already validated above (required, > 0) —
+      // never derived from or capped against the listing's own price.
+      final quotedPrice = double.parse(_quoteController.text.trim());
 
-      if (quotedPrice != null && quotedPrice > 0) {
-        await _tradeChatService.createPriceOffer(
-          chatId: chat.id,
-          price: quotedPrice,
-          currency: 'INR',
-        );
-      } else {
-        await _tradeChatService.createBarterOffer(
-          chatId: chat.id,
-          barterItemTitle: 'Service Proposal',
-          barterItemDescription: _notesController.text.trim().isNotEmpty
-              ? _notesController.text.trim()
-              : 'Service proposal for ${_serviceData?['title'] ?? 'service'}',
-        );
-      }
+      final trimmedLocation = _locationController.text.trim();
+      final trimmedNotes = _notesController.text.trim();
 
-      final details = <String>[
-        'Service proposal submitted',
-        'Date/Time: $displayDate',
-        'Duration: $duration minutes',
-      ];
-
-      final location = _locationController.text.trim();
-      if (location.isNotEmpty) {
-        details.add('Location: $location');
-      }
-
-      final notes = _notesController.text.trim();
-      if (notes.isNotEmpty) {
-        details.add('Notes: $notes');
-      }
-
-      await _tradeChatService.sendMessage(
+      // The scheduled (Pure Coins) flow: the slot is attached directly to
+      // the offer as separate date + time fields — never combined into one
+      // timestamp — so the stored slot is exactly the wall clock picked,
+      // with no timezone math on either end that could shift it. The
+      // backend books it as REQUESTED; the owner accepting the offer
+      // confirms it, blocking it for everyone else. No follow-up text
+      // message needed; the offer card itself now shows the booked slot
+      // (see ChatDetailScreen's _buildOfferAppointmentInfo).
+      await _tradeChatService.createPriceOffer(
         chatId: chat.id,
-        messageText: details.join('\n'),
+        price: quotedPrice,
+        currency: 'INR',
+        description: trimmedNotes.isNotEmpty ? trimmedNotes : null,
+        appointmentDate: _service.dateOnly(dateTime),
+        appointmentTime:
+            '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}',
+        appointmentDuration: duration,
+        appointmentLocation: trimmedLocation.isNotEmpty
+            ? trimmedLocation
+            : null,
+        appointmentNotes: trimmedNotes.isNotEmpty ? trimmedNotes : null,
       );
 
       final latestChat = await _tradeChatService.getChatById(chat.id);
@@ -1696,22 +1727,32 @@ class _ServiceDetailBookingScreenState
 
                         const SizedBox(height: 16),
 
-                        if (_isLookingForService) ...[
-                          TextField(
-                            controller: _quoteController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            inputFormatters:
-                                Validators.amountInputFormatters(),
-                            decoration: AppInputDecoration.build(
-                              label: 'Your Quote Price',
-                              prefixIcon: coinInputPrefix(),
-                              prefixIconConstraints: coinPrefixIconConstraints,
-                            ),
+                        // Free-form coin entry — the requester types whatever
+                        // they want to offer. Never pre-filled from the
+                        // listing price, never validated or capped against
+                        // it; the provider decides whether it's enough.
+                        TextField(
+                          controller: _quoteController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
                           ),
-                          const SizedBox(height: 16),
-                        ],
+                          inputFormatters: Validators.amountInputFormatters(),
+                          onChanged: (_) {
+                            if (_quoteError != null) {
+                              setState(() => _quoteError = null);
+                            }
+                          },
+                          decoration: AppInputDecoration.build(
+                            label: _isLookingForService
+                                ? 'Your Quote Price'
+                                : 'Your Offer (Coins)',
+                            hint: 'Enter the amount you want to offer',
+                            prefixIcon: coinInputPrefix(),
+                            prefixIconConstraints: coinPrefixIconConstraints,
+                            errorText: _quoteError,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
 
                         // Notes Input
                         TextField(
@@ -1790,7 +1831,8 @@ class _ServiceDetailBookingScreenState
   }
 
   Widget _buildCoinPriceRow(String label, String value) {
-    final display = value == '-' ? value : '$value coins';
+    final parsed = num.tryParse(value);
+    final display = parsed == null ? value : CoinFormat.withUnit(parsed);
     return Row(
       children: [
         const CoinIcon(size: 20, iconSize: 12),

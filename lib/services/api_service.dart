@@ -5,10 +5,34 @@ import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:yempover_app/models/ProductPostmain.dart';
+import 'package:yempover_app/utils/session_manager.dart';
 import 'package:yempover_app/utils/subscription_gate.dart';
 import '../constants/api_constants.dart';
 import '../models/auth_models.dart';
 import 'token_service.dart';
+
+// 401 error codes the backend can return. TOKEN_EXPIRED (or no code at all,
+// for responses that predate this) is refreshable — everything else means
+// the token/account is genuinely invalid and no retry will help.
+const Set<String> _kNonRefreshable401Codes = {
+  'TOKEN_INVALID',
+  'NO_TOKEN',
+  'ACCOUNT_INACTIVE',
+  'REFRESH_TOKEN_INVALID',
+  'TOKEN_WRONG_AUDIENCE',
+};
+
+String? _responseErrorCode(http.Response response) {
+  try {
+    final body = jsonDecode(response.body);
+    if (body is Map && body['code'] is String) {
+      return body['code'] as String;
+    }
+  } catch (_) {
+    // Non-JSON body — no code to read.
+  }
+  return null;
+}
 
 class ApiException implements Exception {
   final String message;
@@ -35,11 +59,24 @@ class ApiService {
     var response = await _requestWithConnectionRetry(() => request(token));
 
     if (response.statusCode == 401) {
-      debugPrint('🔄 ApiService: Received 401, attempting token refresh...');
-      final newToken = await _tokenService.refreshToken();
+      final code = _responseErrorCode(response);
+      if (code == null || code == 'TOKEN_EXPIRED') {
+        debugPrint(
+          '🔄 ApiService: Received 401 ($code), attempting token refresh...',
+        );
+        final newToken = await _tokenService.refreshToken();
 
-      if (newToken != null && newToken.isNotEmpty) {
-        response = await _requestWithConnectionRetry(() => request(newToken));
+        if (newToken != null && newToken.isNotEmpty) {
+          response = await _requestWithConnectionRetry(
+            () => request(newToken),
+          );
+        }
+      } else if (_kNonRefreshable401Codes.contains(code)) {
+        // Genuinely invalid session — a token refresh can't fix a bad
+        // account/token, so log out now instead of leaving the caller with
+        // a silently-cleared token and no navigation anywhere.
+        debugPrint('🔴 ApiService: Received 401 ($code) — forcing logout');
+        SessionManager.forceLogout();
       }
     }
 

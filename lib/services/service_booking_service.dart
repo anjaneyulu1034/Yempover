@@ -82,6 +82,8 @@ class ServiceBookingService {
     required String categoryId,
     required double price,
     required String location,
+    double? latitude,
+    double? longitude,
     List<String> images = const [],
     String? barterStatus,
     String? status,
@@ -100,6 +102,8 @@ class ServiceBookingService {
             'category': categoryId,
             'price': price,
             'location': location,
+            if (latitude != null) 'latitude': latitude,
+            if (longitude != null) 'longitude': longitude,
             'images': images,
             if (barterStatus != null && barterStatus.isNotEmpty)
               'barterStatus': barterStatus,
@@ -162,23 +166,35 @@ class ServiceBookingService {
     return _decode(response);
   }
 
+  // Always pass duration when known — a longer booking legitimately has
+  // fewer options, and the server needs it to compute isBookable correctly.
   Future<Map<String, dynamic>> getAvailableSlots({
     required String serviceId,
     required String date,
+    int? duration,
   }) async {
+    final query = <String, String>{
+      'date': date,
+      if (duration != null) 'duration': '$duration',
+    };
+    final uri = Uri.parse(
+      '$_servicesRoot/$serviceId/available-slots',
+    ).replace(queryParameters: query);
     final response = await http
-        .get(
-          Uri.parse('$_servicesRoot/$serviceId/available-slots?date=$date'),
-          headers: await _headers(authRequired: false),
-        )
+        .get(uri, headers: await _headers(authRequired: false))
         .timeout(const Duration(seconds: 30));
 
     return _decode(response);
   }
 
+  // appointmentDate is date-only ("YYYY-MM-DD") and appointmentTime is
+  // "HH:mm", sent as separate fields — never combined into one timestamp —
+  // so the stored slot is exactly the wall clock the user picked, with no
+  // timezone math on either end that could shift it.
   Future<Map<String, dynamic>> createAppointment({
     required String serviceId,
     required String appointmentDate,
+    required String appointmentTime,
     required int duration,
     required String location,
     double? proposedPrice,
@@ -190,6 +206,7 @@ class ServiceBookingService {
           headers: await _headers(authRequired: true),
           body: jsonEncode({
             'appointmentDate': appointmentDate,
+            'appointmentTime': appointmentTime,
             'duration': duration,
             'location': location,
             if (proposedPrice != null) 'proposedPrice': proposedPrice,
@@ -229,6 +246,106 @@ class ServiceBookingService {
 
   Future<Map<String, dynamic>> cancelAppointment(String appointmentId) async {
     return _patch('$_servicesRoot/appointments/$appointmentId/cancel');
+  }
+
+  // Distinct from cancel — only legal while status is REQUESTED, and only
+  // the provider can call it. The server silently truncates a reason over
+  // 500 chars rather than rejecting it.
+  Future<Map<String, dynamic>> rejectAppointment(
+    String appointmentId, {
+    String? reason,
+  }) async {
+    final response = await http
+        .patch(
+          Uri.parse('$_servicesRoot/appointments/$appointmentId/reject'),
+          headers: await _headers(authRequired: true),
+          body: jsonEncode({
+            if (reason != null && reason.trim().isNotEmpty)
+              'reason': reason.trim(),
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    return _decode(response);
+  }
+
+  // Reschedule-screen data for an EXISTING appointment: the currently-held
+  // slot (to pre-fill date/time/duration), the provider's weekly schedule +
+  // special dates (to build the date picker), and one day's slot grid — the
+  // appointment's own window is marked isCurrent rather than booked, so it
+  // stays selectable. `date` is optional and defaults server-side to the
+  // current slot's day; pass it again whenever the user picks a different
+  // date to fetch that day's slots.
+  Future<Map<String, dynamic>> getRescheduleOptionsForAppointment(
+    String appointmentId, {
+    String? date,
+  }) async {
+    final query = <String, String>{
+      if (date != null && date.isNotEmpty) 'date': date,
+    };
+    final uri = Uri.parse(
+      '$_servicesRoot/appointments/$appointmentId/reschedule-options',
+    ).replace(queryParameters: query);
+    final response = await http
+        .get(uri, headers: await _headers(authRequired: true))
+        .timeout(const Duration(seconds: 30));
+
+    return _decode(response);
+  }
+
+  // Same shape, for a service that doesn't have an appointment yet (the
+  // initial booking / pre-acceptance offer picker).
+  Future<Map<String, dynamic>> getRescheduleOptionsForService(
+    String serviceId, {
+    int days = 14,
+    String? fromDate,
+  }) async {
+    final query = <String, String>{
+      'days': '$days',
+      if (fromDate != null && fromDate.isNotEmpty) 'fromDate': fromDate,
+    };
+    final uri = Uri.parse(
+      '$_servicesRoot/$serviceId/reschedule-options',
+    ).replace(queryParameters: query);
+    final response = await http
+        .get(uri, headers: await _headers(authRequired: false))
+        .timeout(const Duration(seconds: 30));
+
+    return _decode(response);
+  }
+
+  // appointmentDate is date-only ("YYYY-MM-DD") and appointmentTime is
+  // "HH:mm" — sent as separate fields, never combined into one timestamp,
+  // so the stored slot is exactly the wall clock picked, with no timezone
+  // math on either end that could shift it (that's what used to turn a
+  // 12:30 booking into 5:30).
+  Future<Map<String, dynamic>> rescheduleAppointment(
+    String appointmentId, {
+    required String appointmentDate,
+    required String appointmentTime,
+    int? duration,
+    String? reason,
+  }) async {
+    final response = await http
+        .patch(
+          Uri.parse('$_servicesRoot/appointments/$appointmentId/reschedule'),
+          headers: await _headers(authRequired: true),
+          body: jsonEncode({
+            'appointmentDate': appointmentDate,
+            'appointmentTime': appointmentTime,
+            if (duration != null) 'duration': duration,
+            // The backend accepts both keys — send both so callers using
+            // either name (this app's own "reason" vs. the API's documented
+            // "notes") both work.
+            if (reason != null && reason.trim().isNotEmpty) ...{
+              'reason': reason.trim(),
+              'notes': reason.trim(),
+            },
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    return _decode(response);
   }
 
   Future<Map<String, dynamic>> completeAppointment(String appointmentId) async {
@@ -287,6 +404,16 @@ class ServiceBookingService {
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
 
     return '${date}T$time$sign$hours:$minutes';
+  }
+
+  // Local wall-clock ISO string with no timezone suffix — what the
+  // reschedule/appointment endpoints expect (see rescheduleAppointment).
+  String localIso(DateTime dateTime) {
+    final date =
+        '${dateTime.year.toString().padLeft(4, '0')}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
+    final time =
+        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}:${dateTime.second.toString().padLeft(2, '0')}';
+    return '${date}T$time';
   }
 
   DateTime? parseTimeOfDay(DateTime date, String? time) {
