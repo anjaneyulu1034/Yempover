@@ -1363,9 +1363,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (!mounted) return;
     setState(() => _isPreparingOffer = false);
 
-    // Pure Coins on a service: pick a slot, the offer books it directly —
-    // reuses the existing chat (initiateChat is get-or-create).
-    if (selectedOption?.requiresSlotSelection == true) {
+    final requiresProductSelection =
+        isZeroCoin || (selectedOption?.requiresProductSelection ?? true);
+    final requiresServiceSelection =
+        selectedOption?.requiresServiceSelection ?? false;
+    final requiresSlotSelection = selectedOption?.requiresSlotSelection == true;
+
+    // Pure Coins on a service: slot-only, no item to pick — the offer books
+    // the slot directly on the dedicated booking screen. Reuses the existing
+    // chat (initiateChat is get-or-create).
+    if (requiresSlotSelection &&
+        !requiresProductSelection &&
+        !requiresServiceSelection) {
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -1375,11 +1384,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       if (mounted) unawaited(_refreshChat());
       return;
     }
-
-    final requiresProductSelection =
-        isZeroCoin || (selectedOption?.requiresProductSelection ?? true);
-    final requiresServiceSelection =
-        selectedOption?.requiresServiceSelection ?? false;
 
     if (!requiresProductSelection && !requiresServiceSelection) {
       final hasEnoughBalance = await _ensureSufficientWalletBalance(post);
@@ -1394,6 +1398,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             currentUserId: widget.currentUserId,
             isService: isService,
             offerMode: offerMode,
+            requiresSlotSelection: requiresSlotSelection,
           ),
         ),
       );
@@ -1414,6 +1419,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           offerMode: offerMode,
           isZeroCoin: isZeroCoin,
           allowServiceSelection: requiresServiceSelection,
+          requiresSlotSelection: requiresSlotSelection,
         ),
       ),
     );

@@ -27,6 +27,11 @@ class OfferDeckScreen extends StatefulWidget {
   // owner simply accepts/rejects, so unlike products there's no
   // value-matching requirement between what's picked and the listing.
   final bool allowServiceSelection;
+  // Services only: forwarded to OfferDescriptionScreen, which shows the
+  // slot picker and requires one to be chosen before submit — the same
+  // slot-booking requirement Pure Coins already has, now also on
+  // Barter/Service and Barter/Service + Coins.
+  final bool requiresSlotSelection;
 
   const OfferDeckScreen({
     super.key,
@@ -35,6 +40,7 @@ class OfferDeckScreen extends StatefulWidget {
     required this.offerMode,
     this.isZeroCoin = false,
     this.allowServiceSelection = false,
+    this.requiresSlotSelection = false,
   });
 
   @override
@@ -698,6 +704,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
           offerMode: widget.offerMode,
           initialQuotedPrice: _quotedPriceController.text.trim(),
           isZeroCoin: widget.isZeroCoin,
+          requiresSlotSelection: widget.requiresSlotSelection,
         ),
       ),
     );

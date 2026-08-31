@@ -15,6 +15,7 @@ import 'package:yempover_app/widgets/app_text_field.dart';
 import 'package:yempover_app/services/socket_io/socket_service.dart';
 import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/widgets/safe_network_image.dart';
+import 'package:yempover_app/widgets/service_slot_picker.dart';
 
 enum OfferSubmissionMode { price, barter, both }
 
@@ -32,6 +33,11 @@ class OfferDescriptionScreen extends StatefulWidget {
   // Explicit "no coins involved" request — the barter item is optional and
   // no price is ever sent, regardless of offerMode.
   final bool isZeroCoin;
+  // Service-only: the backend's exchange-mode option for this offer requires
+  // a booked slot (mirrors the Pure Coins scheduled flow) — Barter/Service
+  // and Barter/Service + Coins on a service now book a slot too, not just
+  // Pure Coins.
+  final bool requiresSlotSelection;
 
   const OfferDescriptionScreen({
     super.key,
@@ -44,6 +50,7 @@ class OfferDescriptionScreen extends StatefulWidget {
     required this.offerMode,
     this.initialQuotedPrice,
     this.isZeroCoin = false,
+    this.requiresSlotSelection = false,
   });
 
   @override
@@ -59,6 +66,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   bool _isSubmitting = false;
   String? _priceError;
   String? _descriptionError;
+  SelectedServiceSlot? _selectedSlot;
+
+  bool get _needsSlot => widget.isService && widget.requiresSlotSelection;
 
   bool get _requiresPrice =>
       widget.offerMode == OfferSubmissionMode.price ||
@@ -191,6 +201,22 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
   // duplicate, unlabeled restatement of the item name.
   String _buildOfferDescription() => _descriptionController.text.trim();
 
+  // "YYYY-MM-DD" / "HH:mm" kept as separate fields (never combined into one
+  // timestamp) so the stored slot is exactly the wall clock the user picked,
+  // with no timezone math on either end that could shift it — same
+  // convention as ServiceDetailBookingScreen's scheduled (Pure Coins) flow.
+  String? _formatAppointmentDate(SelectedServiceSlot? slot) {
+    if (slot == null) return null;
+    final d = slot.dateTime;
+    return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
+
+  String? _formatAppointmentTime(SelectedServiceSlot? slot) {
+    if (slot == null) return null;
+    final d = slot.dateTime;
+    return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
   @override
   void dispose() {
     _descriptionController.dispose();
@@ -308,6 +334,16 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
       return;
     }
 
+    if (_needsSlot && _selectedSlot == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a time slot'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     final walletAlreadyCheckedOnDeck =
         widget.offerMode == OfferSubmissionMode.both &&
         (widget.initialQuotedPrice?.trim().isNotEmpty ?? false);
@@ -406,6 +442,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           description: _buildOfferDescription(),
         );
       } else if (widget.offerMode == OfferSubmissionMode.barter) {
+        final slot = _selectedSlot;
         createdOffer = await _chatService.createBarterOffer(
           chatId: chat.id,
           barterItemTitle: _buildOfferTitle(),
@@ -415,8 +452,12 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           barterServiceItemIds: widget.selectedServiceItems
               .map((item) => item.id)
               .toList(),
+          appointmentDate: _formatAppointmentDate(slot),
+          appointmentTime: _formatAppointmentTime(slot),
+          appointmentDuration: slot?.durationMinutes,
         );
       } else {
+        final slot = _selectedSlot;
         createdOffer = await _chatService.createBothOffer(
           chatId: chat.id,
           price: parsedPrice!,
@@ -427,6 +468,9 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           barterServiceItemIds: widget.selectedServiceItems
               .map((item) => item.id)
               .toList(),
+          appointmentDate: _formatAppointmentDate(slot),
+          appointmentTime: _formatAppointmentTime(slot),
+          appointmentDuration: slot?.durationMinutes,
         );
       }
 
@@ -861,6 +905,22 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
             ),
 
             const SizedBox(height: 24),
+
+            if (_needsSlot) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: ServiceSlotPicker(
+                  serviceId: widget.post.id,
+                  onChanged: (slot) => setState(() => _selectedSlot = slot),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
 
             // Description Input
             if (_requiresPrice) ...[

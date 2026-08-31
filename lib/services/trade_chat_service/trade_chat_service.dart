@@ -307,6 +307,12 @@ class TradeChatService {
     // The offerer's own SERVICES offered in exchange (service-for-barter
     // direct flow) — alongside or instead of barterItemIds.
     List<String>? barterServiceItemIds,
+    // Slot booked alongside a Barter/Service offer on a service listing —
+    // same fields as createPriceOffer's scheduled flow (see there for the
+    // date/time-kept-separate rationale).
+    String? appointmentDate,
+    String? appointmentTime,
+    int? appointmentDuration,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -325,6 +331,10 @@ class TradeChatService {
         'barterItemIds': barterItemIds ?? [],
         if (barterServiceItemIds != null)
           'barterServiceItemIds': barterServiceItemIds,
+        if (appointmentDate != null) 'appointmentDate': appointmentDate,
+        if (appointmentTime != null) 'appointmentTime': appointmentTime,
+        if (appointmentDuration != null)
+          'appointmentDuration': appointmentDuration,
       });
 
       print('📤 Creating barter offer - URL: $url');
@@ -358,6 +368,11 @@ class TradeChatService {
     List<String>? barterWishCategories,
     List<String>? barterItemIds,
     List<String>? barterServiceItemIds,
+    // Slot booked alongside a Barter/Service + Coins offer on a service
+    // listing — same fields as createPriceOffer's scheduled flow.
+    String? appointmentDate,
+    String? appointmentTime,
+    int? appointmentDuration,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -374,6 +389,10 @@ class TradeChatService {
         'barterItemIds': barterItemIds ?? [],
         if (barterServiceItemIds != null)
           'barterServiceItemIds': barterServiceItemIds,
+        if (appointmentDate != null) 'appointmentDate': appointmentDate,
+        if (appointmentTime != null) 'appointmentTime': appointmentTime,
+        if (appointmentDuration != null)
+          'appointmentDuration': appointmentDuration,
       });
 
       print('📤 Creating BOTH offer - URL: $url');
