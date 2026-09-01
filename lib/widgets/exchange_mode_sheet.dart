@@ -183,10 +183,18 @@ Future<bool?> _confirmZeroCoinSelection(BuildContext context) {
 Widget _buildExchangeModeCard(BuildContext context, ExchangeModeOption option) {
   final isBarterFlavored =
       option.mode == 'PURE_BARTER' || option.mode == 'SERVICE_FOR_BARTER';
-  // Only meaningful for the slot-based (Pure Coins) service option — the
-  // provider hasn't published a schedule yet, so there's nothing to book.
+  // Only hard-blocks the slot-only (Pure Coins) option — the provider hasn't
+  // published a schedule yet, so there's nothing to book and no fallback.
+  // Barter/Service and Barter/Service + Coins also carry requiresSlotSelection
+  // now, but they still have product/service items to pick regardless of
+  // scheduling, so they stay tappable — the slot picker inside
+  // OfferDescriptionScreen degrades gracefully (shows "no slots for this
+  // date") instead of dead-ending the whole offer here.
   final schedulingBlocked =
-      option.requiresSlotSelection && !option.schedulingConfigured;
+      option.requiresSlotSelection &&
+      !option.schedulingConfigured &&
+      !option.requiresProductSelection &&
+      !option.requiresServiceSelection;
 
   return ListTile(
     contentPadding: EdgeInsets.zero,

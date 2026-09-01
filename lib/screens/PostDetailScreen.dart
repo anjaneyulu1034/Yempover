@@ -334,8 +334,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       if (!mounted || confirmed != true) return;
     }
 
-    // Pure Coins on a service: pick a slot, the offer books it directly.
-    if (selectedOption.requiresSlotSelection) {
+    final requiresProductSelection = selectedOption.requiresProductSelection;
+    final requiresServiceSelection = selectedOption.requiresServiceSelection;
+
+    // Pure Coins on a service: slot-only, no item to pick — the offer books
+    // the slot directly on the dedicated booking screen.
+    if (selectedOption.requiresSlotSelection &&
+        !requiresProductSelection &&
+        !requiresServiceSelection) {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -347,8 +353,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
     final offerMode = mapOfferTypeToSubmissionMode(selectedOption.offerType);
 
-    if (!selectedOption.requiresProductSelection &&
-        !selectedOption.requiresServiceSelection) {
+    if (!requiresProductSelection && !requiresServiceSelection) {
       final hasEnoughBalance = await _ensureSufficientWalletBalance();
       if (!mounted || !hasEnoughBalance) return;
 
@@ -361,6 +366,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             currentUserId: _currentUserId!,
             isService: isService,
             offerMode: offerMode,
+            requiresSlotSelection: selectedOption.requiresSlotSelection,
           ),
         ),
       );
@@ -374,7 +380,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           post: _post,
           currentUserId: _currentUserId!,
           offerMode: offerMode,
-          allowServiceSelection: selectedOption.requiresServiceSelection,
+          allowServiceSelection: requiresServiceSelection,
+          requiresSlotSelection: selectedOption.requiresSlotSelection,
         ),
       ),
     );
