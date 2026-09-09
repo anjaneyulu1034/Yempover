@@ -127,15 +127,21 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   }
 
   // Services offered in the direct barter flow aren't clubbed/value-matched
-  // like products, so this doesn't gate on isBarterEligiblePost or
-  // isClubbable the way the product mapper does — the owner just accepts or
-  // rejects whatever's picked.
+  // like products, so this doesn't gate on isClubbable the way the product
+  // mapper does — the owner just accepts or rejects whatever's picked. It
+  // DOES still gate on barter-eligibility though: a service the user marked
+  // "No Barter" on themselves is their own listing staying pay-with-coins
+  // only, and offering it up as barter currency here would contradict that.
   List<UserItem> _mapMyPostsToServiceItems(List<MyPost> posts) {
     return posts
         .where((myPost) => myPost.postedById == widget.currentUserId)
         .where((myPost) => myPost.type.toLowerCase() == 'service')
         .where((myPost) => myPost.isListed == true)
         .where((myPost) => !_isPostExpired(myPost))
+        .where(
+          (myPost) =>
+              !_filtersToBarterPostsOnly || _isBarterEligiblePost(myPost),
+        )
         .where(
           (myPost) =>
               myPost.status.toUpperCase() != 'SOLD' &&
