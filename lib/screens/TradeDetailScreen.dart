@@ -12,7 +12,7 @@ import 'package:yempover_app/widgets/coin_icon.dart';
 // productId when there's nothing to deep-link to — e.g. no snapshot data
 // on older trades).
 class _BarterLineItem {
-  final String imageUrl;
+  final String? imageUrl;
   final String? productId;
   final double? price;
 
@@ -305,9 +305,7 @@ class TradeDetailScreen extends StatelessWidget {
                     child: _buildUserSection(
                       context: context,
                       title: trade.otherUser.fullName,
-                      imageUrl:
-                          trade.otherUser.profileImage ??
-                          'https://via.placeholder.com/150',
+                      imageUrl: trade.otherUser.profileImage,
                       badgeLabel: tradeType == 'Sold'
                           ? 'Sold to this user'
                           : tradeType == 'Purchased'
@@ -503,19 +501,18 @@ class TradeDetailScreen extends StatelessWidget {
 
   // The logged-in user's own profile image — was hardcoded to a placeholder
   // before, unlike "Their Item" which already reads trade.otherUser's real
-  // image. Falls back to the same placeholder when no image is set.
-  String _myProfileImage() {
+  // image. Null (not a fake URL) when no image is set, so callers never
+  // issue a network request for an image that doesn't exist.
+  String? _myProfileImage() {
     final image = ProfileSessionManager.instance.profile?.profileImage;
-    return (image != null && image.trim().isNotEmpty)
-        ? image
-        : 'https://via.placeholder.com/150';
+    return (image != null && image.trim().isNotEmpty) ? image : null;
   }
 
   // The listing side of the trade is always exactly one product.
   _BarterLineItem _listingItem(TradeItem trade) {
     final image = trade.product.primaryImage.isNotEmpty
         ? trade.product.primaryImage
-        : 'https://via.placeholder.com/150';
+        : null;
     return _BarterLineItem(
       imageUrl: image,
       productId: trade.product.id,
@@ -532,19 +529,12 @@ class TradeDetailScreen extends StatelessWidget {
     // to a clubbed offer where the images/ids arrays could ever drift).
     if (trade.barterProducts.isNotEmpty) {
       return trade.barterProducts.map((p) {
-        final image = p.images.isNotEmpty
-            ? p.images.first
-            : 'https://via.placeholder.com/150';
+        final image = p.images.isNotEmpty ? p.images.first : null;
         return _BarterLineItem(imageUrl: image, productId: p.id, price: p.price);
       }).toList();
     }
     if (trade.barterItemImages.isEmpty) {
-      return const [
-        _BarterLineItem(
-          imageUrl: 'https://via.placeholder.com/150',
-          productId: null,
-        ),
-      ];
+      return const [_BarterLineItem(imageUrl: null, productId: null)];
     }
     return List.generate(trade.barterItemImages.length, (i) {
       final productId = i < trade.barterProductIds.length
@@ -630,9 +620,7 @@ class TradeDetailScreen extends StatelessWidget {
             _buildUserSection(
               context: context,
               title: trade.otherUser.fullName,
-              imageUrl:
-                  trade.otherUser.profileImage ??
-                  'https://via.placeholder.com/150',
+              imageUrl: trade.otherUser.profileImage,
               badgeLabel: 'Their Item',
               itemTitle: theirItemTitle,
               items: theirItems,
@@ -657,11 +645,12 @@ class TradeDetailScreen extends StatelessWidget {
   Widget _buildUserSection({
     required BuildContext context,
     required String title,
-    required String imageUrl,
+    required String? imageUrl,
     required String itemTitle,
     required List<_BarterLineItem> items,
     required String badgeLabel,
   }) {
+    final hasImage = imageUrl != null && imageUrl.trim().isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -669,12 +658,11 @@ class TradeDetailScreen extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 24,
-              backgroundImage: NetworkImage(imageUrl),
-              onBackgroundImageError: (exception, stackTrace) =>
-                  const Icon(Icons.person),
-              child: imageUrl.contains('placeholder')
-                  ? const Icon(Icons.person, size: 24)
+              backgroundImage: hasImage ? NetworkImage(imageUrl) : null,
+              onBackgroundImageError: hasImage
+                  ? (exception, stackTrace) {}
                   : null,
+              child: hasImage ? null : const Icon(Icons.person, size: 24),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -730,27 +718,32 @@ class TradeDetailScreen extends StatelessWidget {
                 spacing: 10,
                 runSpacing: 10,
                 children: items.map((item) {
+                  final hasImage =
+                      item.imageUrl != null && item.imageUrl!.isNotEmpty;
                   final thumb = Container(
                     width: 60,
                     height: 60,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(6),
-                      image: DecorationImage(
-                        image: NetworkImage(item.imageUrl),
-                        fit: BoxFit.cover,
-                        onError: (exception, stackTrace) {
-                          // Handle image error
-                        },
-                      ),
+                      color: hasImage ? null : Colors.grey.shade200,
+                      image: hasImage
+                          ? DecorationImage(
+                              image: NetworkImage(item.imageUrl!),
+                              fit: BoxFit.cover,
+                              onError: (exception, stackTrace) {
+                                // Handle image error
+                              },
+                            )
+                          : null,
                     ),
-                    child: item.imageUrl.contains('placeholder')
-                        ? const Center(
+                    child: hasImage
+                        ? null
+                        : const Center(
                             child: Icon(
                               Icons.image_not_supported,
                               color: Colors.grey,
                             ),
-                          )
-                        : null,
+                          ),
                   );
                   final tappableThumb = item.productId != null
                       ? InkWell(

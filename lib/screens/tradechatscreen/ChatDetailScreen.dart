@@ -832,6 +832,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       // instead of leaving it stale until a manual refresh (Point: "Make
       // offer again" should reappear live after the owner cancels).
       await _refreshChat();
+
+      if (mounted) {
+        _returnToMarketplaceAfterDealNotCompleted();
+      }
     } catch (e) {
       print('Error handling deal cancelled: $e');
     }
@@ -2625,6 +2629,34 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     });
   }
 
+  // Same as above, for the other outcome — the deal was called off rather
+  // than completed. There's equally nothing left to do in this chat, so
+  // this also sends the viewer back to the marketplace instead of leaving
+  // them on a closed-out screen. Reachable from the local "Deal Not
+  // Complete" action and the deal_cancelled socket broadcast for whichever
+  // party didn't just tap it themselves.
+  bool _hasNavigatedAwayOnDealNotCompleted = false;
+
+  void _returnToMarketplaceAfterDealNotCompleted() {
+    if (!mounted || _hasNavigatedAwayOnDealNotCompleted) return;
+    _hasNavigatedAwayOnDealNotCompleted = true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Deal marked as not completed. Taking you back to the marketplace.',
+        ),
+        backgroundColor: Colors.orange,
+      ),
+    );
+    Future.delayed(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+    });
+  }
+
   Future<void> _completeTrade() async {
     if (_isShowingDealCompletionDialog) return;
 
@@ -2811,6 +2843,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
       _scrollToBottom();
       widget.onChatUpdated(_currentChat);
+      _returnToMarketplaceAfterDealNotCompleted();
     } catch (e) {
       setState(() {
         _isLoading = false;

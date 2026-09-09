@@ -174,22 +174,29 @@ class _HiddenPostsScreenState extends State<HiddenPostsScreen> {
                       contentPadding: const EdgeInsets.all(12),
                       leading: ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
-                          post.processedImages.isNotEmpty
-                              ? post.processedImages.first
-                              : 'https://via.placeholder.com/80',
-                          width: 56,
-                          height: 56,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              width: 56,
-                              height: 56,
-                              color: Colors.grey.shade200,
-                              child: const Icon(Icons.image_not_supported),
-                            );
-                          },
-                        ),
+                        child: post.processedImages.isNotEmpty
+                            ? Image.network(
+                                post.processedImages.first,
+                                width: 56,
+                                height: 56,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    width: 56,
+                                    height: 56,
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(
+                                      Icons.image_not_supported,
+                                    ),
+                                  );
+                                },
+                              )
+                            : Container(
+                                width: 56,
+                                height: 56,
+                                color: Colors.grey.shade200,
+                                child: const Icon(Icons.image_not_supported),
+                              ),
                       ),
                       title: Text(
                         post.title,

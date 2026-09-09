@@ -17,6 +17,7 @@ import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:yempover_app/utils/wallet_offer_guard.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
 import 'package:yempover_app/widgets/exchange_mode_sheet.dart';
+import 'package:yempover_app/widgets/service_slots_preview.dart';
 import 'package:yempover_app/widgets/safe_network_image.dart';
 import 'package:yempover_app/widgets/app_text_field.dart';
 
@@ -1197,7 +1198,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final serviceLocation = _post.location.trim().isNotEmpty
         ? _post.location
         : 'Location not specified';
-    final providerArea = (_post.postedBy.homeAddress ?? '').trim();
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -1279,12 +1279,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             label: 'Service location',
             value: serviceLocation,
           ),
-          if (providerArea.isNotEmpty)
-            _buildServiceMetaRow(
-              icon: Icons.home_work_outlined,
-              label: 'Provider area',
-              value: providerArea,
-            ),
           _buildServiceMetaRow(
             icon: Icons.event_outlined,
             label: 'Posted on',
@@ -1292,6 +1286,24 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // Read-only preview of the provider's schedule — the same weekly-schedule
+  // + live day-slot picker used when actually booking (ServiceSlotPicker),
+  // just without an offer/booking action attached. Lets a prospective buyer
+  // see whether there's a slot that works for them before they commit to
+  // making an offer at all.
+  Widget _buildAvailableSlotsSection() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.shade100),
+      ),
+      child: ServiceSlotsPreview(serviceId: _post.id),
     );
   }
 
@@ -1669,6 +1681,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
                   if (_post.isForBarter) _buildBarterSection(),
                   if (_post.type == PostType.service) _buildServiceSection(),
+                  if (_post.type == PostType.service && !_isOwnPost)
+                    _buildAvailableSlotsSection(),
 
                   Padding(
                     padding: const EdgeInsets.symmetric(

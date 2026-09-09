@@ -221,7 +221,8 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
     final price = trade.displayPrice;
     final imageUrl = trade.product.primaryImage.isNotEmpty
         ? trade.product.primaryImage
-        : 'https://via.placeholder.com/150';
+        : null;
+    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
     return GestureDetector(
       onTap: () {
@@ -256,22 +257,25 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
               height: 70,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                image: DecorationImage(
-                  image: NetworkImage(imageUrl),
-                  fit: BoxFit.cover,
-                  onError: (exception, stackTrace) {
-                    // Handle image loading error
-                  },
-                ),
+                color: hasImage ? null : Colors.grey.shade200,
+                image: hasImage
+                    ? DecorationImage(
+                        image: NetworkImage(imageUrl),
+                        fit: BoxFit.cover,
+                        onError: (exception, stackTrace) {
+                          // Handle image loading error
+                        },
+                      )
+                    : null,
               ),
-              child: imageUrl.contains('placeholder')
-                  ? const Center(
+              child: hasImage
+                  ? null
+                  : const Center(
                       child: Icon(
                         Icons.image_not_supported,
                         color: Colors.grey,
                       ),
-                    )
-                  : null,
+                    ),
             ),
 
             const SizedBox(width: 16),
