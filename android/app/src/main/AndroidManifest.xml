@@ -60,6 +60,20 @@
             </intent-filter>
         </service>
 
+        <!-- Without this, a notification-payload push that arrives while the
+             app is backgrounded/killed is auto-displayed by the FCM SDK on
+             its own fallback "Miscellaneous" channel instead of the app's
+             own high-importance one created in notification1_service.dart —
+             several OEMs (Xiaomi, Samsung, ...) silently suppress that
+             fallback channel, which is why alerts were only ever visible
+             inside the in-app bell icon list. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="signup_channel" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher" />
+
         <!-- Required by Flutter -->
         <meta-data
             android:name="flutterEmbedding"

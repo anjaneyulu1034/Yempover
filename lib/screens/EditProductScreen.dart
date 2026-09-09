@@ -768,7 +768,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
         ...uploadedImageUrls,
       ];
 
-      if (preparedImages.isEmpty) {
+      // A photo is mandatory for a Product listing, but not for a Service —
+      // matches the same rule on the Add Post flow.
+      if (preparedImages.isEmpty && _postType != 'service') {
         throw Exception('Please add at least one image');
       }
 

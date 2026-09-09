@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'chats/trade_chat.dart' show BarterProductInfo;
+import 'chats/trade_chat.dart' show BarterProductInfo, ServiceAppointmentSnapshot;
 
 Map<String, dynamic> _asMap(dynamic value) {
   if (value is Map<String, dynamic>) return value;
@@ -416,6 +416,11 @@ class TradeItem {
   // server-computed. Null for trades completed before this was tracked —
   // fall back to exchangeSummary-based rendering in that case.
   final ValueBreakdown? valueBreakdown;
+  // The slot actually booked for a service trade (every service offer type
+  // books one) — snapshotted server-side at accept time, so it still shows
+  // here even after the live appointment moves on. Null for a product
+  // trade, or a service trade that predates this being tracked.
+  final ServiceAppointmentSnapshot? appointment;
 
   TradeItem({
     required this.id,
@@ -435,6 +440,7 @@ class TradeItem {
     this.isMyBarterItem,
     this.exchangeSummary,
     this.valueBreakdown,
+    this.appointment,
   });
 
   factory TradeItem.fromJson(
@@ -474,6 +480,11 @@ class TradeItem {
       valueBreakdown: json['valueBreakdown'] is Map
           ? ValueBreakdown.fromJson(
               Map<String, dynamic>.from(json['valueBreakdown'] as Map),
+            )
+          : null,
+      appointment: json['appointment'] is Map
+          ? ServiceAppointmentSnapshot.fromJson(
+              Map<String, dynamic>.from(json['appointment'] as Map),
             )
           : null,
     );

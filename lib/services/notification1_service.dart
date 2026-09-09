@@ -107,6 +107,29 @@ class NotificationService1 {
           },
     );
 
+    // Create the channel up front, with high importance, rather than letting
+    // Android/FCM lazily create it on first use. Every push we send carries a
+    // `notification` block, so while the app is backgrounded/killed the FCM
+    // SDK displays it automatically — but only via whatever channel is
+    // configured (see the manifest's default_notification_channel_id meta-
+    // data pointing at this same id). Without this channel existing ahead of
+    // time, that auto-display falls back to FCM's own default channel, which
+    // several OEMs mute or hide by default — the notification still creates
+    // fine server-side (so it shows up in the in-app bell icon list), it
+    // just never surfaces as a system alert.
+    const fln.AndroidNotificationChannel highImportanceChannel =
+        fln.AndroidNotificationChannel(
+          'signup_channel',
+          'BarterX Notifications',
+          description: 'Offers, messages, and deal updates',
+          importance: fln.Importance.high,
+        );
+    await _flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          fln.AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(highImportanceChannel);
+
     // Android 13+ permission
     await _flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
