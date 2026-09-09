@@ -74,6 +74,14 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
       widget.offerMode == OfferSubmissionMode.price ||
       widget.offerMode == OfferSubmissionMode.both;
 
+  // The "Both" mode always requires item selection, so this screen is only
+  // ever reached for it via OfferDeckScreen — which already collected the
+  // quoted price (see its Quoted Price field) and forwards it here as
+  // initialQuotedPrice. Showing the field again here would ask for the same
+  // number twice; only the pure-price mode (which skips OfferDeckScreen
+  // entirely) still needs to collect it on this screen.
+  bool get _showsPriceInputHere => widget.offerMode == OfferSubmissionMode.price;
+
   bool get _requiresBarterItems =>
       widget.offerMode == OfferSubmissionMode.barter ||
       widget.offerMode == OfferSubmissionMode.both;
@@ -543,6 +551,17 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
           setState(() {
             _priceError = 'Price must be greater than 0';
           });
+          // For "Both" the price field lives on the previous (Offer Deck)
+          // screen, not this one — the inline error text above has nowhere
+          // to show, so surface it as a toast instead of failing silently.
+          if (!_showsPriceInputHere) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Price must be greater than 0'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
           return;
         }
 
@@ -923,7 +942,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
             ],
 
             // Description Input
-            if (_requiresPrice) ...[
+            if (_showsPriceInputHere) ...[
               const Text(
                 'Your offer price',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),

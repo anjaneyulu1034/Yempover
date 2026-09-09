@@ -102,9 +102,10 @@ class _AddPostScreenState extends State<AddPostScreen> {
   bool _showLocationMinCharsHint = false;
   static const String _googleApiKey = 'AIzaSyAT3wIjV73qVXPAlgkyifnns38GztnbNF4';
 
+  // A photo is mandatory for a Product listing, but not for a Service —
+  // a service listing is fine with just a description.
   bool get _isImageRequiredForPost =>
-      _selectedOption == 1 &&
-      (_postType == 'Product' || _postType == 'Service');
+      _selectedOption == 1 && _postType == 'Product';
 
   static const Color _primary = Color(0xFF2E5BFF);
   static const Color _primaryLight = Color(0xFFEFF4FF);

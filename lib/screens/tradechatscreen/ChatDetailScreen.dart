@@ -29,6 +29,7 @@ import 'package:yempover_app/utils/wallet_offer_guard.dart';
 import 'package:yempover_app/utils/validators.dart';
 import 'package:yempover_app/services/resume_state_service.dart';
 import 'package:yempover_app/screens/tradechatscreen/deal_verification_panel.dart';
+import 'package:yempover_app/screens/Home_screen.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final TradeChat chat;
@@ -799,12 +800,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       unawaited(_refreshChat());
 
       if (!partial && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Deal completed successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        _returnToMarketplaceAfterDealCompletion();
       }
     } catch (e) {
       print('Error handling deal completed: $e');
@@ -2603,6 +2599,32 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return true;
   }
 
+  // Both sides just marked the deal completed — nothing left to do in this
+  // chat, so send the viewer back to the marketplace instead of leaving them
+  // sitting on a closed-out screen with no useful next action. Reachable
+  // from two independent paths (the local completion action, and the
+  // deal_completed socket broadcast for whichever party didn't just tap the
+  // button themselves) — guarded so it only ever navigates once.
+  bool _hasNavigatedAwayOnDealCompletion = false;
+
+  void _returnToMarketplaceAfterDealCompletion() {
+    if (!mounted || _hasNavigatedAwayOnDealCompletion) return;
+    _hasNavigatedAwayOnDealCompletion = true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Deal completed! Taking you back to the marketplace.'),
+        backgroundColor: Colors.green,
+      ),
+    );
+    Future.delayed(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+    });
+  }
+
   Future<void> _completeTrade() async {
     if (_isShowingDealCompletionDialog) return;
 
@@ -2659,6 +2681,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         remarks: result['remarks'] ?? 'accepted',
       );
 
+      final justFullyCompleted = !_currentChat.isCompleted && updatedChat.isCompleted;
+
       setState(() {
         _currentChat = updatedChat;
         _messages = List.from(updatedChat.messages);
@@ -2667,6 +2691,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
       _scrollToBottom();
       widget.onChatUpdated(_currentChat);
+      if (justFullyCompleted) {
+        _returnToMarketplaceAfterDealCompletion();
+      }
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -4871,6 +4898,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                                 otherUserName: _getOtherUser().firstName,
                                 onChatShouldRefresh:
                                     _refreshChatWithFullScreenLoader,
+                                onDealFullyCompleted: _returnToMarketplaceAfterDealCompletion,
                               )
                             else
                               _buildDealCompletionBanner(),

@@ -12,6 +12,7 @@ import 'package:yempover_app/screens/CoinsWalletScreen.dart';
 import 'package:yempover_app/screens/PrivacyScreen.dart';
 import 'package:yempover_app/screens/TermsScreen.dart';
 import 'package:yempover_app/screens/TradeHistoryScreen.dart';
+import 'package:yempover_app/screens/service/AppointmentsDashboardScreen.dart';
 import 'package:yempover_app/services/account_service.dart';
 import 'package:yempover_app/services/auth_service.dart';
 import 'package:yempover_app/services/profile_session_manager.dart';
@@ -313,19 +314,20 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
 
         // Service Appointments Dashboard
         if (!_isGuestUser)
-          // _buildMenuItem(
-          //   icon: Icons.calendar_month_outlined,
-          //   title: 'Appointments',
-          //   onTap: () {
-          //     Navigator.push(
-          //       context,
-          //       MaterialPageRoute(
-          //         builder: (context) => const AppointmentsDashboardScreen(),
-          //       ),
-          //     );
-          //   },
-          // ),
-          if (!_isGuestUser)
+          _buildMenuItem(
+            icon: Icons.calendar_month_outlined,
+            title: 'Appointments',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AppointmentsDashboardScreen(),
+                ),
+              );
+            },
+          ),
+
+        if (!_isGuestUser)
             _buildMenuItem(
               icon: Icons.visibility_off_outlined,
               title: 'Hidden Posts',

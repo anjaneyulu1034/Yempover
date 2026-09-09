@@ -16,6 +16,12 @@ class DealVerificationPanel extends StatefulWidget {
   final String currentUserId;
   final String? itemName;
   final VoidCallback onChatShouldRefresh;
+  // Fired the moment BOTH sides have marked the deal completed, but only for
+  // a transition that happens while this panel is on screen — not when the
+  // chat is reopened later to an already-completed deal (e.g. from Trade
+  // History), which should stay browsable rather than bounce the viewer
+  // straight back out.
+  final VoidCallback? onDealFullyCompleted;
   // Who gave what to whom, so the completed-deal card can spell out the
   // exchange instead of just a bare checkmark — the offerer handed over
   // offeredItemLabel and received itemName (the post) from the receiver.
@@ -31,6 +37,7 @@ class DealVerificationPanel extends StatefulWidget {
     required this.chatId,
     required this.currentUserId,
     required this.onChatShouldRefresh,
+    this.onDealFullyCompleted,
     this.itemName,
     this.offererName,
     this.receiverName,
@@ -50,6 +57,12 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
   bool _isLoading = true;
   String? _loadError;
   bool _isBusy = false; // completing / closing
+  bool _hasFetchedOnce = false;
+  bool _wasAlreadyDoneOnEntry = false;
+  bool _firedFullyCompleted = false;
+
+  bool _isDealDone(DealVerification v) =>
+      v.status == DealStatus.COMPLETED || v.completion.bothCompleted;
 
   @override
   void initState() {
@@ -87,11 +100,20 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
         widget.chatId,
       );
       if (!mounted) return;
+      final isDone = _isDealDone(verification);
+      if (!_hasFetchedOnce) {
+        _hasFetchedOnce = true;
+        _wasAlreadyDoneOnEntry = isDone;
+      }
       setState(() {
         _verification = verification;
         _isLoading = false;
         _loadError = null;
       });
+      if (isDone && !_wasAlreadyDoneOnEntry && !_firedFullyCompleted) {
+        _firedFullyCompleted = true;
+        widget.onDealFullyCompleted?.call();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -306,9 +328,7 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
       );
     }
 
-    final isDone =
-        verification.status == DealStatus.COMPLETED ||
-        verification.completion.bothCompleted;
+    final isDone = _isDealDone(verification);
 
     return _panelContainer(
       child: Column(
