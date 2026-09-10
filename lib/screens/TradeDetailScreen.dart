@@ -34,6 +34,12 @@ class TradeDetailScreen extends StatelessWidget {
     final tradeType = currentUserId != null
         ? trade.getTradeType(currentUserId!)
         : trade.getDisplayTradeType();
+    // Same as tradeType, but a completed service reads "Confirmed" instead
+    // of "Sold" for the badge text — tradeType itself stays as-is so the
+    // color logic below (keyed on 'Sold') is unaffected.
+    final tradeTypeLabel = currentUserId != null
+        ? trade.getTradeTypeLabel(currentUserId!)
+        : trade.getDisplayTradeTypeLabel();
 
     final isBarter = trade.isBarter;
     final price = trade.displayPrice;
@@ -99,7 +105,7 @@ class TradeDetailScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            tradeType,
+                            tradeTypeLabel,
                             style: const TextStyle(
                               fontSize: 14,
                               color: Colors.white,

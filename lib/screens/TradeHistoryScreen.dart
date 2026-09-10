@@ -217,6 +217,12 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
     final tradeType = _currentUserId != null
         ? trade.getTradeType(_currentUserId!)
         : trade.getDisplayTradeType();
+    // Same as tradeType, but a completed service reads "Confirmed" instead
+    // of "Sold" for the badge text — tradeType itself stays as-is so the
+    // color logic (keyed on 'Sold') is unaffected.
+    final tradeTypeLabel = _currentUserId != null
+        ? trade.getTradeTypeLabel(_currentUserId!)
+        : trade.getDisplayTradeTypeLabel();
 
     final price = trade.displayPrice;
     final imageUrl = trade.product.primaryImage.isNotEmpty
@@ -315,7 +321,7 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          tradeType,
+                          tradeTypeLabel,
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.white,

@@ -516,6 +516,23 @@ class TradeItem {
   bool get hasBarterItemSnapshot =>
       barterItemTitle != null && barterItemTitle!.trim().isNotEmpty;
 
+  // True when the underlying listing was a Service, not a Product — the
+  // backend reshapes a completed service transaction into the same Product
+  // JSON shape (serviceAsProductShape) so older clients still render
+  // something, which means `product` alone can't tell the two apart. Their
+  // status enums never overlap though: a Service is always one of
+  // LOOKING_FOR_SERVICE/PROVIDE_SERVICE/COMPLETED/CANCELLED, a Product
+  // always FOR_SALE/FOR_BARTER/SOLD/BARTERED/EXPIRED — so status alone is a
+  // reliable signal, for old and new trades alike.
+  static const _serviceOnlyStatuses = {
+    'LOOKING_FOR_SERVICE',
+    'PROVIDE_SERVICE',
+    'COMPLETED',
+    'CANCELLED',
+  };
+  bool get isServiceTrade =>
+      _serviceOnlyStatuses.contains(product.status.trim().toUpperCase());
+
   // Determine trade type based on who posted the product
   String getTradeType(String currentUserId) {
     if (isBarter) return 'Barter';
@@ -524,6 +541,15 @@ class TradeItem {
     } else {
       return 'Purchased';
     }
+  }
+
+  // Same as getTradeType, but a completed service reads "Confirmed" instead
+  // of "Sold" — a service isn't taken off the shelf like a physical item,
+  // it's fulfilled/confirmed. Purchased/Barter labels, and everything for a
+  // Product, are unchanged.
+  String getTradeTypeLabel(String currentUserId) {
+    final type = getTradeType(currentUserId);
+    return (type == 'Sold' && isServiceTrade) ? 'Confirmed' : type;
   }
 
   // Check if it's a barter trade
@@ -536,6 +562,13 @@ class TradeItem {
   String getDisplayTradeType() {
     if (isBarter) return 'Barter';
     return product.postedById == otherUser.id ? 'Purchased' : 'Sold';
+  }
+
+  // Display-label counterpart to getDisplayTradeType, same "Confirmed" swap
+  // for a completed service.
+  String getDisplayTradeTypeLabel() {
+    final type = getDisplayTradeType();
+    return (type == 'Sold' && isServiceTrade) ? 'Confirmed' : type;
   }
 }
 
