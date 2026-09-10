@@ -972,10 +972,20 @@ class TradeDetailScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
             child: Text(
-              '+ ${CoinFormat.amount(side.coins)} coins',
+              // A side's `coins` is what THAT side contributed/paid — on
+              // your own side that's coins leaving your wallet (matches the
+              // "-51" the wallet transaction itself shows), not a gain, so
+              // it reads as a minus/warning color there. On the other
+              // side it's their contribution, which is what pays you —
+              // that stays a "+"/green, since it's not your own balance.
+              side.isYou
+                  ? '- ${CoinFormat.amount(side.coins)} coins'
+                  : '+ ${CoinFormat.amount(side.coins)} coins',
               style: TextStyle(
                 fontSize: 12.5,
-                color: Colors.green.shade700,
+                color: side.isYou
+                    ? Colors.red.shade700
+                    : Colors.green.shade700,
                 fontWeight: FontWeight.w600,
               ),
             ),

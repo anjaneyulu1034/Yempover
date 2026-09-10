@@ -543,13 +543,19 @@ class TradeItem {
     }
   }
 
-  // Same as getTradeType, but a completed service reads "Confirmed" instead
-  // of "Sold" — a service isn't taken off the shelf like a physical item,
-  // it's fulfilled/confirmed. Purchased/Barter labels, and everything for a
-  // Product, are unchanged.
-  String getTradeTypeLabel(String currentUserId) {
-    final type = getTradeType(currentUserId);
-    return (type == 'Sold' && isServiceTrade) ? 'Confirmed' : type;
+  // Same as getTradeType, but a completed service reads "Confirmed"/"Booked"
+  // instead of "Sold"/"Purchased" — a service isn't taken off the shelf
+  // like a physical item (it's fulfilled/confirmed by the provider) or
+  // picked up like a physical item (it's booked by the client). Barter
+  // label, and everything for a Product, are unchanged.
+  String getTradeTypeLabel(String currentUserId) =>
+      _serviceLabel(getTradeType(currentUserId));
+
+  String _serviceLabel(String type) {
+    if (!isServiceTrade) return type;
+    if (type == 'Sold') return 'Confirmed';
+    if (type == 'Purchased') return 'Booked';
+    return type;
   }
 
   // Check if it's a barter trade
@@ -564,12 +570,9 @@ class TradeItem {
     return product.postedById == otherUser.id ? 'Purchased' : 'Sold';
   }
 
-  // Display-label counterpart to getDisplayTradeType, same "Confirmed" swap
-  // for a completed service.
-  String getDisplayTradeTypeLabel() {
-    final type = getDisplayTradeType();
-    return (type == 'Sold' && isServiceTrade) ? 'Confirmed' : type;
-  }
+  // Display-label counterpart to getDisplayTradeType, same service-label
+  // swap.
+  String getDisplayTradeTypeLabel() => _serviceLabel(getDisplayTradeType());
 }
 
 class OtherUser {
