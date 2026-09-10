@@ -419,9 +419,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadFavoritePostIds() async {
     try {
+      // The backend caps this endpoint's limit at 100 (express-validator's
+      // isInt max) — 200 was rejected outright with a 400 before any
+      // favorites loaded, so no post on the home feed ever showed as
+      // favorited.
       final response = await _postActionService.getFavorites(
         page: 1,
-        limit: 200,
+        limit: 100,
       );
       final ids = response.data.favorites
           .map((favorite) => favorite.actualPostId)

@@ -30,6 +30,7 @@ import 'package:yempover_app/utils/validators.dart';
 import 'package:yempover_app/services/resume_state_service.dart';
 import 'package:yempover_app/screens/tradechatscreen/deal_verification_panel.dart';
 import 'package:yempover_app/screens/Home_screen.dart';
+import 'package:yempover_app/main.dart' as app;
 
 class ChatDetailScreen extends StatefulWidget {
   final TradeChat chat;
@@ -2620,9 +2621,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         backgroundColor: Colors.green,
       ),
     );
+    // Navigate via the app-wide root navigator, not Navigator.of(context) —
+    // pushAndRemoveUntil((route) => false) tears down this screen (and
+    // everything below it) as part of the same operation, and by the time
+    // this fires 900ms later a local BuildContext lookup can land on an
+    // already-deactivated ancestor ("Looking up a deactivated widget's
+    // ancestor is unsafe"). The root key isn't tied to this widget's
+    // position in the tree, so it's unaffected by that teardown.
     Future.delayed(const Duration(milliseconds: 900), () {
-      if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
+      app.rootNavigatorKey.currentState?.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
         (route) => false,
       );
@@ -2648,9 +2655,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         backgroundColor: Colors.orange,
       ),
     );
+    // See _returnToMarketplaceAfterDealCompletion — same root-navigator
+    // reasoning applies here.
     Future.delayed(const Duration(milliseconds: 900), () {
-      if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
+      app.rootNavigatorKey.currentState?.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
         (route) => false,
       );
