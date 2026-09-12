@@ -3,6 +3,7 @@
 // inspection: an exchange-mode header, a background payment info banner
 // (informational only), and the mutual "Deal Completed" / "Deal Not
 // Completed" buttons driven entirely by GET .../deal/verification.
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:yempover_app/constants/api_constants.dart';
 import 'package:yempover_app/models/chats/trade_chat.dart';
@@ -61,6 +62,12 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
   bool _wasAlreadyDoneOnEntry = false;
   bool _firedFullyCompleted = false;
 
+  // Cosmetic-only countdown to slotGate.slotEndsAt — ticks the displayed
+  // text once a second; the server's slotElapsed flag (re-fetched when it
+  // hits zero) is what actually flips the button, never this timer alone.
+  Timer? _slotCountdownTimer;
+  Duration? _slotRemaining;
+
   bool _isDealDone(DealVerification v) =>
       v.status == DealStatus.COMPLETED || v.completion.bothCompleted;
 
@@ -74,7 +81,54 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
   @override
   void dispose() {
     _socketService.off('deal:updated', _handleDealUpdated);
+    _slotCountdownTimer?.cancel();
     super.dispose();
+  }
+
+  // Re-derives the countdown from whatever the latest fetch returned —
+  // called after every _fetchVerification so a reschedule/slot edit (which
+  // changes slotEndsAt) or the slot simply no longer being gated always
+  // invalidates and replaces any previous timer, never leaves a stale one
+  // running.
+  void _syncSlotCountdown(DealVerification verification) {
+    _slotCountdownTimer?.cancel();
+    _slotCountdownTimer = null;
+
+    final slotGate = verification.slotGate;
+    final slotEndsAt = slotGate?.slotEndsAt;
+    if (slotGate == null ||
+        !slotGate.isActivelyBlocking ||
+        slotEndsAt == null) {
+      setState(() => _slotRemaining = null);
+      return;
+    }
+
+    void tick() {
+      final remaining = slotEndsAt.difference(DateTime.now());
+      if (remaining <= Duration.zero) {
+        _slotCountdownTimer?.cancel();
+        _slotCountdownTimer = null;
+        if (mounted) setState(() => _slotRemaining = Duration.zero);
+        // The countdown hitting zero is cosmetic only — re-fetch so the
+        // button's actual enabled state comes from the server, not local
+        // device time (which may be ahead of the server's clock).
+        _fetchVerification(silent: true);
+        return;
+      }
+      if (mounted) setState(() => _slotRemaining = remaining);
+    }
+
+    tick();
+    _slotCountdownTimer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
+  }
+
+  String _formatCountdown(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    final mm = m.toString().padLeft(2, '0');
+    final ss = s.toString().padLeft(2, '0');
+    return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
   }
 
   void _handleDealUpdated(dynamic data) {
@@ -110,6 +164,7 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
         _isLoading = false;
         _loadError = null;
       });
+      _syncSlotCountdown(verification);
       if (isDone && !_wasAlreadyDoneOnEntry && !_firedFullyCompleted) {
         _firedFullyCompleted = true;
         widget.onDealFullyCompleted?.call();
@@ -188,6 +243,12 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
         if (!mounted) return;
       }
       _showError(e);
+      // The completion attempt failed — most commonly the slot gate 400ing
+      // because the window hadn't elapsed yet (or the device clock was
+      // ahead of the server's). Re-fetch so the button settles back into
+      // whatever its actually-correct disabled state is, rather than
+      // leaving it looking tappable.
+      unawaited(_fetchVerification(silent: true));
     }
   }
 
@@ -487,25 +548,68 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
       );
     }
 
+    // The one condition that keeps the button visible-but-disabled instead
+    // of the pre-existing plain onPressed:null (which a completely
+    // unrelated !canComplete reason still gets, unchanged). A disabled
+    // ElevatedButton never fires onPressed at all, so tapping it here still
+    // needs a non-null handler to be able to explain why.
+    final isBlockedBySlot = completion.isBlockedBySlot;
+
     return SizedBox(
       width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: (_isBusy || !completion.canComplete) ? null : _markCompleted,
-        icon: _isBusy
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ElevatedButton.icon(
+            onPressed: _isBusy
+                ? null
+                : isBlockedBySlot
+                    ? () => _showError(
+                          completion.slotBlockedMessage ??
+                              'You can mark this deal as completed once the slot is over.',
+                        )
+                    : (completion.canComplete ? _markCompleted : null),
+            icon: _isBusy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Icon(
+                    isBlockedBySlot
+                        ? Icons.lock_clock_outlined
+                        : Icons.check_circle_outline,
+                  ),
+            label: const Text('Deal Completed'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  isBlockedBySlot ? Colors.grey.shade400 : Colors.green,
+              foregroundColor: Colors.white,
+            ),
+          ),
+          if (isBlockedBySlot) ...[
+            const SizedBox(height: 6),
+            Text(
+              completion.slotBlockedMessage ??
+                  'You can mark this deal as completed once the slot is over.',
+              style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700),
+            ),
+            if (_slotRemaining != null && _slotRemaining! > Duration.zero) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Available in ${_formatCountdown(_slotRemaining!)}',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
                 ),
-              )
-            : const Icon(Icons.check_circle_outline),
-        label: const Text('Deal Completed'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
-        ),
+              ),
+            ],
+          ],
+        ],
       ),
     );
   }

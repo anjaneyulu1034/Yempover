@@ -660,6 +660,57 @@ class ServiceAppointmentSnapshot {
   String get displayDateTime => '$displayDate • $displayTime';
 }
 
+// Server-authoritative gate on "Deal Completed" for the scheduled service
+// flow — neither side may complete a booked-slot deal before the slot's
+// window (start + duration) has actually elapsed. hasSlot is false (and
+// slotElapsed true) for every deal without a booked slot — products and
+// barter/direct service deals — so nothing changes for those; this class
+// is a pure passthrough of what the backend already decided, never a rule
+// re-implemented client-side. Same shape appears on TradeChat (chat
+// detail) and at the top level of DealVerification (deal/verification).
+class SlotGate {
+  final bool hasSlot;
+  final String? appointmentId;
+  // Raw ISO strings — parsed on demand (slotEndsAt getter below), only for
+  // a cosmetic countdown display. The server's slotElapsed flag (not any
+  // local time comparison) is the actual source of truth for gating.
+  final String? appointmentDateRaw;
+  final int? duration; // Minutes
+  final String? slotEndsAtRaw;
+  final bool slotElapsed;
+  final String? message;
+
+  SlotGate({
+    required this.hasSlot,
+    this.appointmentId,
+    this.appointmentDateRaw,
+    this.duration,
+    this.slotEndsAtRaw,
+    required this.slotElapsed,
+    this.message,
+  });
+
+  factory SlotGate.fromJson(Map<String, dynamic> json) {
+    return SlotGate(
+      hasSlot: json['hasSlot'] == true,
+      appointmentId: json['appointmentId']?.toString(),
+      appointmentDateRaw: json['appointmentDate']?.toString(),
+      duration: json['duration'] is num ? (json['duration'] as num).toInt() : null,
+      slotEndsAtRaw: json['slotEndsAt']?.toString(),
+      slotElapsed: json['slotElapsed'] == true,
+      message: json['message']?.toString(),
+    );
+  }
+
+  DateTime? get slotEndsAt =>
+      slotEndsAtRaw != null ? DateTime.tryParse(slotEndsAtRaw!)?.toLocal() : null;
+
+  // True right now, specifically because of the booked slot — the one
+  // condition "Deal Completed" should show as disabled-but-tappable
+  // (with this.message) rather than hidden outright.
+  bool get isActivelyBlocking => hasSlot && !slotElapsed;
+}
+
 // One product or service on either side of the trade — used for display
 // only (thumbnail + title + price), never to validate the deal.
 class TradeExchangeItem {
@@ -1182,6 +1233,17 @@ class DealCompletion {
   final bool bothCompleted;
   final DateTime? completedAt;
   final bool canComplete;
+  // Mirrors SlotGate.slotElapsed for the scheduled service flow — canComplete
+  // above already factors this in, but exposed separately so the UI can
+  // tell "blocked by the slot" apart from any other reason canComplete is
+  // false (already consented, blocked user, ...). True (unblocked) when
+  // there's no booked slot on this deal, or the key is missing entirely
+  // (older cached response) — same "no gate" default as SlotGate itself.
+  final bool slotElapsed;
+  // Ready-to-render copy for the slot gate, e.g. "Your booked slot is on
+  // ... You can mark this deal as completed once the slot is over." Null
+  // when slotElapsed is true (nothing to explain).
+  final String? slotBlockedMessage;
 
   DealCompletion({
     required this.iCompleted,
@@ -1189,6 +1251,8 @@ class DealCompletion {
     required this.bothCompleted,
     this.completedAt,
     required this.canComplete,
+    this.slotElapsed = true,
+    this.slotBlockedMessage,
   });
 
   factory DealCompletion.fromJson(Map<String, dynamic> json) {
@@ -1198,8 +1262,17 @@ class DealCompletion {
       bothCompleted: json['bothCompleted'] == true,
       completedAt: _tryParseLocal(json['completedAt']?.toString()),
       canComplete: json['canComplete'] == true,
+      slotElapsed:
+          json.containsKey('slotElapsed') ? json['slotElapsed'] == true : true,
+      slotBlockedMessage: json['slotBlockedMessage']?.toString(),
     );
   }
+
+  // The specific, tappable-for-explanation reason "Deal Completed" is
+  // disabled right now — as opposed to any other pre-existing reason
+  // (already consented, blocked user, ...), which keeps its old
+  // hidden/inert behavior untouched.
+  bool get isBlockedBySlot => !canComplete && !slotElapsed;
 }
 
 // The per-user deal summary — GET /trade-chat/{chatId}/deal/verification.
@@ -1256,6 +1329,11 @@ class DealVerification {
   final DealPayment payment;
   final DealCompletion completion;
   final CloseDealPrompt? closeDealPrompt;
+  // Same object as TradeChat.slotGate — carries the raw appointment/slot
+  // data (id, date, duration, slotEndsAt) that completion.slotElapsed alone
+  // doesn't, for an optional countdown. Null when the deal has no booked
+  // slot, or on a response predating this — treat null as "no gate".
+  final SlotGate? slotGate;
 
   DealVerification({
     required this.chatId,
@@ -1268,6 +1346,7 @@ class DealVerification {
     required this.payment,
     required this.completion,
     this.closeDealPrompt,
+    this.slotGate,
   });
 
   factory DealVerification.fromJson(Map<String, dynamic> json) {
@@ -1291,6 +1370,9 @@ class DealVerification {
           ? CloseDealPrompt.fromJson(
               Map<String, dynamic>.from(json['closeDealPrompt'] as Map),
             )
+          : null,
+      slotGate: json['slotGate'] is Map
+          ? SlotGate.fromJson(Map<String, dynamic>.from(json['slotGate'] as Map))
           : null,
     );
   }
@@ -1604,6 +1686,18 @@ class TradeChat {
   // NOT_COMPLETED, with badgeLabel as ready-to-render display copy.
   final String? badge;
   final String? badgeLabel;
+  // getChatDetail only: server-authoritative "can THIS user complete the
+  // deal right now" — supersedes the old client-side heuristic (accepted
+  // offer exists, not already consented, is a participant, chat active),
+  // and now also folds in the scheduled-service slot gate below. Defaults
+  // false when missing, same defensive pattern as canCounterOffer etc.
+  final bool canCompleteDeal;
+  // getChatDetail only: the scheduled-service completion gate. hasSlot is
+  // false (slotElapsed true) for every deal without a booked slot, so this
+  // is a no-op for products and barter/direct service deals. Null on a
+  // response predating this feature — treat null as "no gate" (button
+  // behaves exactly as before).
+  final SlotGate? slotGate;
 
   TradeChat({
     required this.id,
@@ -1642,6 +1736,8 @@ class TradeChat {
     this.listingUnavailable = false,
     this.badge,
     this.badgeLabel,
+    this.canCompleteDeal = false,
+    this.slotGate,
   });
 
   factory TradeChat.fromJson(Map<String, dynamic> json) {
@@ -1714,6 +1810,10 @@ class TradeChat {
           : null,
       badge: json['badge'] as String?,
       badgeLabel: json['badgeLabel'] as String?,
+      canCompleteDeal: json['canCompleteDeal'] == true,
+      slotGate: json['slotGate'] is Map
+          ? SlotGate.fromJson(Map<String, dynamic>.from(json['slotGate'] as Map))
+          : null,
     );
   }
 
@@ -1760,6 +1860,8 @@ class TradeChat {
     bool? listingUnavailable,
     String? badge,
     String? badgeLabel,
+    bool? canCompleteDeal,
+    SlotGate? slotGate,
   }) {
     return TradeChat(
       id: id ?? this.id,
@@ -1800,6 +1902,8 @@ class TradeChat {
       listingUnavailable: listingUnavailable ?? this.listingUnavailable,
       badge: badge ?? this.badge,
       badgeLabel: badgeLabel ?? this.badgeLabel,
+      canCompleteDeal: canCompleteDeal ?? this.canCompleteDeal,
+      slotGate: slotGate ?? this.slotGate,
     );
   }
 
@@ -1931,24 +2035,6 @@ class TradeChat {
     if (accepted.isEmpty) return null;
     accepted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return accepted.first;
-  }
-
-  // Check if deal can be completed
-  bool canCompleteDeal(String currentUserId) {
-    if (!isActive) return false;
-    if (!hasAcceptedOffer) return false;
-
-    if (dealCompletion?.hasUserCompleted(
-          currentUserId,
-          initiatorId,
-          responderId,
-        ) ==
-        true) {
-      return false;
-    }
-
-    // After acceptance, both users can provide completion consent.
-    return currentUserId == initiatorId || currentUserId == responderId;
   }
 
   // Check if both users have completed the deal

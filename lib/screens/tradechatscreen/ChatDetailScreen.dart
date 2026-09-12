@@ -4685,10 +4685,34 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     return offer.barterItemTitle ?? 'Unknown';
   }
 
+  // Shows the disabled Deal Complete button's slot-gate copy — tapping a
+  // disabled ElevatedButton fires nothing at all, so the button stays
+  // enabled (tappable) while slot-blocked and this is what runs instead of
+  // _completeTrade.
+  void _showSlotBlockedMessage(String? message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message ?? 'You can mark this deal as completed once the slot is over.',
+        ),
+        backgroundColor: Colors.grey.shade700,
+      ),
+    );
+  }
+
   Widget _buildDealCompletionBanner() {
     if (_isReferenceUnavailable) return const SizedBox();
     if (_isBlocked) return const SizedBox();
-    if (!_currentChat.canCompleteDeal(widget.currentUserId)) {
+
+    final slotGate = _currentChat.slotGate;
+    final isSlotBlocked = slotGate?.isActivelyBlocking == true;
+
+    // Every other reason this is unavailable (no accepted offer, chat
+    // inactive, already consented, ...) keeps its existing hidden-entirely
+    // behavior. Only the slot gate gets to show the banner in a disabled
+    // state instead of hiding it.
+    if (!_currentChat.canCompleteDeal && !isSlotBlocked) {
       return const SizedBox();
     }
 
@@ -4726,9 +4750,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             children: [
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _completeTrade,
+                  // Stays enabled (tappable) even while slot-blocked, so
+                  // tapping it can explain why — a null onPressed never
+                  // fires at all, which would silently swallow the tap.
+                  onPressed: isSlotBlocked
+                      ? () => _showSlotBlockedMessage(slotGate?.message)
+                      : _completeTrade,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+                    backgroundColor:
+                        isSlotBlocked ? Colors.grey.shade400 : Colors.green,
                     minimumSize: const Size(double.infinity, 40),
                   ),
                   child: const Text('Deal Complete'),
@@ -4747,6 +4777,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               ),
             ],
           ),
+          if (isSlotBlocked && (slotGate?.message ?? '').isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              slotGate!.message!,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+            ),
+          ],
         ],
       ),
     );
