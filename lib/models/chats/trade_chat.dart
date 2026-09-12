@@ -702,8 +702,27 @@ class SlotGate {
     );
   }
 
-  DateTime? get slotEndsAt =>
-      slotEndsAtRaw != null ? DateTime.tryParse(slotEndsAtRaw!)?.toLocal() : null;
+  // slotEndsAtRaw is a wall-clock value serialized with a 'Z'/UTC suffix
+  // that does NOT mean "this instant in UTC" — same convention as every
+  // other appointment timestamp in this codebase (see
+  // ServiceAppointmentSnapshot's own warning above: calling .toLocal() on
+  // one of these re-interprets the digits against the device's timezone
+  // and is exactly what once turned a 12:30 booking into 5:30). Read the
+  // raw wall-clock digits via the UTC-tagged parse result's getters (which
+  // return the un-converted digits) and reconstruct as local — never
+  // convert.
+  DateTime? get slotEndsAt {
+    final parsed = slotEndsAtRaw != null ? DateTime.tryParse(slotEndsAtRaw!) : null;
+    if (parsed == null) return null;
+    return DateTime(
+      parsed.year,
+      parsed.month,
+      parsed.day,
+      parsed.hour,
+      parsed.minute,
+      parsed.second,
+    );
+  }
 
   // True right now, specifically because of the booked slot — the one
   // condition "Deal Completed" should show as disabled-but-tappable
