@@ -619,16 +619,32 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
         const SizedBox(height: 12),
         InkWell(
           onTap: () async {
-            final initialDate = _isLookingForService
-                ? _selectedDate
-                : (_isSelectableBookingDate(_selectedDate, firstDate, upperBound)
-                    ? _selectedDate
-                    : (_nextAvailableDate(
-                            from: firstDate,
-                            to: upperBound,
-                            weekdays: _availableWeekdays(),
-                          ) ??
-                          firstDate));
+            DateTime? initialDate;
+            if (_isLookingForService) {
+              initialDate = _selectedDate;
+            } else if (_isSelectableBookingDate(_selectedDate, firstDate, upperBound)) {
+              initialDate = _selectedDate;
+            } else {
+              initialDate = _nextAvailableDate(
+                from: firstDate,
+                to: upperBound,
+                weekdays: _availableWeekdays(),
+              );
+              if (initialDate == null) {
+                // No day between today and the service's expiry matches any
+                // of its configured available weekdays - every day in the
+                // calendar would fail selectableDayPredicate, including
+                // whatever we picked as a fallback initialDate (that's
+                // exactly what crashed here: showDatePicker asserts
+                // initialDate itself must satisfy the predicate). Nothing to
+                // show, so tell the user instead of opening a dead picker.
+                SnackbarUtils.showErrorToast(
+                  context,
+                  'No available slots for this service before it expires.',
+                );
+                return;
+              }
+            }
 
             final picked = await showDatePicker(
               context: context,
