@@ -85,7 +85,14 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
       if (!mounted) return;
       _applyPlan(response.plan);
     } catch (error) {
-      if (mounted) {
+      if (!mounted) return;
+      // A brand-new service (no id yet) with no expiry is never ambiguous
+      // — it's always the recurring weekly schedule — so don't block the
+      // create flow behind a server round trip that has nothing left to
+      // resolve beyond what's already known client-side.
+      if (widget.serviceId.isEmpty && widget.expiryValidUntil == null) {
+        _applyPlan(AvailabilityPlan.defaultWeekly());
+      } else {
         SnackbarUtils.showError(context, _messageFor(error));
       }
     } finally {

@@ -236,6 +236,37 @@ class AvailabilityPlan {
   bool get isExpired => mode == 'EXPIRED';
   bool get isWeekly => mode == 'WEEKLY';
 
+  // Client-side fallback for the one case that's never actually ambiguous
+  // even without a plan from the server: a brand-new service (no id yet)
+  // with "no expiry" is always the recurring weekly schedule. Used only
+  // when the availability-plan preview call itself fails, so the create
+  // flow doesn't get stuck behind a blocking error over something the
+  // client can already determine on its own.
+  factory AvailabilityPlan.defaultWeekly() {
+    return AvailabilityPlan(
+      mode: 'WEEKLY',
+      modeLabel: 'Weekly Schedule',
+      hasExpiry: false,
+      showAvailableNowCard: false,
+      showDateRows: false,
+      showWeeklyGrid: true,
+      showDayToggles: true,
+      allowsWeeklyRepeat: true,
+      dates: const [],
+      dateCount: 0,
+      daysOff: const [],
+      supportsDaysOff: false,
+      supportsHolidayImport: false,
+      supportsBookingHorizon: false,
+      durationOptions: const [],
+      defaultDurationMinutes: 30,
+      canSave: true,
+      hasSavedAvailability: false,
+      needsAvailabilitySetup: true,
+      dateFormat: AppDateFormatConfig.fromJson(null),
+    );
+  }
+
   factory AvailabilityPlan.fromJson(Map<String, dynamic> json) {
     return AvailabilityPlan(
       mode: json['mode']?.toString() ?? 'WEEKLY',
