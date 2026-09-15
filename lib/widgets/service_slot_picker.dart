@@ -290,10 +290,33 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
     return _service.parseTimeOfDay(_selectedDate, time);
   }
 
+  // QA BUG-5/6: prefer the backend's ready-made appointment label (already
+  // reflects duration, e.g. "9:00 AM – 2:00 PM" for a 5-hour service) over
+  // reformatting just the start time.
   String _slotLabel(Map<String, dynamic> slot) {
+    final label = slot['label']?.toString();
+    if (label != null && label.isNotEmpty) return label;
     final dt = _slotDateTime(slot);
     if (dt != null) return _timeFormat.format(dt);
     return slot['startTime']?.toString() ?? slot['time']?.toString() ?? 'Slot';
+  }
+
+  // QA BUG-2: duration choices come from the listing's own availabilityPlan.
+  List<int> get _durationMinutesOptions {
+    final plan = _serviceData?['availabilityPlan'];
+    if (plan is Map<String, dynamic>) {
+      final options = plan['durationOptions'];
+      if (options is List && options.isNotEmpty) {
+        final minutes = options
+            .whereType<Map>()
+            .map((o) => o['minutes'])
+            .whereType<num>()
+            .map((n) => n.toInt())
+            .toList();
+        if (minutes.isNotEmpty) return minutes;
+      }
+    }
+    return const [15, 30, 45, 60];
   }
 
   bool _slotAvailable(Map<String, dynamic> slot) {
@@ -542,7 +565,7 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
               border: Border.all(color: Colors.grey.shade300),
             ),
             child: Column(
-              children: [15, 30, 45, 60].map((value) {
+              children: _durationMinutesOptions.map((value) {
                 final isSelected = _duration == value;
                 return InkWell(
                   onTap: () {

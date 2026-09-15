@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:yempover_app/constants/api_constants.dart';
 import 'package:yempover_app/models/add_post_model.dart';
+import 'package:yempover_app/models/service_availability_plan.dart';
 import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/api_exceptions.dart';
 import 'package:yempover_app/utils/error_message_utils.dart';
 
 class AddPostService {
@@ -188,6 +190,13 @@ class AddPostService {
           'validUntil': request.validUntil,
         'status': request.status,
         'price': request.price,
+        if (request.availabilitySlots != null)
+          'availabilitySlots': request.availabilitySlots,
+        if (request.expiryUnit != null && request.expiryUnit!.isNotEmpty)
+          'expiryUnit': request.expiryUnit,
+        if (request.expiryValue != null) 'expiryValue': request.expiryValue,
+        if (request.confirmAvailabilityChange != null)
+          'confirmAvailabilityChange': request.confirmAvailabilityChange,
       };
 
       final url = '${ApiConstants.baseUrl}/me/posts/services';
@@ -216,15 +225,54 @@ class AddPostService {
         debugPrint('✅ AddPostService: Service created successfully');
         return CreateServiceResponse.fromJson(jsonResponse);
       } else {
-        throw Exception(
-          ErrorMessageUtils.sanitize(
-            response.body,
-            fallback: 'Unable to create post right now. Please try again.',
-          ),
+        // Backend-authored, user-safe messages (QA BUG-3/4) — read `message`
+        // straight off the body rather than through ErrorMessageUtils, whose
+        // generic heuristics (e.g. any message containing "invalid") are
+        // tuned for garbling raw network/auth errors, not this copy.
+        String message = 'Unable to create post right now. Please try again.';
+        String? code;
+        Map<String, dynamic>? details;
+        try {
+          final body = json.decode(response.body);
+          if (body is Map && body['message'] != null) {
+            message = body['message'].toString();
+          }
+          if (body is Map && body['code'] != null) {
+            code = body['code'].toString();
+          }
+          if (body is Map && body['details'] is Map) {
+            details = Map<String, dynamic>.from(body['details'] as Map);
+          }
+        } catch (_) {
+          // Keep the generic fallback above.
+        }
+
+        // QA BUG-4: the expiry/availability the seller picked would swap the
+        // mode and hasn't been confirmed yet — nothing was created. The
+        // caller must show `details` as a confirmation dialog, not a toast.
+        if (response.statusCode == 409 &&
+            code == 'AVAILABILITY_MODE_CHANGE' &&
+            details != null) {
+          throw AvailabilityChangeRequiredException(
+            message,
+            AvailabilityConfirmation.fromJson(details),
+          );
+        }
+
+        throw ApiCodedException(
+          message,
+          code: code,
+          details: details,
+          statusCode: response.statusCode,
         );
       }
     } catch (e) {
       debugPrint('🔴 AddPostService: Error creating service: $e');
+      // Typed exceptions already carry a backend-authored, verbatim message
+      // (QA BUG-3/4) — only generic/unexpected errors go through sanitize.
+      if (e is AvailabilityChangeRequiredException || e is ApiCodedException) {
+        rethrow;
+      }
       throw Exception(ErrorMessageUtils.sanitize(e));
     } finally {
       // Always close the client

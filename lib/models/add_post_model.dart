@@ -1,4 +1,6 @@
 // lib/models/add_post_model.dart
+import 'package:yempover_app/models/service_availability_plan.dart';
+
 class CreateProductRequest {
   final String title;
   final String description;
@@ -60,6 +62,14 @@ class CreateServiceRequest {
   final String? barterStatus;
   final String status; // PROVIDE_SERVICE
   final double price;
+  // Weekly schedule (WEEKLY mode) or one row per calendar date (AVAILABLE_NOW
+  // / DATE_RANGE mode) — shape decided by the availabilityPlan (QA BUG-1).
+  final List<Map<String, dynamic>>? availabilitySlots;
+  final String? expiryUnit;
+  final num? expiryValue;
+  // The seller has seen and accepted the "your weekly schedule will be
+  // replaced" dialog (QA BUG-4).
+  final bool? confirmAvailabilityChange;
 
   CreateServiceRequest({
     required this.title,
@@ -74,6 +84,10 @@ class CreateServiceRequest {
     this.barterStatus,
     required this.status,
     required this.price,
+    this.availabilitySlots,
+    this.expiryUnit,
+    this.expiryValue,
+    this.confirmAvailabilityChange,
   });
 
   Map<String, dynamic> toJson() {
@@ -92,6 +106,12 @@ class CreateServiceRequest {
         'barterStatus': barterStatus,
       'status': status,
       'price': price,
+      if (availabilitySlots != null) 'availabilitySlots': availabilitySlots,
+      if (expiryUnit != null && expiryUnit!.isNotEmpty)
+        'expiryUnit': expiryUnit,
+      if (expiryValue != null) 'expiryValue': expiryValue,
+      if (confirmAvailabilityChange != null)
+        'confirmAvailabilityChange': confirmAvailabilityChange,
     };
   }
 }
@@ -232,6 +252,7 @@ class ServiceData {
   final DateTime createdAt;
   final DateTime updatedAt;
   final CategoryInfo category;
+  final AvailabilityPlan? availabilityPlan;
 
   ServiceData({
     required this.id,
@@ -251,9 +272,11 @@ class ServiceData {
     required this.createdAt,
     required this.updatedAt,
     required this.category,
+    this.availabilityPlan,
   });
 
   factory ServiceData.fromJson(Map<String, dynamic> json) {
+    final planJson = json['availabilityPlan'];
     return ServiceData(
       id: json['id'] ?? '',
       title: json['title'] ?? '',
@@ -282,6 +305,9 @@ class ServiceData {
         json['updatedAt'] ?? DateTime.now().toIso8601String(),
       ),
       category: CategoryInfo.fromJson(json['category'] ?? {}),
+      availabilityPlan: planJson is Map<String, dynamic>
+          ? AvailabilityPlan.fromJson(planJson)
+          : null,
     );
   }
 }

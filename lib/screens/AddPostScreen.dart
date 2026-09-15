@@ -6,11 +6,12 @@ import 'package:yempover_app/models/my_post_model.dart';
 import 'dart:io';
 import 'package:yempover_app/services/category_service.dart';
 import 'package:yempover_app/services/add_post_service.dart';
+import 'package:yempover_app/services/my_posts_service.dart';
 import 'package:yempover_app/models/add_post_model.dart';
+import 'package:yempover_app/models/service_availability_plan.dart';
 import 'package:yempover_app/screens/service/ServiceAvailabilityScreen.dart';
 import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/services/location_service.dart';
-import 'package:yempover_app/services/service_booking_service.dart';
 import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:yempover_app/utils/validators.dart';
@@ -44,8 +45,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
   // Services
   final CategoryService _categoryService = CategoryService();
   final AddPostService _addPostService = AddPostService();
+  final MyPostsService _myPostsService = MyPostsService();
   final LocationService _locationService = LocationService();
-  final ServiceBookingService _serviceBookingService = ServiceBookingService();
 
   // Set via the availability picker just before creating a "Provide
   // Service" post, so create + schedule happen as one continuous flow
@@ -1371,6 +1372,44 @@ class _AddPostScreenState extends State<AddPostScreen> {
     }
   }
 
+  // The unit/value the Set Availability preview call sends — mirrors what
+  // the final createServicePost call sends further down, since the id-less
+  // availability-plan endpoint needs one of expiryUnit/validUntil to resolve
+  // a mode. Without this, "No expiry" (or an expiry value not yet entered)
+  // reaches the preview with no params at all and 404s as "Service not
+  // found" (QA BUG-1 regression).
+  String? get _expiryUnitParam {
+    return _selectedExpiryUnit == 'No expiry'
+        ? 'no expiry'
+        : _selectedExpiryUnit.toLowerCase();
+  }
+
+  int? get _expiryValueParam {
+    if (_selectedExpiryUnit == 'No expiry') return null;
+    final raw = double.tryParse(_expiryValueController.text.trim());
+    if (raw == null) return null;
+    // The server's expiryValue field is integer-only; a fractional
+    // Months/Years value is still carried correctly via validUntil alone.
+    return raw == raw.roundToDouble() ? raw.round() : null;
+  }
+
+  // Best-effort preview of the plan for the expiry currently on the form —
+  // used to open Set Availability already in the right mode instead of
+  // letting that screen make its own id-less request (see
+  // _expiryUnitParam). Never blocks the flow: on failure, the screen falls
+  // back to fetching its own plan.
+  Future<AvailabilityPlanResponse?> _fetchAvailabilityPreview() async {
+    try {
+      return await _myPostsService.getServiceAvailabilityPlan(
+        expiryUnit: _expiryUnitParam,
+        expiryValue: _expiryValueParam,
+        validUntil: _computeExpiryDate()?.toUtc().toIso8601String(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   Widget _buildTimelineExpirySection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2141,12 +2180,21 @@ class _AddPostScreenState extends State<AddPostScreen> {
           // creating a service with no bookable slots.
           if (_pendingAvailabilitySlots == null) {
             if (!mounted) return;
+            // Prefetch the plan with the same expiryUnit/validUntil the
+            // create call below will send, so the id-less availability-plan
+            // request always has something to resolve a mode from — a bare
+            // request (e.g. "No expiry" with nothing typed yet) 404s as
+            // "Service not found".
+            final preview = await _fetchAvailabilityPreview();
+            if (!mounted) return;
             final picked = await Navigator.push<List<Map<String, dynamic>>>(
               context,
               MaterialPageRoute(
-                builder: (_) => const ServiceAvailabilityScreen(
+                builder: (_) => ServiceAvailabilityScreen(
                   pickerMode: true,
                   isInitialSetup: true,
+                  expiryValidUntil: expiryDate,
+                  initialPlan: preview?.plan,
                 ),
               ),
             );
@@ -2155,64 +2203,44 @@ class _AddPostScreenState extends State<AddPostScreen> {
             _pendingAvailabilitySlots = picked;
           }
 
+          // Timeline Post Expiry as unit+value, not just a precomputed date —
+          // the backend derives validUntil itself and uses that to decide
+          // the availability mode/duration rules (QA BUG-1/2/3). Fractional
+          // Months/Years values can't be sent as expiryValue (server expects
+          // an integer there), so those fall back to validUntil alone, which
+          // the server honors as the authoritative expiry either way.
+          final expiryUnitParam = _expiryUnitParam;
+          final expiryValueParam = _expiryValueParam;
+
+          // Saves the listing + weekly/date schedule + expiry in one call
+          // instead of create-then-setAvailability — the server validates
+          // the schedule against the expiry atomically (QA BUG-2/3/4) and
+          // this is the endpoint that actually enforces those rules on
+          // creation, unlike the legacy /api/services path.
           debugPrint(
-            '📦 Creating provider service with ${imageUrls.length} images via /api/services',
+            '📦 Creating provider service with ${imageUrls.length} images via /api/mobile/me/posts/services',
           );
-          final response = await _serviceBookingService.createService(
-            title: _titleController.text.trim(),
-            description: _descriptionController.text.trim(),
-            categoryId: _selectedSubCategoryId!,
-            price: price,
-            location: _locationController.text.trim(),
-            latitude: _selectedLatitude,
-            longitude: _selectedLongitude,
-            images: imageUrls,
-            barterStatus: _barterAllowed ? 'OPEN_FOR_BARTER' : 'NO_BARTER',
-            status: 'PROVIDE_SERVICE',
-            validFrom: validUntilIso == null ? null : validFromIso,
-            validUntil: validUntilIso,
+          final response = await _addPostService.createServicePost(
+            CreateServiceRequest(
+              title: _titleController.text.trim(),
+              description: _descriptionController.text.trim(),
+              categoryId: _selectedSubCategoryId!,
+              images: imageUrls,
+              location: _locationController.text.trim(),
+              latitude: _selectedLatitude,
+              longitude: _selectedLongitude,
+              barterStatus: _barterAllowed ? 'OPEN_FOR_BARTER' : 'NO_BARTER',
+              status: 'PROVIDE_SERVICE',
+              price: price,
+              validFrom: validUntilIso == null ? null : validFromIso,
+              validUntil: validUntilIso,
+              expiryUnit: expiryUnitParam,
+              expiryValue: expiryValueParam,
+              availabilitySlots: _pendingAvailabilitySlots,
+            ),
           );
 
-          final data = response['data'];
-          String? serviceId;
-          if (data is Map<String, dynamic>) {
-            if (data['service'] is Map<String, dynamic>) {
-              serviceId = data['service']['id']?.toString();
-            }
-            serviceId ??= data['id']?.toString();
-            serviceId ??= data['serviceId']?.toString();
-          }
-
-          if (serviceId == null || serviceId.isEmpty) {
-            throw Exception(
-              'Service created but ID was not returned by server',
-            );
-          }
-
-          if (_pendingAvailabilitySlots!.isNotEmpty) {
-            try {
-              await _serviceBookingService.setAvailability(
-                serviceId: serviceId,
-                availabilitySlots: _pendingAvailabilitySlots!,
-              );
-            } catch (e) {
-              // The service itself was created successfully — don't block
-              // the post over a schedule save failure, just let them know.
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Service created, but availability could not be '
-                      'saved: ${_serviceBookingService.extractMessage(e)}',
-                    ),
-                    backgroundColor: Colors.orange,
-                  ),
-                );
-              }
-            }
-          }
-
-          debugPrint('✅ Service created successfully');
+          debugPrint('✅ Service created successfully: ${response.data.id}');
         }
       } else {
         // Handle "Looking For" (service only)

@@ -3885,7 +3885,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 ),
                 if (appointment.duration != null)
                   Text(
-                    '${appointment.duration} minutes'
+                    // QA BUG-5: the actual appointment window, e.g.
+                    // "9:00 AM – 2:00 PM (5 hr)", not just a bare minute
+                    // count — the seller's working hours are a different
+                    // (wider) thing than this booked slot.
+                    '${appointment.displayRange}'
+                    '${appointment.durationLabel != null && appointment.durationLabel!.isNotEmpty ? ' (${appointment.durationLabel})' : ' (${appointment.duration} minutes)'}'
                     '${appointment.location != null && appointment.location!.trim().isNotEmpty ? ' • ${appointment.location}' : ''}',
                     style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700),
                   ),

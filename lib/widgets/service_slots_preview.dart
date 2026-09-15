@@ -223,7 +223,12 @@ class _ServiceSlotsPreviewState extends State<ServiceSlotsPreview> {
     return _service.parseTimeOfDay(_selectedDate, time);
   }
 
+  // QA BUG-5/6: prefer the backend's ready-made appointment label (already
+  // reflects duration, e.g. "9:00 AM – 2:00 PM" for a 5-hour service) over
+  // reformatting just the start time.
   String _slotLabel(Map<String, dynamic> slot) {
+    final label = slot['label']?.toString();
+    if (label != null && label.isNotEmpty) return label;
     final dt = _slotDateTime(slot);
     if (dt != null) return _timeFormat.format(dt);
     return slot['startTime']?.toString() ?? slot['time']?.toString() ?? 'Slot';

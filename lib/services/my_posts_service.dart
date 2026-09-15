@@ -283,6 +283,8 @@ import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/constants/api_constants.dart';
 import 'package:yempover_app/models/my_post_model.dart';
 import 'package:yempover_app/models/api_response.dart';
+import 'package:yempover_app/models/service_availability_plan.dart';
+import 'package:yempover_app/utils/api_exceptions.dart';
 
 class MyPostsService {
   static final MyPostsService _instance = MyPostsService._internal();
@@ -516,6 +518,113 @@ class MyPostsService {
         // "N upcoming booking(s) fall outside the new schedule...") — show
         // that message directly rather than dumping the raw status/body.
         String message = 'Failed to update post (${response.statusCode})';
+        String? code;
+        Map<String, dynamic>? details;
+        try {
+          final body = json.decode(response.body);
+          if (body is Map && body['message'] != null) {
+            message = body['message'].toString();
+          }
+          if (body is Map && body['code'] != null) {
+            code = body['code'].toString();
+          }
+          if (body is Map && body['details'] is Map) {
+            details = Map<String, dynamic>.from(body['details'] as Map);
+          }
+        } catch (_) {
+          // Keep the generic fallback above.
+        }
+
+        // QA BUG-4: the expiry change would swap the availability mode and
+        // the seller hasn't confirmed yet — nothing was written. The caller
+        // must show `details` as a confirmation dialog, not a generic toast.
+        if (response.statusCode == 409 &&
+            code == 'AVAILABILITY_MODE_CHANGE' &&
+            details != null) {
+          throw AvailabilityChangeRequiredException(
+            message,
+            AvailabilityConfirmation.fromJson(details),
+          );
+        }
+
+        throw ApiCodedException(
+          message,
+          code: code,
+          details: details,
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      debugPrint('🔴 MyPostsService: Error updating post: $e');
+      rethrow;
+    } finally {
+      client.close();
+    }
+  }
+
+  // The Set Availability screen for a service, decided server-side from
+  // Timeline Post Expiry (QA BUG-1/2/3/4). Pass no `expiryUnit`/`expiryValue`/
+  // `validUntil` to get the plan for the expiry already saved; pass one to
+  // preview the plan (and confirmation dialog, if the mode would change) for
+  // an expiry the seller is considering but hasn't saved yet. `serviceId`
+  // null hits the id-less create-flow variant.
+  Future<AvailabilityPlanResponse> getServiceAvailabilityPlan({
+    String? serviceId,
+    String? expiryUnit,
+    num? expiryValue,
+    String? validUntil,
+  }) async {
+    final client = http.Client();
+
+    try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token found. Please login again.');
+      }
+
+      final path = (serviceId != null && serviceId.isNotEmpty)
+          ? '/me/posts/services/$serviceId/availability-plan'
+          : '/me/posts/services/availability-plan';
+
+      final query = <String, String>{
+        if (expiryUnit != null && expiryUnit.isNotEmpty)
+          'expiryUnit': expiryUnit,
+        if (expiryValue != null) 'expiryValue': '$expiryValue',
+        if (validUntil != null && validUntil.isNotEmpty)
+          'validUntil': validUntil,
+      };
+      final uri = Uri.parse(
+        '${ApiConstants.baseUrl}$path',
+      ).replace(queryParameters: query.isEmpty ? null : query);
+
+      debugPrint('🌐 MyPostsService: Fetching availability plan: $uri');
+
+      final response = await client
+          .get(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint(
+        '📨 MyPostsService: Availability plan response: ${response.statusCode}',
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final Map<String, dynamic> jsonResponse = json.decode(response.body);
+        final data = jsonResponse['data'];
+        return AvailabilityPlanResponse.fromJson(
+          data is Map<String, dynamic> ? data : const {},
+        );
+      } else if (response.statusCode == 401) {
+        await TokenService().clearTokens();
+        throw Exception('Session expired. Please login again.');
+      } else {
+        String message = 'Failed to load availability plan';
         try {
           final body = json.decode(response.body);
           if (body is Map && body['message'] != null) {
@@ -524,10 +633,10 @@ class MyPostsService {
         } catch (_) {
           // Keep the generic fallback above.
         }
-        throw Exception(message);
+        throw ApiCodedException(message, statusCode: response.statusCode);
       }
     } catch (e) {
-      debugPrint('🔴 MyPostsService: Error updating post: $e');
+      debugPrint('🔴 MyPostsService: Error fetching availability plan: $e');
       rethrow;
     } finally {
       client.close();

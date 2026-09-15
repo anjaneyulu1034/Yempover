@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:yempover_app/constants/api_constants.dart';
+import 'package:yempover_app/models/service_availability_plan.dart';
 import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/api_exceptions.dart';
 import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -70,7 +72,32 @@ class ServiceBookingService {
               : response.statusCode == 410
               ? 'Service is no longer available'
               : 'Request failed');
-      throw Exception(message);
+
+      final code = body['code']?.toString();
+      final rawDetails = body['details'];
+      final details = rawDetails is Map
+          ? Map<String, dynamic>.from(rawDetails)
+          : null;
+
+      // QA BUG-4: the availability save would swap the mode and the caller
+      // hasn't confirmed yet — nothing was written.
+      if (response.statusCode == 409 &&
+          code == 'AVAILABILITY_MODE_CHANGE' &&
+          details != null) {
+        throw AvailabilityChangeRequiredException(
+          message,
+          AvailabilityConfirmation.fromJson(details),
+        );
+      }
+
+      // QA BUG-3: the rest of these are backend-authored, user-safe
+      // validation messages — kept verbatim, never sanitized.
+      throw ApiCodedException(
+        message,
+        code: code,
+        details: details,
+        statusCode: response.statusCode,
+      );
     }
 
     return body;

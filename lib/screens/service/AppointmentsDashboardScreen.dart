@@ -1483,7 +1483,16 @@ class _AppointmentsDashboardScreenState
                             final isBookable =
                                 slot['isBookable'] == true || isCurrent;
                             final isSelected = selectedSlot == time;
-                            final label = isCurrent ? '$time (current)' : time;
+                            // QA BUG-5/6: show the actual appointment window
+                            // ("9:00 AM – 2:00 PM"), never the raw 24-hour
+                            // start time the server stores it as.
+                            final displayLabel =
+                                slot['label']?.toString() ??
+                                slot['startTimeLabel']?.toString() ??
+                                time;
+                            final label = isCurrent
+                                ? '$displayLabel (current)'
+                                : displayLabel;
                             return Tooltip(
                               message: !isBookable
                                   ? (slot['reason']?.toString() ??

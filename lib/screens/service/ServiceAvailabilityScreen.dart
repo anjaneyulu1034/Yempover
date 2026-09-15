@@ -1,7 +1,10 @@
+import 'package:yempover_app/models/service_availability_plan.dart';
+import 'package:yempover_app/services/my_posts_service.dart';
 import 'package:yempover_app/services/service_booking_service.dart';
+import 'package:yempover_app/utils/api_exceptions.dart';
+import 'package:yempover_app/utils/app_date_format.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 class ServiceAvailabilityScreen extends StatefulWidget {
   final String serviceId;
@@ -12,6 +15,13 @@ class ServiceAvailabilityScreen extends StatefulWidget {
   // into its own single create/update call instead of this screen saving
   // them separately.
   final bool pickerMode;
+  // The post's own expiry (Timeline Post Expiry) — kept as a fallback for
+  // callers that haven't fetched a plan yet; prefer `initialPlan`.
+  final DateTime? expiryValidUntil;
+  // The availabilityPlan already fetched by the caller (e.g. the Timeline
+  // Post Expiry picker's preview call) — QA BUG-1: the server decides which
+  // mode to render, not this screen. When null, the screen fetches its own.
+  final AvailabilityPlan? initialPlan;
 
   const ServiceAvailabilityScreen({
     super.key,
@@ -19,6 +29,8 @@ class ServiceAvailabilityScreen extends StatefulWidget {
     this.isInitialSetup = false,
     this.initialAvailabilitySlots,
     this.pickerMode = false,
+    this.expiryValidUntil,
+    this.initialPlan,
   });
 
   @override
@@ -28,19 +40,86 @@ class ServiceAvailabilityScreen extends StatefulWidget {
 
 class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
   final ServiceBookingService _service = ServiceBookingService();
+  final MyPostsService _myPostsService = MyPostsService();
 
   bool _savingAvailability = false;
   bool _loadingAvailability = false;
+  bool _loadingPlan = false;
   bool _published = false;
 
-  final DateFormat _timeFormat = DateFormat('h:mm a');
+  // QA BUG-1: which screen to render comes from the server, not a
+  // client-side heuristic. Everything below is derived from this.
+  AvailabilityPlan? _plan;
+  bool get _isLoading => _loadingAvailability || _loadingPlan || _plan == null;
+
+  // One row per calendar date — only populated/used in AVAILABLE_NOW /
+  // DATE_RANGE mode, seeded straight from `_plan.dates` (already clipped to
+  // now/expiry by the server).
+  List<AvailabilityDateRow> _dateRows = [];
+  int? _selectedDurationMinutes;
 
   @override
   void initState() {
     super.initState();
-    if (!widget.isInitialSetup) {
-      _loadExistingAvailability();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    if (widget.initialPlan != null) {
+      _applyPlan(widget.initialPlan!);
+    } else {
+      await _loadPlan();
     }
+    if (!widget.isInitialSetup) {
+      await _loadExistingAvailability();
+    }
+  }
+
+  Future<void> _loadPlan() async {
+    setState(() => _loadingPlan = true);
+    try {
+      final response = await _myPostsService.getServiceAvailabilityPlan(
+        serviceId: widget.serviceId.isNotEmpty ? widget.serviceId : null,
+        validUntil: widget.expiryValidUntil?.toUtc().toIso8601String(),
+      );
+      if (!mounted) return;
+      _applyPlan(response.plan);
+    } catch (error) {
+      if (mounted) {
+        SnackbarUtils.showError(context, _messageFor(error));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingPlan = false);
+    }
+  }
+
+  void _applyPlan(AvailabilityPlan plan) {
+    setState(() {
+      _plan = plan;
+      _selectedDurationMinutes = plan.defaultDurationMinutes;
+      _dateRows = plan.dates
+          .map(
+            (r) => AvailabilityDateRow(
+              date: r.date,
+              dateLabel: r.dateLabel,
+              dayOfWeek: r.dayOfWeek,
+              dayLabel: r.dayLabel,
+              startTime: r.startTime,
+              endTime: r.endTime,
+              startTimeLabel: r.startTimeLabel,
+              endTimeLabel: r.endTimeLabel,
+              rangeLabel: r.rangeLabel,
+              windowMinutes: r.windowMinutes,
+              windowLabel: r.windowLabel,
+              label: r.label,
+              isFirst: r.isFirst,
+              isLast: r.isLast,
+              isClippedAtStart: r.isClippedAtStart,
+              isClippedAtExpiry: r.isClippedAtExpiry,
+            ),
+          )
+          .toList();
+    });
   }
 
   Future<bool> _handleWillPop() async {
@@ -144,6 +223,8 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
       return;
     }
 
+    if (widget.serviceId.isEmpty) return;
+
     setState(() => _loadingAvailability = true);
 
     try {
@@ -167,7 +248,7 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
       }
     } catch (error) {
       if (mounted) {
-        SnackbarUtils.showError(context, _service.extractMessage(error));
+        SnackbarUtils.showError(context, _messageFor(error));
       }
     } finally {
       if (mounted) {
@@ -203,77 +284,91 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
     });
   }
 
+  Future<void> _pickDateRowTime(int rowIndex, bool isStart) async {
+    final row = _dateRows[rowIndex];
+    final initial = isStart ? row.startTime : row.endTime;
+    final chunks = initial.split(':');
+    final hour = int.tryParse(chunks.first) ?? 9;
+    final minute = int.tryParse(chunks.length > 1 ? chunks[1] : '0') ?? 0;
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: hour, minute: minute),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(primary: Colors.deepPurple),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked == null) return;
+
+    final value =
+        '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+    setState(() {
+      if (isStart) {
+        row.startTime = value;
+      } else {
+        row.endTime = value;
+      }
+    });
+  }
+
   String _formatTime(String timeString) {
-    try {
-      final chunks = timeString.split(':');
-      final hour = int.parse(chunks[0]);
-      final minute = int.parse(chunks[1]);
-      final time = DateTime(2000, 1, 1, hour, minute);
-      return _timeFormat.format(time);
-    } catch (e) {
-      return timeString;
-    }
+    return AppDateFormat.timeOfDay(timeString);
   }
 
-  String? _validateDay(Map<String, dynamic> day) {
-    if (day['isAvailable'] != true) return null;
-
-    final start = day['startTime']?.toString() ?? '';
-    final end = day['endTime']?.toString() ?? '';
-    if (start.isEmpty || end.isEmpty) {
-      return '${day['dayOfWeek']}: start/end required';
+  // Backend-authored messages (QA BUG-3/4) are shown verbatim; only generic/
+  // unexpected errors get the sanitizer's network/auth-oriented rewriting.
+  String _messageFor(Object error) {
+    if (error is ApiCodedException || error is AvailabilityChangeRequiredException) {
+      return error.toString();
     }
-    if (!_isAfter(end, start)) {
-      return '${day['dayOfWeek']}: endTime must be after startTime';
-    }
-
-    final breakStart = day['breakStartTime']?.toString() ?? '';
-    final breakEnd = day['breakEndTime']?.toString() ?? '';
-
-    if (breakStart.isNotEmpty || breakEnd.isNotEmpty) {
-      if (breakStart.isEmpty || breakEnd.isEmpty) {
-        return '${day['dayOfWeek']}: both break times required';
-      }
-      if (!_isAfter(breakEnd, breakStart)) {
-        return '${day['dayOfWeek']}: breakEndTime must be after breakStartTime';
-      }
-      if (_isAfter(start, breakStart) || _isAfter(breakEnd, end)) {
-        return '${day['dayOfWeek']}: break must be within working hours';
-      }
-    }
-
-    return null;
-  }
-
-  bool _isAfter(String left, String right) {
-    final l = left.split(':').map((e) => int.tryParse(e) ?? 0).toList();
-    final r = right.split(':').map((e) => int.tryParse(e) ?? 0).toList();
-    return (l[0] * 60 + l[1]) > (r[0] * 60 + r[1]);
+    return _service.extractMessage(error);
   }
 
   Future<void> _saveAvailability() async {
-    for (final day in _days) {
-      final error = _validateDay(day);
-      if (error != null) {
-        SnackbarUtils.showError(context, error);
-        return;
-      }
+    final plan = _plan;
+    if (plan == null) return;
+
+    // Server is authoritative (QA BUG-2/3) — this screen only builds the
+    // payload shape the mode calls for, it doesn't re-validate it.
+    final List<Map<String, dynamic>> payload;
+    if (plan.showWeeklyGrid) {
+      payload = _days;
+    } else {
+      final duration = _selectedDurationMinutes ?? plan.defaultDurationMinutes ?? 15;
+      payload = _dateRows
+          .map((r) => r.toSlotJson(slotDurationMinutes: duration))
+          .toList();
     }
 
     if (widget.pickerMode) {
-      Navigator.pop(context, _days);
+      Navigator.pop(context, payload);
       return;
     }
 
     setState(() => _savingAvailability = true);
 
     try {
-      await _service.setAvailability(
+      final response = await _service.setAvailability(
         serviceId: widget.serviceId,
-        availabilitySlots: _days,
+        availabilitySlots: payload,
       );
 
       if (!mounted) return;
+
+      final data = response['data'];
+      final planJson = data is Map<String, dynamic>
+          ? data['availabilityPlan']
+          : null;
+      if (planJson is Map<String, dynamic>) {
+        _applyPlan(AvailabilityPlan.fromJson(planJson));
+      }
+
       setState(() => _published = widget.isInitialSetup);
       SnackbarUtils.showSuccess(context, 'Availability saved successfully');
 
@@ -287,7 +382,7 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
       });
     } catch (error) {
       if (!mounted) return;
-      SnackbarUtils.showError(context, _service.extractMessage(error));
+      SnackbarUtils.showError(context, _messageFor(error));
     } finally {
       if (mounted) {
         setState(() => _savingAvailability = false);
@@ -327,119 +422,499 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
             borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
           ),
         ),
-        body: _loadingAvailability
+        body: _isLoading
             ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            : _buildBody(),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    final plan = _plan!;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader(plan),
+          const SizedBox(height: 20),
+
+          if (plan.isExpired)
+            _buildExpiredCard(plan)
+          else if (plan.showAvailableNowCard)
+            _buildAvailableNowCard(plan)
+          else if (plan.showDateRows)
+            _buildDateRows(plan)
+          else if (plan.showWeeklyGrid)
+            _buildWeeklyGrid(plan),
+
+          const SizedBox(height: 20),
+
+          if (!plan.isExpired) _buildSaveButton(plan),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(AvailabilityPlan plan) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF7B2FF7), Color(0xFFAD00FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.deepPurple.withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              // Weekly Schedule Header
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF7B2FF7), Color(0xFFAD00FF)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.deepPurple.withValues(alpha: 0.3),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
+              const Icon(Icons.schedule, color: Colors.white),
+              const SizedBox(width: 12),
+              Text(
+                plan.showWeeklyGrid ? 'Weekly Schedule' : plan.modeLabel,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.schedule, color: Colors.white),
-                        SizedBox(width: 12),
-                        Text(
-                          'Weekly Schedule',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            plan.showWeeklyGrid
+                ? 'Set your regular weekly availability. One availability block per day is supported.'
+                : "This post expires soon, so it's a one-time window instead of a repeating weekly schedule.",
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.9),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpiredCard(AvailabilityPlan plan) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.red.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.event_busy, color: Colors.red.shade700),
+              const SizedBox(width: 8),
+              Text(
+                'This post has expired',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red.shade700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            plan.blockingReason ??
+                'Extend the Timeline Post Expiry to set availability again.',
+            style: TextStyle(color: Colors.red.shade900, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Go back'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // QA BUG-1 / BUG-2: a single (or, when the window crosses midnight,
+  // multi-row) non-editable window the seller can't get wrong — there's
+  // nothing to toggle. Duration is still user-choosable, from the plan's
+  // options only.
+  Widget _buildAvailableNowCard(AvailabilityPlan plan) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.circle, color: Colors.green, size: 12),
+              const SizedBox(width: 8),
+              const Text(
+                'Available now',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (plan.expiresAtLabel != null)
+            Text(
+              'This post expires ${plan.expiresAtLabel} — set your window automatically below instead of a repeating weekly schedule.',
+              style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+            ),
+          const SizedBox(height: 16),
+          if (_dateRows.isEmpty)
+            Text(
+              plan.blockingReason ?? 'Expiry too short for any appointment.',
+              style: TextStyle(
+                color: Colors.red.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else if (_dateRows.length == 1)
+            Row(
+              children: [
+                Icon(Icons.schedule, size: 16, color: Colors.deepPurple.shade300),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    plan.windowLabel ?? _dateRows.first.label,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Set your regular weekly availability. One availability block per day is supported.',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: 14,
+                  ),
+                ),
+              ],
+            )
+          else
+            // Window crosses midnight — one row per calendar date, per spec.
+            ..._dateRows.map(
+              (row) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      row.isClippedAtExpiry ? Icons.flag : Icons.schedule,
+                      size: 16,
+                      color: Colors.deepPurple.shade300,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        row.label,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
+            ),
+          const SizedBox(height: 8),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+          const Text(
+            'Appointment Duration',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          _buildDurationChips(plan),
+        ],
+      ),
+    );
+  }
 
-              const SizedBox(height: 20),
+  // QA BUG-1: one card per calendar date inside the expiry window, editable
+  // start/end time, no day toggle and no weekly-repeat concept.
+  Widget _buildDateRows(AvailabilityPlan plan) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (int i = 0; i < _dateRows.length; i++) ...[
+          _buildDateRowCard(i),
+          const SizedBox(height: 12),
+        ],
+        const SizedBox(height: 4),
+        const Text(
+          'Appointment Duration',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        _buildDurationChips(plan),
+      ],
+    );
+  }
 
-              // Days Cards
-              ...List.generate(_days.length, (index) => _buildDayCard(index)),
-
-              const SizedBox(height: 20),
-
-              // Save Weekly Schedule Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _savingAvailability ? null : _saveAvailability,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    elevation: 0,
+  Widget _buildDateRowCard(int index) {
+    final row = _dateRows[index];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.event, size: 18, color: Colors.deepPurple.shade300),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  row.dateLabel,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
                   ),
-                  child: _savingAvailability
-                      ? const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            Text('Saving...'),
-                          ],
-                        )
-                      : const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.save),
-                            SizedBox(width: 8),
-                            Text(
-                              'Save Weekly Schedule',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+                ),
+              ),
+              if (row.isClippedAtExpiry)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.amber.shade200),
+                  ),
+                  child: Text(
+                    'Ends at expiry',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: Colors.amber.shade900,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTimeField(
+                  label: 'Start',
+                  value: row.startTime,
+                  onTap: () => _pickDateRowTime(index, true),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTimeField(
+                  label: 'End',
+                  value: row.endTime,
+                  onTap: () => _pickDateRowTime(index, false),
                 ),
               ),
             ],
           ),
-        ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildDurationChips(AvailabilityPlan plan) {
+    final options = plan.durationOptions.isNotEmpty
+        ? plan.durationOptions
+        : const [
+            DurationOption(minutes: 15, label: '15 min', enabled: true, isDefault: true),
+            DurationOption(minutes: 30, label: '30 min', enabled: true, isDefault: false),
+            DurationOption(minutes: 45, label: '45 min', enabled: true, isDefault: false),
+            DurationOption(minutes: 60, label: '1 hr', enabled: true, isDefault: false),
+          ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: options.map((option) {
+        final selected = _selectedDurationMinutes == option.minutes;
+        final chip = ChoiceChip(
+          label: Text(option.label),
+          selected: selected,
+          onSelected: option.enabled
+              ? (value) {
+                  if (!value) return;
+                  setState(() => _selectedDurationMinutes = option.minutes);
+                }
+              : null,
+          selectedColor: Colors.deepPurple.shade100,
+          labelStyle: TextStyle(
+            color: option.enabled ? Colors.black87 : Colors.grey.shade400,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+          ),
+          backgroundColor: option.enabled ? null : Colors.grey.shade100,
+        );
+        if (option.enabled || option.disabledReason == null) return chip;
+        return Tooltip(message: option.disabledReason!, child: chip);
+      }).toList(),
+    );
+  }
+
+  Widget _buildSaveButton(AvailabilityPlan plan) {
+    final canSave = plan.canSave;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!canSave && plan.blockingReason != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(
+              plan.blockingReason!,
+              style: TextStyle(
+                color: Colors.red.shade700,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: (_savingAvailability || !canSave)
+                ? null
+                : _saveAvailability,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: Colors.grey.shade300,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+              ),
+              elevation: 0,
+            ),
+            child: _savingAvailability
+                ? const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text('Saving...'),
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.save),
+                      const SizedBox(width: 8),
+                      Text(
+                        plan.showWeeklyGrid
+                            ? 'Save Weekly Schedule'
+                            : 'Save Availability',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWeeklyGrid(AvailabilityPlan plan) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (plan.effectiveUntilLabel != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.amber.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.event_busy, size: 18, color: Colors.amber.shade800),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    plan.effectiveUntilLabel!,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.amber.shade900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (plan.daysOff.isNotEmpty) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.weekend, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Days off: ${plan.daysOff.map((d) => d.dayLabel).join(', ')}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        ...List.generate(_days.length, (index) => _buildDayCard(index, plan)),
+      ],
     );
   }
 
@@ -530,7 +1005,7 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
     );
   }
 
-  Widget _buildDayCard(int index) {
+  Widget _buildDayCard(int index, AvailabilityPlan plan) {
     final row = _days[index];
     final enabled = row['isAvailable'] == true;
 
@@ -726,40 +1201,75 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey[300]!),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: DropdownButtonFormField<int>(
-                            initialValue: row['slotDurationMinutes'] as int,
-                            items: const [15, 30, 45, 60]
-                                .map(
-                                  (value) => DropdownMenuItem(
-                                    value: value,
-                                    child: Text('$value minutes'),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setState(
-                                () => row['slotDurationMinutes'] = value,
-                              );
-                            },
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                            ),
-                          ),
-                        ),
+                        _buildDayDurationDropdown(row, plan),
                       ],
                     ),
                   ),
                 ]
               : [],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayDurationDropdown(
+    Map<String, dynamic> row,
+    AvailabilityPlan plan,
+  ) {
+    final options = plan.durationOptions.isNotEmpty
+        ? plan.durationOptions
+        : const [
+            DurationOption(minutes: 15, label: '15 minutes', enabled: true, isDefault: true),
+            DurationOption(minutes: 30, label: '30 minutes', enabled: true, isDefault: false),
+            DurationOption(minutes: 45, label: '45 minutes', enabled: true, isDefault: false),
+            DurationOption(minutes: 60, label: '60 minutes', enabled: true, isDefault: false),
+          ];
+    final current = row['slotDurationMinutes'] as int;
+    // A previously-saved duration might not be one of the plan's current
+    // options (e.g. expiry shortened since) — keep it selectable so the
+    // dropdown doesn't crash, the server is what actually enforces this.
+    final values = options.map((o) => o.minutes).toSet();
+    if (!values.contains(current)) {
+      values.add(current);
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: DropdownButtonFormField<int>(
+        initialValue: current,
+        items: values.map((minutes) {
+          final option = options.firstWhere(
+            (o) => o.minutes == minutes,
+            orElse: () => DurationOption(
+              minutes: minutes,
+              label: '$minutes minutes',
+              enabled: true,
+              isDefault: false,
+            ),
+          );
+          return DropdownMenuItem(
+            value: minutes,
+            enabled: option.enabled,
+            child: Text(
+              option.enabled
+                  ? option.label
+                  : '${option.label}${option.disabledReason != null ? ' (${option.disabledReason})' : ''}',
+              style: TextStyle(
+                color: option.enabled ? Colors.black87 : Colors.grey.shade400,
+              ),
+            ),
+          );
+        }).toList(),
+        onChanged: (value) {
+          if (value == null) return;
+          setState(() => row['slotDurationMinutes'] = value);
+        },
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16),
         ),
       ),
     );
@@ -792,7 +1302,7 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  value,
+                  isOptional && value == 'Not set' ? value : _formatTime(value),
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: isOptional && value == 'Not set'

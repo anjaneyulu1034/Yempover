@@ -3,6 +3,7 @@ import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 import 'package:yempover_app/services/service_booking_service.dart';
 import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:yempover_app/services/token_service.dart';
+import 'package:yempover_app/utils/app_date_format.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:yempover_app/utils/validators.dart';
 import 'package:flutter/material.dart';
@@ -43,6 +44,26 @@ class _ServiceDetailBookingScreenState
   String? _quoteError;
 
   Map<String, dynamic>? _serviceData;
+
+  // QA BUG-2: duration choices come from the listing's own availabilityPlan,
+  // never a hardcoded list — falls back to the old fixed set only when the
+  // service response doesn't carry a plan (e.g. an older cached response).
+  List<int> get _durationMinutesOptions {
+    final plan = _serviceData?['availabilityPlan'];
+    if (plan is Map<String, dynamic>) {
+      final options = plan['durationOptions'];
+      if (options is List && options.isNotEmpty) {
+        final minutes = options
+            .whereType<Map>()
+            .map((o) => o['minutes'])
+            .whereType<num>()
+            .map((n) => n.toInt())
+            .toList();
+        if (minutes.isNotEmpty) return minutes;
+      }
+    }
+    return const [15, 30, 45, 60];
+  }
   List<Map<String, dynamic>> _slots = [];
   String? _slotsUnavailableReason;
   DateTime _selectedDate = DateTime.now();
@@ -466,13 +487,24 @@ class _ServiceDetailBookingScreenState
     return _service.parseTimeOfDay(_selectedDate, time);
   }
 
+  // QA BUG-5/6: a slot is the actual bookable APPOINTMENT window (e.g.
+  // "9:00 AM – 2:00 PM" for a 5-hour service), never the provider's whole
+  // working day — and the backend now hands back that exact string, already
+  // formatted, so prefer it over reconstructing one client-side.
   String _slotLabel(Map<String, dynamic> slot) {
+    final label = slot['label']?.toString();
+    if (label != null && label.isNotEmpty) return label;
+
     final dt = _slotDateTime(slot);
+    final endLabel = slot['endTimeLabel']?.toString();
     final end = slot['endTime']?.toString();
 
     if (dt != null) {
+      if (endLabel != null && endLabel.isNotEmpty) {
+        return '${_timeFormat.format(dt)} - $endLabel';
+      }
       if (end != null && end.isNotEmpty) {
-        return '${_timeFormat.format(dt)} - $end';
+        return '${_timeFormat.format(dt)} - ${AppDateFormat.timeOfDay(end)}';
       }
       return _timeFormat.format(dt);
     }
@@ -1268,7 +1300,16 @@ class _ServiceDetailBookingScreenState
                                   ),
                                   Text(
                                     slot['isAvailable'] == true
-                                        ? '${slot['startTime']} - ${slot['endTime']}'
+                                        // QA BUG-5/6: the provider's working
+                                        // hours (context only, never shown as
+                                        // a bookable slot) — prefer the
+                                        // backend's windowLabel, which is
+                                        // already AM/PM-formatted.
+                                        ? (slot['windowLabel']?.toString() ??
+                                              AppDateFormat.rangeOfDay(
+                                                slot['startTime'].toString(),
+                                                slot['endTime'].toString(),
+                                              ))
                                         : 'Unavailable',
                                     style: TextStyle(
                                       color: slot['isAvailable'] == true
@@ -1659,8 +1700,9 @@ class _ServiceDetailBookingScreenState
                                   ],
                                 ),
                                 child: Column(
-                                  children: List.generate(4, (index) {
-                                    final options = [15, 30, 45, 60];
+                                  children: List.generate(
+                                      _durationMinutesOptions.length, (index) {
+                                    final options = _durationMinutesOptions;
                                     final value = options[index];
                                     final isSelected = _duration == value;
                                     return Column(

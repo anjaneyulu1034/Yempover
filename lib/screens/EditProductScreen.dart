@@ -12,6 +12,8 @@ import '../services/add_post_service.dart';
 import '../services/category_service.dart';
 import '../services/location_service.dart';
 import '../services/my_posts_service.dart';
+import '../models/service_availability_plan.dart';
+import '../utils/api_exceptions.dart';
 import '../utils/error_message_utils.dart';
 import '../utils/validators.dart';
 import 'service/ServiceAvailabilityScreen.dart';
@@ -112,8 +114,16 @@ class _EditProductScreenState extends State<EditProductScreen> {
     _selectedLongitude = widget.post.longitude;
     _images = List.from(widget.post.images.take(_maxPostImages));
     _initializeTimelineFields();
+    // Captured once, right after the fields are first populated from the
+    // saved post — the revert target if the BUG-4 confirmation dialog below
+    // is cancelled.
+    _originalExpiryUnit = _selectedExpiryUnit;
+    _originalExpiryValueText = _expiryValueController.text;
     _validateStatus();
   }
+
+  String _originalExpiryUnit = 'No expiry';
+  String _originalExpiryValueText = '';
 
   void _initializeTimelineFields() {
     final validUntil = widget.post.validUntil;
@@ -679,6 +689,12 @@ class _EditProductScreenState extends State<EditProductScreen> {
   }
 
   Future<void> _openManageAvailability() async {
+    // Preview the plan for whatever expiry is currently in the form (which
+    // may not be saved yet) rather than the one on `widget.post` — otherwise
+    // this screen could open in the wrong mode while the seller is mid-edit.
+    final preview = await _fetchAvailabilityPreview();
+
+    if (!mounted) return;
     final result = await Navigator.push<List<Map<String, dynamic>>>(
       context,
       MaterialPageRoute(
@@ -686,6 +702,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
           serviceId: widget.post.id,
           pickerMode: true,
           initialAvailabilitySlots: _pendingAvailabilitySlots,
+          expiryValidUntil: _computeEditedExpiryDate(),
+          initialPlan: preview?.plan,
         ),
       ),
     );
@@ -699,6 +717,152 @@ class _EditProductScreenState extends State<EditProductScreen> {
         ),
       ),
     );
+  }
+
+  // The unit/value the plan-preview and save calls send — `null` for both
+  // when the sentinel "already expired, keep as-is" unit is selected, since
+  // that case is carried entirely by `validUntil` (see
+  // _computeEditedExpiryDate).
+  String? get _expiryUnitParam {
+    if (_selectedExpiryUnit == _expiredExpiryUnit) return null;
+    return _selectedExpiryUnit == 'No expiry'
+        ? 'no expiry'
+        : _selectedExpiryUnit.toLowerCase();
+  }
+
+  int? get _expiryValueParam {
+    if (_selectedExpiryUnit == _expiredExpiryUnit ||
+        _selectedExpiryUnit == 'No expiry') {
+      return null;
+    }
+    final raw = double.tryParse(_expiryValueController.text.trim());
+    if (raw == null) return null;
+    // The server's expiryValue field is integer-only; a fractional
+    // Months/Years value (e.g. "6.5") is still carried correctly via
+    // `validUntil` alone, which the server treats as authoritative anyway.
+    return raw == raw.roundToDouble() ? raw.round() : null;
+  }
+
+  // Best-effort preview of the plan for whatever expiry is currently in the
+  // form — used to open Set Availability in the right mode and to detect a
+  // mode-change confirmation (QA BUG-1/4) before the seller commits to Save.
+  // Never blocks the save itself: if this fails, the save's own request
+  // still carries the real expiry and the server enforces everything there.
+  Future<AvailabilityPlanResponse?> _fetchAvailabilityPreview() async {
+    try {
+      return await _postsService.getServiceAvailabilityPlan(
+        serviceId: widget.post.id,
+        expiryUnit: _expiryUnitParam,
+        expiryValue: _expiryValueParam,
+        validUntil: _computeEditedExpiryDate()?.toUtc().toIso8601String(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool?> _showAvailabilityConfirmationDialog(
+    AvailabilityConfirmation confirmation,
+  ) {
+    final isBlocked = confirmation.action == 'BLOCKED';
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(confirmation.title),
+        content: Text(confirmation.message),
+        actions: isBlocked
+            ? [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: Text(
+                    confirmation.cancelLabel.isNotEmpty
+                        ? confirmation.cancelLabel
+                        : 'OK',
+                  ),
+                ),
+              ]
+            : [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: Text(confirmation.cancelLabel),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: Text(confirmation.confirmLabel),
+                ),
+              ],
+      ),
+    );
+  }
+
+  // The seller has seen and accepted the confirmation dialog this save
+  // should carry `confirmAvailabilityChange: true` for.
+  bool _confirmAvailabilityChangeOnSave = false;
+
+  // QA BUG-4: changing the expiry can swap the availability mode (e.g. a
+  // weekly schedule replaced by a single "Available now" window). The
+  // server — not a client-side heuristic — decides whether that's actually
+  // happening, via the plan-preview's `confirmation` object.
+  Future<bool> _confirmExpiryScheduleImpactIfNeeded() async {
+    _confirmAvailabilityChangeOnSave = false;
+
+    final preview = await _fetchAvailabilityPreview();
+    final confirmation = preview?.confirmation;
+    if (confirmation == null) return true; // No mode change - nothing to confirm.
+
+    if (!mounted) return true;
+
+    if (confirmation.action == 'REQUIRE_WEEKLY_SETUP') {
+      // Reverse direction (short -> long expiry): the seller needs to build
+      // a real weekly schedule themselves — the server can't invent one.
+      final proceed = await _showAvailabilityConfirmationDialog(confirmation);
+      if (proceed != true) {
+        setState(() {
+          _selectedExpiryUnit = _originalExpiryUnit;
+          _expiryValueController.text = _originalExpiryValueText;
+        });
+        return false;
+      }
+      _confirmAvailabilityChangeOnSave = true;
+      if (!mounted) return true;
+      final result = await Navigator.push<List<Map<String, dynamic>>>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ServiceAvailabilityScreen(
+            serviceId: widget.post.id,
+            pickerMode: true,
+            initialPlan: confirmation.plan,
+          ),
+        ),
+      );
+      if (result != null && mounted) {
+        setState(() => _pendingAvailabilitySlots = result);
+      }
+      return true;
+    }
+
+    final confirmed = await _showAvailabilityConfirmationDialog(confirmation);
+    if (confirmed != true) {
+      // Cancel discards the expiry change — revert to whatever was loaded
+      // from the saved post, not just abort this one save attempt.
+      if (mounted) {
+        setState(() {
+          _selectedExpiryUnit = _originalExpiryUnit;
+          _expiryValueController.text = _originalExpiryValueText;
+        });
+      }
+      return false;
+    }
+    if (confirmation.action == 'BLOCKED') {
+      // Acknowledged, but nothing to save — the seller must fix the expiry
+      // or schedule first.
+      return false;
+    }
+    // REPLACE_WITH_AVAILABLE_NOW / REPLACE_WITH_DATES: the server rebuilds
+    // the schedule itself once `confirmAvailabilityChange: true` is sent —
+    // no availabilitySlots to attach here.
+    _confirmAvailabilityChangeOnSave = true;
+    return true;
   }
 
   Future<void> _saveChanges() async {
@@ -735,146 +899,189 @@ class _EditProductScreenState extends State<EditProductScreen> {
       return;
     }
 
-    setState(() {
-      _isSaving = true;
-    });
+    if (_postType == 'service') {
+      final shouldProceed = await _confirmExpiryScheduleImpactIfNeeded();
+      if (!shouldProceed) return;
+    }
+
+    await _runSave(confirmAvailabilityChange: _confirmAvailabilityChangeOnSave);
+  }
+
+  // QA BUG-4 reactive path: a save that changes validUntil without having
+  // gone through the confirmation preview (e.g. some other edit shifted it)
+  // still comes back 409 AVAILABILITY_MODE_CHANGE — treat that as "show the
+  // dialog", not a generic error toast, then retry once confirmed.
+  Future<void> _runSave({required bool confirmAvailabilityChange}) async {
+    setState(() => _isSaving = true);
 
     try {
-      final List<String> existingImages = [];
-      final List<String> newBase64Images = [];
-
-      for (final image in _images) {
-        if (_isLocalImagePath(image)) {
-          final file = File(image);
-          if (!await file.exists()) {
-            continue;
-          }
-
-          final base64Image = await _addPostService.imageToBase64Url(file);
-          newBase64Images.add(base64Image);
-        } else if (image.trim().startsWith('data:image/')) {
-          newBase64Images.add(image);
-        } else {
-          existingImages.add(image);
-        }
-      }
-
-      final uploadedImageUrls = newBase64Images.isNotEmpty
-          ? await _postsService.uploadPostImagesBase64(newBase64Images)
-          : <String>[];
-
-      final List<String> preparedImages = [
-        ...existingImages,
-        ...uploadedImageUrls,
-      ];
-
-      // A photo is mandatory for a Product listing, but not for a Service —
-      // matches the same rule on the Add Post flow.
-      if (preparedImages.isEmpty && _postType != 'service') {
-        throw Exception('Please add at least one image');
-      }
-
-      if (preparedImages.length > _maxPostImages) {
-        throw Exception('Maximum 5 images allowed');
-      }
-
-      final updatedExpiryDate = _computeEditedExpiryDate();
-      final validFromIso = updatedExpiryDate == null
-          ? null
-          : DateTime.now().toUtc().toIso8601String();
-      final validUntilIso = updatedExpiryDate?.toUtc().toIso8601String();
-
-      // Create request with type explicitly set
-      final requestData = {
-        'title': _titleController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'images': preparedImages,
-        'status': _selectedStatus,
-        'barterStatus': _normalizeBarterStatus(_selectedBarterStatus),
-        'categoryId': _selectedCategoryId,
-        'isListed': _isListed,
-        if (_postType != 'service') ...{
-          'canBeClubbed': _canBeClubbed,
-          'isClubbable': _canBeClubbed,
-          'canClubItems': _canBeClubbed,
-        },
-        'type': _postType, // IMPORTANT: Include the post type
-        'validFrom': validFromIso,
-        'validUntil': validUntilIso,
-      };
-
-      // Price is mandatory for edit flows (product/service).
-      requestData['price'] = double.parse(_priceController.text.trim());
-
-      requestData['location'] = _locationController.text.trim();
-      if (_selectedLatitude != null) {
-        requestData['latitude'] = _selectedLatitude;
-      }
-      if (_selectedLongitude != null) {
-        requestData['longitude'] = _selectedLongitude;
-      }
-      if (_postType == 'service' && _pendingAvailabilitySlots != null) {
-        requestData['availabilitySlots'] = _pendingAvailabilitySlots;
-      }
-
-      debugPrint('📦 Sending update request with type: $_postType');
-      debugPrint('📦 Request data: $requestData');
-
-      final response = await _postsService.updatePost(
-        widget.post.id,
-        requestData,
-      );
-
+      await _submitUpdate(confirmAvailabilityChange: confirmAvailabilityChange);
+    } on AvailabilityChangeRequiredException catch (e) {
       if (!mounted) return;
+      setState(() => _isSaving = false);
 
-      if (response.status == 'success') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _postType == 'service'
-                  ? 'Service updated successfully'
-                  : 'Product updated successfully',
-            ),
-            backgroundColor: Colors.green,
-          ),
-        );
-        widget.onProductUpdated();
-        Navigator.pop(context, true);
-      } else {
-        throw Exception(
-          response.message.isNotEmpty ? response.message : 'Update failed',
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-
-      final raw = e.toString().toLowerCase();
-      String message;
-      if (raw.contains('please add at least one image') ||
-          raw.contains('at least one image')) {
-        message = 'Please add at least one image to continue.';
-      } else if (raw.contains('maximum 5 images')) {
-        message = 'You can upload a maximum of 5 images.';
-      } else {
-        // Surface the real reason (validation error, session expiry, network
-        // issue, etc.) instead of always showing the same generic message
-        // no matter what actually went wrong.
-        message = ErrorMessageUtils.sanitize(
-          e,
-          fallback: 'Unable to save changes right now. Please try again.',
-        );
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      final confirmed = await _showAvailabilityConfirmationDialog(
+        e.confirmation,
       );
-    } finally {
-      if (mounted) {
+      if (confirmed == true && e.confirmation.action != 'BLOCKED') {
+        await _runSave(confirmAvailabilityChange: true);
+      } else if (mounted) {
         setState(() {
-          _isSaving = false;
+          _selectedExpiryUnit = _originalExpiryUnit;
+          _expiryValueController.text = _originalExpiryValueText;
         });
       }
+      return;
+    } catch (e) {
+      if (mounted) _showSaveError(e);
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
+  }
+
+  Future<void> _submitUpdate({required bool confirmAvailabilityChange}) async {
+    final List<String> existingImages = [];
+    final List<String> newBase64Images = [];
+
+    for (final image in _images) {
+      if (_isLocalImagePath(image)) {
+        final file = File(image);
+        if (!await file.exists()) {
+          continue;
+        }
+
+        final base64Image = await _addPostService.imageToBase64Url(file);
+        newBase64Images.add(base64Image);
+      } else if (image.trim().startsWith('data:image/')) {
+        newBase64Images.add(image);
+      } else {
+        existingImages.add(image);
+      }
+    }
+
+    final uploadedImageUrls = newBase64Images.isNotEmpty
+        ? await _postsService.uploadPostImagesBase64(newBase64Images)
+        : <String>[];
+
+    final List<String> preparedImages = [
+      ...existingImages,
+      ...uploadedImageUrls,
+    ];
+
+    // A photo is mandatory for a Product listing, but not for a Service —
+    // matches the same rule on the Add Post flow.
+    if (preparedImages.isEmpty && _postType != 'service') {
+      throw Exception('Please add at least one image');
+    }
+
+    if (preparedImages.length > _maxPostImages) {
+      throw Exception('Maximum 5 images allowed');
+    }
+
+    final updatedExpiryDate = _computeEditedExpiryDate();
+    final validFromIso = updatedExpiryDate == null
+        ? null
+        : DateTime.now().toUtc().toIso8601String();
+    final validUntilIso = updatedExpiryDate?.toUtc().toIso8601String();
+
+    // Create request with type explicitly set
+    final requestData = {
+      'title': _titleController.text.trim(),
+      'description': _descriptionController.text.trim(),
+      'images': preparedImages,
+      'status': _selectedStatus,
+      'barterStatus': _normalizeBarterStatus(_selectedBarterStatus),
+      'categoryId': _selectedCategoryId,
+      'isListed': _isListed,
+      if (_postType != 'service') ...{
+        'canBeClubbed': _canBeClubbed,
+        'isClubbable': _canBeClubbed,
+        'canClubItems': _canBeClubbed,
+      },
+      'type': _postType, // IMPORTANT: Include the post type
+      'validFrom': validFromIso,
+      'validUntil': validUntilIso,
+      if (_postType == 'service' && _expiryUnitParam != null)
+        'expiryUnit': _expiryUnitParam,
+      if (_postType == 'service' && _expiryValueParam != null)
+        'expiryValue': _expiryValueParam,
+    };
+
+    // Price is mandatory for edit flows (product/service).
+    requestData['price'] = double.parse(_priceController.text.trim());
+
+    requestData['location'] = _locationController.text.trim();
+    if (_selectedLatitude != null) {
+      requestData['latitude'] = _selectedLatitude;
+    }
+    if (_selectedLongitude != null) {
+      requestData['longitude'] = _selectedLongitude;
+    }
+    if (_postType == 'service' && _pendingAvailabilitySlots != null) {
+      requestData['availabilitySlots'] = _pendingAvailabilitySlots;
+    }
+    // QA BUG-4: the seller has seen and accepted the mode-change dialog.
+    if (confirmAvailabilityChange) {
+      requestData['confirmAvailabilityChange'] = true;
+    }
+
+    debugPrint('📦 Sending update request with type: $_postType');
+    debugPrint('📦 Request data: $requestData');
+
+    final response = await _postsService.updatePost(
+      widget.post.id,
+      requestData,
+    );
+
+    if (!mounted) return;
+
+    if (response.status == 'success') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _postType == 'service'
+                ? 'Service updated successfully'
+                : 'Product updated successfully',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+      widget.onProductUpdated();
+      Navigator.pop(context, true);
+    } else {
+      throw Exception(
+        response.message.isNotEmpty ? response.message : 'Update failed',
+      );
+    }
+  }
+
+  void _showSaveError(Object e) {
+    final raw = e.toString().toLowerCase();
+    String message;
+    if (raw.contains('please add at least one image') ||
+        raw.contains('at least one image')) {
+      message = 'Please add at least one image to continue.';
+    } else if (raw.contains('maximum 5 images')) {
+      message = 'You can upload a maximum of 5 images.';
+    } else if (e is ApiCodedException) {
+      // QA BUG-3: backend-authored, user-safe validation message — shown
+      // verbatim, not run through the generic network/auth sanitizer.
+      message = e.message;
+    } else {
+      // Surface the real reason (validation error, session expiry, network
+      // issue, etc.) instead of always showing the same generic message
+      // no matter what actually went wrong.
+      message = ErrorMessageUtils.sanitize(
+        e,
+        fallback: 'Unable to save changes right now. Please try again.',
+      );
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
   }
 
   @override

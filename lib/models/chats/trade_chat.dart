@@ -589,6 +589,13 @@ class ServiceAppointmentSnapshot {
   final String? slotDate;
   final String? slotTime;
   final String? slotEndTime;
+  // QA BUG-5/6: pre-formatted by the server in the app's one date format —
+  // prefer these over the hand-rolled display getters below, which stay only
+  // as a fallback for a response that hasn't been decorated with them.
+  final String? slotDateLabel;
+  final String? slotDateTimeLabel;
+  final String? slotRangeLabel;
+  final String? durationLabel;
 
   ServiceAppointmentSnapshot({
     required this.id,
@@ -601,6 +608,10 @@ class ServiceAppointmentSnapshot {
     this.slotDate,
     this.slotTime,
     this.slotEndTime,
+    this.slotDateLabel,
+    this.slotDateTimeLabel,
+    this.slotRangeLabel,
+    this.durationLabel,
   });
 
   factory ServiceAppointmentSnapshot.fromJson(Map<String, dynamic> json) {
@@ -621,12 +632,17 @@ class ServiceAppointmentSnapshot {
       slotTime: slotTime,
       slotEndTime:
           json['slotEndTime']?.toString() ?? _addMinutesToHHmm(slotTime, duration),
+      slotDateLabel: json['slotDateLabel']?.toString(),
+      slotDateTimeLabel: json['slotDateTimeLabel']?.toString(),
+      slotRangeLabel: json['slotRangeLabel']?.toString(),
+      durationLabel: json['durationLabel']?.toString(),
     );
   }
 
   // "2026-09-03" -> "Sep 3, 2026". Falls back to the raw key if it doesn't
   // parse (never via DateTime timezone conversion — just a display format).
   String get displayDate {
+    if (slotDateLabel != null && slotDateLabel!.isNotEmpty) return slotDateLabel!;
     if (slotDate == null) return '--';
     final parts = slotDate!.split('-');
     if (parts.length != 3) return slotDate!;
@@ -657,7 +673,16 @@ class ServiceAppointmentSnapshot {
 
   String get displayTime => _displayTimeOf(slotTime);
   String get displayEndTime => _displayTimeOf(slotEndTime);
-  String get displayDateTime => '$displayDate • $displayTime';
+  String get displayDateTime =>
+      (slotDateTimeLabel != null && slotDateTimeLabel!.isNotEmpty)
+      ? slotDateTimeLabel!
+      : '$displayDate • $displayTime';
+  // QA BUG-5: the actual appointment window ("9:00 AM – 2:00 PM"), not just
+  // a start time + a bare minute count.
+  String get displayRange =>
+      (slotRangeLabel != null && slotRangeLabel!.isNotEmpty)
+      ? slotRangeLabel!
+      : '$displayTime – $displayEndTime';
 }
 
 // Server-authoritative gate on "Deal Completed" for the scheduled service
