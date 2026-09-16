@@ -267,6 +267,7 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
     final reason = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        scrollable: true,
         title: Text(prompt?.title ?? 'Deal Not Completed'),
         content: StatefulBuilder(
           builder: (context, setDialogState) => Column(

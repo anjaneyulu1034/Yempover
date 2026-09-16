@@ -1548,6 +1548,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
+            scrollable: true,
             title: const Text('Counter Coins Offer'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -2762,6 +2763,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
+            scrollable: true,
             title: const Text('Deal Not Completed'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -4357,6 +4359,53 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             if (latestOffer.barterItemDescription != null &&
                 latestOffer.barterItemDescription!.trim().isNotEmpty)
               _buildOfferNote(latestOffer.barterItemDescription!),
+          ] else if (latestOffer.isZeroCoin) ...[
+            // No real item or coins on the table — offerType is still BARTER
+            // for these (see backend), so without this branch they'd fall
+            // into the barter-exchange preview below with an empty
+            // barterItemImages/barterItemTitle, rendering a broken-image
+            // placeholder next to the synthesized "Offer for <listing>"
+            // fallback text instead of clearly saying what this actually is.
+            Text(
+              isServiceChat
+                  ? '$senderName is requesting your service for free — no item or coins offered in exchange.'
+                  : '$senderName is requesting your product for free — no item or coins offered in exchange.',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _buildOfferItemThumb(
+                  latestOffer.listing?.image ?? _currentChat.postImage,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        latestOffer.listing?.title ?? _currentChat.postTitle,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Zero-coin request',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (latestOffer.barterItemDescription != null &&
+                latestOffer.barterItemDescription!.trim().isNotEmpty)
+              _buildOfferNote(latestOffer.barterItemDescription!),
           ] else if (latestOffer.isBarterOffer || latestOffer.isBothOffer) ...[
             Text(
               isServiceChat
@@ -4604,6 +4653,44 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       Text(
                         'Offer: ${CoinFormat.withUnit(latestOffer.price)}',
                         style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (latestOffer.barterItemDescription != null &&
+                latestOffer.barterItemDescription!.trim().isNotEmpty)
+              _buildOfferNote(latestOffer.barterItemDescription!),
+          ] else if (latestOffer.isZeroCoin) ...[
+            // Mirrors the incoming card's isZeroCoin branch above — no real
+            // item on your side of this offer, so skip the exchange preview
+            // (which would otherwise show a broken-image placeholder) and
+            // say plainly what this is.
+            Row(
+              children: [
+                _buildOfferItemThumb(
+                  latestOffer.listing?.image ?? _currentChat.postImage,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        latestOffer.listing?.title ?? _currentChat.postTitle,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Requested for free — you offered no item or coins in exchange',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     ],
                   ),
