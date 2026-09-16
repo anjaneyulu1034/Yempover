@@ -49,6 +49,15 @@ class _SubscriptionResumeGateState extends State<SubscriptionResumeGate>
     try {
       final response = await SubscriptionPlanService()
           .getCurrentSubscriptionPlan();
+      // getCurrentSubscriptionPlan() never throws — a failed fetch (network
+      // hiccup, profile lookup error) is swallowed internally and comes
+      // back as status: 'error', data: null, which `isValid ?? false`
+      // would otherwise treat identically to "really has no subscription".
+      // Only pop the gate on a genuine successful check that says invalid;
+      // anything else falls through to the same silent skip as the catch
+      // below (the global HTTP interceptor still catches a real lapse on
+      // the next actual request).
+      if (response.status != 'success') return;
       final isValid = response.data?.isValid ?? false;
       if (!isValid) {
         SubscriptionGate.showIfNeeded();
