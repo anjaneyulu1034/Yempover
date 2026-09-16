@@ -669,6 +669,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
       _scrollToBottom();
       widget.onChatUpdated(_currentChat);
+      if (mounted) _returnToMarketplaceAfterOfferRejected();
     } catch (e) {
       print('Error handling offer rejected: $e');
     }
@@ -1246,6 +1247,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
       _scrollToBottom();
       widget.onChatUpdated(_currentChat);
+      if (mounted) _returnToMarketplaceAfterOfferRejected();
     } catch (e) {
       _showErrorToast(e);
     } finally {
@@ -2654,6 +2656,33 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           'Deal marked as not completed. Taking you back to the marketplace.',
         ),
         backgroundColor: Colors.orange,
+      ),
+    );
+    // See _returnToMarketplaceAfterDealCompletion — same root-navigator
+    // reasoning applies here.
+    Future.delayed(const Duration(milliseconds: 900), () {
+      app.rootNavigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+    });
+  }
+
+  // Sends both parties back to the marketplace the moment any offer in this
+  // chat is rejected — the rejecting user via _rejectOffer, the other party
+  // via the offer_rejected socket event in _handleOfferRejected. Guarded so
+  // a chat with several rejections in its history (re-offer after reject is
+  // otherwise a normal flow) only navigates once per live rejection, not
+  // retroactively for historical ones already in the chat log.
+  bool _hasNavigatedAwayOnOfferRejected = false;
+
+  void _returnToMarketplaceAfterOfferRejected() {
+    if (!mounted || _hasNavigatedAwayOnOfferRejected) return;
+    _hasNavigatedAwayOnOfferRejected = true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Offer rejected. Taking you back to the marketplace.'),
+        backgroundColor: Colors.red,
       ),
     );
     // See _returnToMarketplaceAfterDealCompletion — same root-navigator
