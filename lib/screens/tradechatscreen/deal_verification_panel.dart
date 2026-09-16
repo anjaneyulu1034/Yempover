@@ -23,6 +23,13 @@ class DealVerificationPanel extends StatefulWidget {
   // History), which should stay browsable rather than bounce the viewer
   // straight back out.
   final VoidCallback? onDealFullyCompleted;
+  // Fired right after this user's own "Deal Not Completed" (close) succeeds.
+  // Unlike onDealFullyCompleted, closing only takes one side — there's
+  // nothing to wait for — so this fires unconditionally on success rather
+  // than depending on the deal_cancelled socket broadcast looping back to
+  // the same client that sent it, which is what onChatShouldRefresh alone
+  // was leaving this user waiting on.
+  final VoidCallback? onDealClosed;
   // Who gave what to whom, so the completed-deal card can spell out the
   // exchange instead of just a bare checkmark — the offerer handed over
   // offeredItemLabel and received itemName (the post) from the receiver.
@@ -39,6 +46,7 @@ class DealVerificationPanel extends StatefulWidget {
     required this.currentUserId,
     required this.onChatShouldRefresh,
     this.onDealFullyCompleted,
+    this.onDealClosed,
     this.itemName,
     this.offererName,
     this.receiverName,
@@ -350,6 +358,7 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
       // the parent refetches, chat.dealVerification becomes null and this
       // panel stops being rendered.
       widget.onChatShouldRefresh();
+      widget.onDealClosed?.call();
     } catch (e) {
       if (!mounted) return;
       setState(() => _isBusy = false);

@@ -704,6 +704,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
           initialAvailabilitySlots: _pendingAvailabilitySlots,
           expiryValidUntil: _computeEditedExpiryDate(),
           initialPlan: preview?.plan,
+          knownNoExpiry: _selectedExpiryUnit == 'No expiry',
         ),
       ),
     );
@@ -1057,6 +1058,14 @@ class _EditProductScreenState extends State<EditProductScreen> {
     }
   }
 
+  // express-validator dumps look like "field[0].sub: Invalid value,
+  // field[1].sub: Invalid value, ..." — a comma-joined list of raw field
+  // paths, never something a seller wrote or should read as-is.
+  bool _looksLikeRawValidatorDump(String message) {
+    return message.contains('Invalid value') ||
+        RegExp(r'\[\d+\]\.\w+\s*:').hasMatch(message);
+  }
+
   void _showSaveError(Object e) {
     final raw = e.toString().toLowerCase();
     String message;
@@ -1068,7 +1077,12 @@ class _EditProductScreenState extends State<EditProductScreen> {
     } else if (e is ApiCodedException) {
       // QA BUG-3: backend-authored, user-safe validation message — shown
       // verbatim, not run through the generic network/auth sanitizer.
-      message = e.message;
+      // Exception: express-validator's own field-path dump (e.g.
+      // "availabilitySlots[0].breakStartTime: Invalid value, [1]...") isn't
+      // curated copy — it's raw technical output, unreadable as a toast.
+      message = _looksLikeRawValidatorDump(e.message)
+          ? 'Some availability details are invalid. Please check your schedule and try again.'
+          : e.message;
     } else {
       // Surface the real reason (validation error, session expiry, network
       // issue, etc.) instead of always showing the same generic message

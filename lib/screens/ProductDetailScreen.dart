@@ -39,12 +39,14 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
   }
 
   Future<void> _refreshPost() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
 
     try {
       final response = await _postsService.getPostById(_post.id);
+      if (!mounted) return;
       if (response.data != null && response.data!['post'] != null) {
         setState(() {
           _post = MyPost.fromJson(response.data!['post']);
@@ -52,6 +54,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -131,6 +134,7 @@ class _PostDetailScreenState extends State<PostDetailScreen1> {
         SnackbarUtils.showSuccess(context, '${_post.title} has been deleted');
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });

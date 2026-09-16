@@ -22,6 +22,15 @@ class ServiceAvailabilityScreen extends StatefulWidget {
   // Post Expiry picker's preview call) — QA BUG-1: the server decides which
   // mode to render, not this screen. When null, the screen fetches its own.
   final AvailabilityPlan? initialPlan;
+  // True only when the caller is CERTAIN the seller picked "No expiry" —
+  // as opposed to `expiryValidUntil` merely being null, which for an
+  // existing service can also mean "already expired, keep as-is" (a
+  // sentinel the edit screen carries separately). Only set this when it's
+  // unambiguous: a brand-new service with no expiry, or an edit where the
+  // seller explicitly chose "No expiry". Used to fall back to the weekly
+  // grid locally if the plan-preview call fails, without ever guessing
+  // wrong for an expired listing.
+  final bool knownNoExpiry;
 
   const ServiceAvailabilityScreen({
     super.key,
@@ -31,6 +40,7 @@ class ServiceAvailabilityScreen extends StatefulWidget {
     this.pickerMode = false,
     this.expiryValidUntil,
     this.initialPlan,
+    this.knownNoExpiry = false,
   });
 
   @override
@@ -86,11 +96,18 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
       _applyPlan(response.plan);
     } catch (error) {
       if (!mounted) return;
-      // A brand-new service (no id yet) with no expiry is never ambiguous
-      // — it's always the recurring weekly schedule — so don't block the
-      // create flow behind a server round trip that has nothing left to
-      // resolve beyond what's already known client-side.
-      if (widget.serviceId.isEmpty && widget.expiryValidUntil == null) {
+      // "No expiry" is never ambiguous — it's always the recurring weekly
+      // schedule — so don't block on a server round trip that has nothing
+      // left to resolve beyond what's already known client-side. This is
+      // safe for a brand-new service (no id yet, no expiry set), and for an
+      // edit ONLY when the caller has confirmed the seller actually chose
+      // "No expiry" (`knownNoExpiry`) rather than `expiryValidUntil` simply
+      // being null for some other reason (e.g. an already-expired listing
+      // being left as-is, which must still show the expired-state card).
+      final safeToDefaultWeekly =
+          (widget.serviceId.isEmpty && widget.expiryValidUntil == null) ||
+          widget.knownNoExpiry;
+      if (safeToDefaultWeekly) {
         _applyPlan(AvailabilityPlan.defaultWeekly());
       } else {
         SnackbarUtils.showError(context, _messageFor(error));
@@ -345,7 +362,19 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
     // payload shape the mode calls for, it doesn't re-validate it.
     final List<Map<String, dynamic>> payload;
     if (plan.showWeeklyGrid) {
-      payload = _days;
+      // `_days` rows default break times to '' (not null) so the "Not set"
+      // UI state has a stable value to check .isEmpty against — but the
+      // backend validator only treats undefined/null as "no break", and
+      // rejects '' against the HH:mm pattern. Left as '', saving ANY day
+      // fails validation for every row, not just the one being changed.
+      payload = _days.map((day) {
+        final normalized = Map<String, dynamic>.from(day);
+        final breakStart = normalized['breakStartTime']?.toString() ?? '';
+        final breakEnd = normalized['breakEndTime']?.toString() ?? '';
+        normalized['breakStartTime'] = breakStart.isEmpty ? null : breakStart;
+        normalized['breakEndTime'] = breakEnd.isEmpty ? null : breakEnd;
+        return normalized;
+      }).toList();
     } else {
       final duration = _selectedDurationMinutes ?? plan.defaultDurationMinutes ?? 15;
       payload = _dateRows

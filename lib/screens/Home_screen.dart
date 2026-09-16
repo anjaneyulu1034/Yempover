@@ -1571,6 +1571,10 @@ class _HomeScreenState extends State<HomeScreen> {
   String _getBarterStatus(ExtendedPost post) {
     if (post.isForBarter) return 'Open for barter';
     if (post.isForSale) return 'For sale';
+    // Services don't carry a FOR_SALE/FOR_BARTER `status` (that's PROVIDE_
+    // SERVICE/LOOKING_FOR_SERVICE instead), so a non-barter service fell
+    // through to '' above and the card showed no barter indicator at all.
+    if (post.post.type == PostType.service) return 'Not for Barter';
     return '';
   }
 
@@ -2710,23 +2714,31 @@ class _HomeScreenState extends State<HomeScreen> {
                             vertical: 8,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE8EAF6),
+                            color: (post.isForBarter || post.isForSale)
+                                ? const Color(0xFFE8EAF6)
+                                : const Color(0xFFEEEEEE),
                             borderRadius: BorderRadius.circular(30),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                Icons.sync_alt,
+                                (post.isForBarter || post.isForSale)
+                                    ? Icons.sync_alt
+                                    : Icons.block_outlined,
                                 size: 14,
-                                color: const Color(0xFF3F51B5),
+                                color: (post.isForBarter || post.isForSale)
+                                    ? const Color(0xFF3F51B5)
+                                    : const Color(0xFF616161),
                               ),
                               const SizedBox(width: 4),
                               Text(
                                 _getBarterStatus(post),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 11,
-                                  color: Color(0xFF3F51B5),
+                                  color: (post.isForBarter || post.isForSale)
+                                      ? const Color(0xFF3F51B5)
+                                      : const Color(0xFF616161),
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),

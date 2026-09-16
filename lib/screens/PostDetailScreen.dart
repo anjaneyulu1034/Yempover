@@ -1456,6 +1456,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           bg: const Color(0xFFE8EAF6),
         ),
       );
+    } else {
+      tags.add(
+        _buildStatusTag(
+          icon: Icons.block_outlined,
+          label: 'Not for Barter',
+          fg: const Color(0xFF616161),
+          bg: const Color(0xFFEEEEEE),
+        ),
+      );
     }
 
     if (_post.canClubItems) {

@@ -4983,6 +4983,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                                 onChatShouldRefresh:
                                     _refreshChatWithFullScreenLoader,
                                 onDealFullyCompleted: _returnToMarketplaceAfterDealCompletion,
+                                onDealClosed: _returnToMarketplaceAfterDealNotCompleted,
                               )
                             else
                               _buildDealCompletionBanner(),
