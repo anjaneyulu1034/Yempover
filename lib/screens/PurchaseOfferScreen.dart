@@ -344,7 +344,7 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
               inputFormatters: Validators.amountInputFormatters(),
               decoration: AppInputDecoration.build(
                 label: 'Offer Price',
-                hint: 'Enter your offer in coins',
+                hint: 'Enter your offer in Barter Dollars',
                 prefix: coinInputPrefix(),
                 fillColor: Colors.grey.shade50,
               ),

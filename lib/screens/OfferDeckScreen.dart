@@ -79,8 +79,8 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
 
   String get _emptyItemsMessage {
     if (widget.isZeroCoin) {
-      return 'Item is optional for a zero-coin request — post items open for '
-          'barter if you\'d like to offer one, or continue without one.';
+      return 'Item is optional for a zero-Barter-Dollar request — post items '
+          'open for barter if you\'d like to offer one, or continue without one.';
     }
     if (_filtersToBarterPostsOnly) {
       return 'Post items open for barter to make this offer';
@@ -726,7 +726,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Coins to be Deducted'),
+        title: const Text('Barter Dollars to be Deducted'),
         content: Row(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -736,7 +736,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
             Expanded(
               child: Text(
                 'If this offer is accepted, ${CoinFormat.amount(coins)} '
-                'coins will be deducted from your wallet.',
+                'Barter Dollars will be deducted from your wallet.',
                 style: const TextStyle(fontSize: 14.5, height: 1.35),
               ),
             ),
@@ -771,7 +771,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
         //  // onPressed: () => Navigator.pop(context),
         // ),
         title: Text(
-          widget.isZeroCoin ? "Zero-Coin Offer" : "Offer Deck",
+          widget.isZeroCoin ? "Zero Barter Dollar Offer" : "Offer Deck",
           style: const TextStyle(
             color: Colors.black,
             fontWeight: FontWeight.w600,
@@ -807,7 +807,7 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Zero-coin transaction — no coins involved. '
+                            'Zero Barter Dollar transaction — no Barter Dollars involved. '
                             'Picking an item below is optional.',
                             style: TextStyle(
                               fontSize: 12,

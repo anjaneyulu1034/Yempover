@@ -114,11 +114,11 @@ Widget _buildZeroCoinOption(BuildContext context) {
     contentPadding: EdgeInsets.zero,
     leading: const Icon(Icons.money_off, color: Colors.teal, size: 32),
     title: const Text(
-      'Request zero-coin transaction',
+      'Request zero-Barter-Dollar transaction',
       style: TextStyle(fontWeight: FontWeight.w600),
     ),
     subtitle: const Text(
-      'No coins involved — offer a product in return, or ask for it free.',
+      'No Barter Dollars involved — offer a product in return, or ask for it free.',
       style: TextStyle(fontSize: 12),
     ),
     onTap: () async {
@@ -143,12 +143,12 @@ Future<bool?> _confirmZeroCoinSelection(BuildContext context) {
           Icon(Icons.money_off, color: Colors.teal),
           SizedBox(width: 10),
           Expanded(
-            child: Text('Zero-Coin Exchange', style: TextStyle(fontSize: 18)),
+            child: Text('Zero Barter Dollar Exchange', style: TextStyle(fontSize: 18)),
           ),
         ],
       ),
       content: const Text(
-        'No coins will be exchanged in this deal — only the product(s) '
+        'No Barter Dollars will be exchanged in this deal — only the product(s) '
         'themselves, or you can ask for this product for free.',
         style: TextStyle(fontSize: 14, height: 1.4),
       ),

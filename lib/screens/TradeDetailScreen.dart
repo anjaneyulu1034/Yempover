@@ -979,8 +979,8 @@ class TradeDetailScreen extends StatelessWidget {
               // side it's their contribution, which is what pays you —
               // that stays a "+"/green, since it's not your own balance.
               side.isYou
-                  ? '- ${CoinFormat.amount(side.coins)} coins'
-                  : '+ ${CoinFormat.amount(side.coins)} coins',
+                  ? '- ${CoinFormat.amount(side.coins)} Barter Dollars'
+                  : '+ ${CoinFormat.amount(side.coins)} Barter Dollars',
               style: TextStyle(
                 fontSize: 12.5,
                 color: side.isYou

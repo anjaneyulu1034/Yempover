@@ -669,7 +669,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Zero-coin transaction — no coins involved. Item(s) below are optional.',
+                        'Zero Barter Dollar transaction — no Barter Dollars involved. Item(s) below are optional.',
                         style: TextStyle(fontSize: 12, color: Colors.teal.shade900),
                       ),
                     ),
@@ -789,7 +789,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                             if (_requiresBarterItems) ...[
                               if (widget.isZeroCoin && _allSelectedItems.isEmpty)
                                 Text(
-                                  'No item — asking for zero coins',
+                                  'No item — asking for zero Barter Dollars',
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: Colors.grey.shade600,
@@ -972,7 +972,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                 },
                 decoration: AppInputDecoration.build(
                   label: 'Offer Price',
-                  hint: 'Enter your offer in coins',
+                  hint: 'Enter your offer in Barter Dollars',
                   prefix: coinInputPrefix(),
                   errorText: _priceError,
                   fillColor: Colors.grey.shade50,

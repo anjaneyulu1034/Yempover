@@ -1150,13 +1150,14 @@ class TradeOffer {
       barterProductsTotalValue + barterServicesTotalValue;
 
   // Plain number, no $/USD — whole numbers with no decimals (130), up to 2
-  // decimals only when fractional (135.5), "coin" singular for exactly 1.
+  // decimals only when fractional (135.5), "Barter Dollar" singular for
+  // exactly 1.
   static String _coinsLabel(double value) {
     final formatted = value == value.roundToDouble()
         ? value.toInt().toString()
         : value.toStringAsFixed(2);
     final isSingular = value == 1 || value == -1;
-    return '$formatted ${isSingular ? 'coin' : 'coins'}';
+    return '$formatted ${isSingular ? 'Barter Dollar' : 'Barter Dollars'}';
   }
 
   String get offerSummary {

@@ -39,13 +39,14 @@ class CoinIcon extends StatelessWidget {
   }
 }
 
-/// Formats barter coin amounts without a dollar sign. The app's currency is
-/// in-app "coins", never fiat — nothing here should ever emit a $ or USD.
+/// Formats barter coin amounts, displayed to the user as "Barter Dollars".
+/// The app's currency is in-app only, never fiat — nothing here should ever
+/// emit a real-currency symbol or USD.
 class CoinFormat {
   // Plain number, no unit word: whole numbers with no decimals (130), up to
   // 2 decimals only when fractional (135.5). Returns 'Free' for null/<=0 —
   // used for LISTING prices, where an unset/zero price conventionally means
-  // the item is free, not "0 coins".
+  // the item is free, not "0 Barter Dollars".
   static String amount(num? value) {
     if (value == null || value <= 0) return 'Free';
     return _formatNumber(value);
@@ -57,23 +58,23 @@ class CoinFormat {
     return d.toStringAsFixed(2);
   }
 
-  // Number + singular/plural unit ("1 coin" / "2 coins"), still 'Free' for
-  // null/<=0 — use for LISTING/item prices displayed with the word "coins"
-  // instead of a CoinIcon.
+  // Number + singular/plural unit ("1 Barter Dollar" / "2 Barter Dollars"),
+  // still 'Free' for null/<=0 — use for LISTING/item prices displayed with
+  // the unit word instead of a CoinIcon.
   static String withLabel(num? value) {
     if (value == null || value <= 0) return 'Free';
     return _withUnitUnchecked(value);
   }
 
   // Number + singular/plural unit, but WITHOUT the 'Free' fallback — 0 reads
-  // as "0 coins". Use for offer amounts, totals, balances, and shortfalls,
-  // where zero is a real value rather than "no price set".
+  // as "0 Barter Dollars". Use for offer amounts, totals, balances, and
+  // shortfalls, where zero is a real value rather than "no price set".
   static String withUnit(num? value) => _withUnitUnchecked(value ?? 0);
 
   static String _withUnitUnchecked(num value) {
     final formatted = _formatNumber(value);
     final isSingular = value == 1 || value == -1;
-    return '$formatted ${isSingular ? 'coin' : 'coins'}';
+    return '$formatted ${isSingular ? 'Barter Dollar' : 'Barter Dollars'}';
   }
 }
 

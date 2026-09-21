@@ -19,7 +19,7 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
   final CoinService _coinService = CoinService();
 
   int _balance = 0;
-  String _currencyLabel = 'Barter Coins';
+  String _currencyLabel = 'Barter Dollars';
   bool _isLoading = true;
   String? _loadError;
   bool _hasWallet = false;
@@ -74,7 +74,7 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
         setState(() {
           _hasWallet = false;
           _balance = 0;
-          _currencyLabel = 'Barter Coins';
+          _currencyLabel = 'Barter Dollars';
           _isLoading = false;
           _loadError = null;
           _hasLoadedOnce = true;
@@ -88,7 +88,7 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
         _hasWallet = true;
         _balance = CoinService.parseCoinAmount(wallet['balance']);
         _currencyLabel = currency == 'BARTER_COIN' || currency == null
-            ? 'Barter Coins'
+            ? 'Barter Dollars'
             : currency.replaceAll('_', ' ');
         _isLoading = false;
         _loadError = null;
@@ -252,7 +252,7 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
         onPressed: _openAddCoins,
         icon: const Icon(Icons.add),
         label: const Text(
-          'Add Coins',
+          'Add Dollars',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
@@ -377,7 +377,7 @@ class _CoinsWalletScreenState extends State<CoinsWalletScreen> {
           if (!hasWallet) ...[
             const SizedBox(height: 14),
             Text(
-              'No wallet yet — tap Add Coins to create one',
+              'No wallet yet — tap Add Dollars to create one',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.85),
                 fontSize: 13,
@@ -1690,7 +1690,7 @@ _WalletTransaction _walletTxnFromApi(Map<String, dynamic> txn) {
   switch (transactionType) {
     case 'ADD_FUNDS':
       type = _WalletTxnType.added;
-      title = 'Coins Added';
+      title = 'Barter Dollars Added';
       break;
     case 'REWARD':
       type = _WalletTxnType.reward;
@@ -1702,7 +1702,7 @@ _WalletTransaction _walletTxnFromApi(Map<String, dynamic> txn) {
       break;
     default:
       type = isCredit ? _WalletTxnType.added : _WalletTxnType.spent;
-      title = isCredit ? 'Coins Added' : 'Coins Spent';
+      title = isCredit ? 'Barter Dollars Added' : 'Barter Dollars Spent';
   }
 
   DateTime? createdAt;

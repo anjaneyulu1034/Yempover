@@ -99,7 +99,7 @@ class CoinService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to load coin packages');
+      throw Exception('Failed to load Barter Dollar packages');
     }
 
     final payload = json.decode(response.body) as Map<String, dynamic>;
@@ -232,7 +232,7 @@ class CoinService {
 
     if (response.statusCode != 200 && response.statusCode != 201) {
       final message =
-          _messageFromBody(response.body) ?? 'Coin purchase failed';
+          _messageFromBody(response.body) ?? 'Barter Dollar purchase failed';
       throw Exception(message);
     }
 
@@ -256,7 +256,7 @@ class CoinService {
     );
 
     if (response.statusCode != 200 && response.statusCode != 201) {
-      final message = _messageFromBody(response.body) ?? 'Failed to add coins';
+      final message = _messageFromBody(response.body) ?? 'Failed to add Barter Dollars';
       throw Exception(message);
     }
 

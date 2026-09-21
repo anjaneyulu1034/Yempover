@@ -1551,7 +1551,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         builder: (context, setDialogState) {
           return AlertDialog(
             scrollable: true,
-            title: const Text('Counter Coins Offer'),
+            title: const Text('Counter Barter Dollars Offer'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1581,7 +1581,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     }
                   },
                   decoration: InputDecoration(
-                    labelText: 'Your Counter Coins',
+                    labelText: 'Your Counter Barter Dollars',
                     prefixIcon: coinInputPrefix(),
                     prefixIconConstraints: coinPrefixIconConstraints,
                     border: const OutlineInputBorder(),
@@ -1608,14 +1608,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 onPressed: () {
                   final trimmed = priceController.text.trim();
                   if (trimmed.isEmpty) {
-                    setDialogState(() => dialogError = 'Enter coins');
+                    setDialogState(() => dialogError = 'Enter Barter Dollars');
                     return;
                   }
 
                   final parsed = double.tryParse(trimmed);
                   if (parsed == null) {
                     setDialogState(
-                      () => dialogError = 'Enter a valid coin amount',
+                      () => dialogError = 'Enter a valid Barter Dollar amount',
                     );
                     return;
                   }
@@ -2146,7 +2146,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               borderRadius: BorderRadius.circular(14),
               side: BorderSide(color: Colors.grey.shade300, width: 1.2),
             ),
-            title: const Text('Counter with Coins'),
+            title: const Text('Counter with Barter Dollars'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2247,7 +2247,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       }
                     },
                     decoration: InputDecoration(
-                      labelText: 'Coins to Pay',
+                      labelText: 'Barter Dollars to Pay',
                       prefixIcon: coinInputPrefix(),
                       prefixIconConstraints: coinPrefixIconConstraints,
                       border: border,
@@ -2283,14 +2283,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 onPressed: () {
                   final trimmedPrice = priceController.text.trim();
                   if (trimmedPrice.isEmpty) {
-                    setDialogState(() => dialogError = 'Enter coins to pay');
+                    setDialogState(() => dialogError = 'Enter Barter Dollars to pay');
                     return;
                   }
 
                   final parsed = double.tryParse(trimmedPrice);
                   if (parsed == null || parsed <= 0) {
                     setDialogState(
-                      () => dialogError = 'Enter a valid coin amount',
+                      () => dialogError = 'Enter a valid Barter Dollar amount',
                     );
                     return;
                   }
@@ -4397,8 +4397,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             // fallback text instead of clearly saying what this actually is.
             Text(
               isServiceChat
-                  ? '$senderName is requesting your service for free — no item or coins offered in exchange.'
-                  : '$senderName is requesting your product for free — no item or coins offered in exchange.',
+                  ? '$senderName is requesting your service for free — no item or Barter Dollars offered in exchange.'
+                  : '$senderName is requesting your product for free — no item or Barter Dollars offered in exchange.',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 10),
@@ -4420,7 +4420,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Zero-coin request',
+                        'Zero Barter Dollar request',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
@@ -4714,7 +4714,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Requested for free — you offered no item or coins in exchange',
+                        'Requested for free — you offered no item or Barter Dollars in exchange',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
@@ -5367,7 +5367,7 @@ class __DealCompletionDialogState extends State<_DealCompletionDialog> {
               if (widget.isPriceOffer) ...[
                 const SizedBox(height: 12),
                 Text(
-                  'Coins will be deducted from your wallet when you complete this deal.',
+                  'Barter Dollars will be deducted from your wallet when you complete this deal.',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey.shade700,

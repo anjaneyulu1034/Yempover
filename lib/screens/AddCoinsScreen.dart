@@ -21,7 +21,7 @@ class _CoinPackage {
 
   factory _CoinPackage.fromMap(Map<String, dynamic> map) {
     return _CoinPackage(
-      name: map['name']?.toString() ?? 'Coin Pack',
+      name: map['name']?.toString() ?? 'Barter Dollar Pack',
       coinAmount: CoinService.parseCoinAmount(map['coinAmount']),
     );
   }
@@ -133,11 +133,11 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
 
     final amount = int.tryParse(amountText);
     if (amountText.isEmpty) {
-      amountError = 'Coins is required';
+      amountError = 'Barter Dollars is required';
     } else if (amount == null || amount <= 0) {
-      amountError = 'Enter a valid number of coins greater than 0';
+      amountError = 'Enter a valid number of Barter Dollars greater than 0';
     } else if (amountText.length > Validators.maxAmountLength) {
-      amountError = 'Coins amount is too large';
+      amountError = 'Barter Dollars amount is too large';
     }
 
     if (description.isEmpty) {
@@ -168,14 +168,14 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
 
       if (!mounted) return;
 
-      SnackbarUtils.showSuccess(context, 'Coins added successfully');
+      SnackbarUtils.showSuccess(context, 'Barter Dollars added successfully');
       Navigator.pop(context, AddCoinsResult(transaction: transaction));
     } catch (e) {
       if (!mounted) return;
       SnackbarUtils.showError(
         context,
         e,
-        fallback: 'Failed to add coins. Please try again.',
+        fallback: 'Failed to add Barter Dollars. Please try again.',
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -196,7 +196,7 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
           color: const Color(0xFF111827),
         ),
         title: const Text(
-          'Add Coins',
+          'Add Dollars',
           style: TextStyle(
             color: Color(0xFF111827),
             fontWeight: FontWeight.w700,
@@ -224,7 +224,7 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                   SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Top up your barter coins',
+                      'Top up your Barter Dollars',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 15,
@@ -249,7 +249,7 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Coins',
+                    'Barter Dollars',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: _labelColor,
@@ -268,7 +268,7 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                       }
                     },
                     decoration: _fieldDecoration(
-                      label: 'Add Coins',
+                      label: 'Add Dollars',
                       errorText: _amountError,
                       prefixIcon: coinInputPrefix(),
                       prefixIconConstraints: coinPrefixIconConstraints,
@@ -324,7 +324,7 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                         ),
                       )
                     : const Text(
-                        'Add Coins',
+                        'Add Dollars',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -379,7 +379,7 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${pack.coinAmount} Coin${pack.coinAmount == 1 ? '' : 's'}',
+                  '${pack.coinAmount} Barter Dollar${pack.coinAmount == 1 ? '' : 's'}',
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 16,

@@ -1787,7 +1787,7 @@ class _ServiceDetailBookingScreenState
                           decoration: AppInputDecoration.build(
                             label: _isLookingForService
                                 ? 'Your Quote Price'
-                                : 'Your Offer (Coins)',
+                                : 'Your Offer (Barter Dollars)',
                             hint: 'Enter the amount you want to offer',
                             prefixIcon: coinInputPrefix(),
                             prefixIconConstraints: coinPrefixIconConstraints,

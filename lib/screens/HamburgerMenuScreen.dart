@@ -358,7 +358,7 @@ class _HamburgerMenuScreenState extends State<HamburgerMenuScreen> {
         if (!_isGuestUser)
           _buildMenuItem(
             icon: Icons.account_balance_wallet_outlined,
-            title: 'Barter Coins',
+            title: 'Barter Dollars',
             onTap: () {
               Navigator.push(
                 context,

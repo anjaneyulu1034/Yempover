@@ -1477,7 +1477,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _fieldLabel(
-          _selectedOption == 1 ? 'Price (coins)' : 'Will Pay Amount (coins)',
+          _selectedOption == 1
+              ? 'Price (Barter Dollars)'
+              : 'Will Pay Amount (Barter Dollars)',
           required: true,
           useCoinIcon: true,
         ),

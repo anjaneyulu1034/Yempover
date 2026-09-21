@@ -277,7 +277,7 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
               Text(
                 prompt?.helperText ??
                     'Let the other person know why this deal fell through. '
-                        'Any secured coins are refunded and the item goes '
+                        'Any secured Barter Dollars are refunded and the item goes '
                         'back on the marketplace immediately.',
                 style: const TextStyle(fontSize: 13, color: Colors.black54),
               ),
