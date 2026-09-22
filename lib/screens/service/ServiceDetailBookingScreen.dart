@@ -120,6 +120,7 @@ class _ServiceDetailBookingScreenState
       }
 
       final initialBookingDate = _resolveInitialBookingDate(parsed);
+      final configuredDuration = _configuredSlotDurationMinutes(parsed);
 
       if (!mounted) return;
       setState(() {
@@ -127,6 +128,11 @@ class _ServiceDetailBookingScreenState
         _selectedDate = initialBookingDate;
         _serviceUiState = ServiceDetailUiState.serviceReady;
         _locationController.text = parsed['location']?.toString() ?? '';
+        // Seed with what the provider actually saved (e.g. 15 min) instead
+        // of leaving the hardcoded 30-min default in place — otherwise this
+        // screen always requests/shows 30-min-spaced slots regardless of
+        // the listing's real slot duration.
+        if (configuredDuration != null) _duration = configuredDuration;
       });
     } catch (error) {
       if (!mounted) return;
@@ -139,6 +145,26 @@ class _ServiceDetailBookingScreenState
 
   DateTime _dateOnly(DateTime value) {
     return DateTime(value.year, value.month, value.day);
+  }
+
+  // The slot length the provider actually saved when setting up availability
+  // (e.g. 15 min) — used to seed the picker's default instead of always
+  // starting from the generic 30-min fallback.
+  int? _configuredSlotDurationMinutes(Map<String, dynamic> service) {
+    final raw = service['availabilitySlots'];
+    if (raw is! List) return null;
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final slot = Map<String, dynamic>.from(item);
+      if (slot['isSpecialDate'] == true) continue;
+      if (slot['isAvailable'] == false) continue;
+      final minutes = slot['slotDurationMinutes'];
+      final parsed = minutes is int
+          ? minutes
+          : int.tryParse(minutes?.toString() ?? '');
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    return null;
   }
 
   int? _weekdayFromString(String? value) {

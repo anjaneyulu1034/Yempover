@@ -185,13 +185,19 @@ class _HomeScreenState extends State<HomeScreen> {
       // App-level: connect the socket and start tracking the live wallet
       // balance once, here, rather than each coin-showing screen doing its
       // own fetch — Home is reached after every login/cold-start resume.
-      if (mounted) {
-        Provider.of<WalletBalanceProvider>(
-          context,
-          listen: false,
-        ).ensureLive();
-      }
+      _startWalletTrackingIfLoggedIn();
     });
+  }
+
+  // GET /me/coins/wallet requires a real auth token. A guest has none, so
+  // calling this unconditionally 401'd as NO_TOKEN — a code the API layer
+  // treats as "session genuinely invalid" and force-logs-out on, wiping
+  // guest mode and bouncing straight back to LoginScreen the instant Home
+  // finished loading, regardless of anything the guest actually did.
+  Future<void> _startWalletTrackingIfLoggedIn() async {
+    final isGuest = await _tokenService.isGuestUser();
+    if (isGuest || !mounted) return;
+    Provider.of<WalletBalanceProvider>(context, listen: false).ensureLive();
   }
 
   void _onBlockedUsersChanged() {

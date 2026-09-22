@@ -3,6 +3,7 @@ import 'package:yempover_app/services/service_booking_service.dart';
 import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
 import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
+import 'package:yempover_app/utils/api_exceptions.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -79,6 +80,24 @@ class _AppointmentsDashboardScreenState
     return '$dateText • $timeText';
   }
 
+  // "YYYY-MM-DD HH:mm" wall-clock sort key so the latest appointment shows
+  // first. Plain string comparison sorts these chronologically correctly on
+  // its own (zero-padded ISO-shaped date/time) — never parse into a
+  // timezone-aware DateTime for this, which is exactly what _formatSlot's
+  // own warning above guards against (it turns a 12:30 booking into 5:30).
+  String _sortKeyForItem(Map<String, dynamic> item) {
+    var d = item['slotDate']?.toString();
+    var t = item['slotTime']?.toString();
+    final fallbackIso = item['appointmentDate']?.toString();
+    if ((d == null || d.isEmpty) && fallbackIso != null) {
+      d = RegExp(r'^(\d{4}-\d{2}-\d{2})').firstMatch(fallbackIso)?.group(1);
+    }
+    if ((t == null || t.isEmpty) && fallbackIso != null) {
+      t = RegExp(r'T(\d{2}:\d{2})').firstMatch(fallbackIso)?.group(1);
+    }
+    return '${d ?? ''} ${t ?? ''}';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -115,8 +134,12 @@ class _AppointmentsDashboardScreenState
       if (!mounted) return;
 
       setState(() {
-        _providerAppointments = _extractList(provider);
-        _clientAppointments = _extractList(client);
+        // Latest appointment first, regardless of whatever order the
+        // backend returned them in.
+        _providerAppointments = _extractList(provider)
+          ..sort((a, b) => _sortKeyForItem(b).compareTo(_sortKeyForItem(a)));
+        _clientAppointments = _extractList(client)
+          ..sort((a, b) => _sortKeyForItem(b).compareTo(_sortKeyForItem(a)));
         _loading = false;
       });
     } catch (error) {
@@ -1381,10 +1404,17 @@ class _AppointmentsDashboardScreenState
                   16,
                   MediaQuery.of(sheetContext).viewInsets.bottom + 16,
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                // The time-slot Wrap can run to a dozen-plus chips, and with
+                // the date picker, notes field, and submit button all below
+                // it this regularly exceeds the sheet's available height —
+                // without a scroll view the Column overflows and the
+                // "Confirm Reschedule" button gets pushed off-screen,
+                // unreachable (bottom RenderFlex overflow).
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                     const Text(
                       'Reschedule Slot',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -1482,6 +1512,16 @@ class _AppointmentsDashboardScreenState
                             final isCurrent = slot['isCurrent'] == true;
                             final isBookable =
                                 slot['isBookable'] == true || isCurrent;
+                            // HELD = someone else has a pending (unconfirmed)
+                            // request on this exact slot. The server still
+                            // allows submitting it (first-confirmed wins),
+                            // but it can 400 as SLOT_UNAVAILABLE the moment
+                            // that other request gets confirmed — flagged
+                            // distinctly so it never looks identical to a
+                            // genuinely free slot.
+                            final isHeld = isBookable &&
+                                !isCurrent &&
+                                status == 'HELD';
                             final isSelected = selectedSlot == time;
                             // QA BUG-5/6: show the actual appointment window
                             // ("9:00 AM – 2:00 PM"), never the raw 24-hour
@@ -1499,13 +1539,19 @@ class _AppointmentsDashboardScreenState
                                         (status.isNotEmpty
                                             ? status
                                             : 'Not available'))
+                                  : isHeld
+                                  ? 'Another user has also requested this slot — it may become unavailable if they are confirmed first.'
                                   : '',
                               child: ChoiceChip(
                                 label: Text(
                                   label,
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: !isBookable ? Colors.grey : null,
+                                    color: !isBookable
+                                        ? Colors.grey
+                                        : isHeld
+                                        ? Colors.orange.shade900
+                                        : null,
                                   ),
                                 ),
                                 selected: isSelected,
@@ -1516,6 +1562,11 @@ class _AppointmentsDashboardScreenState
                                       ),
                                 backgroundColor: !isBookable
                                     ? Colors.grey.shade100
+                                    : isHeld
+                                    ? Colors.orange.shade50
+                                    : null,
+                                side: isHeld
+                                    ? BorderSide(color: Colors.orange.shade300)
                                     : null,
                                 selectedColor: Colors.indigo.withValues(
                                   alpha: 0.15,
@@ -1524,6 +1575,52 @@ class _AppointmentsDashboardScreenState
                             );
                           }).toList(),
                         ),
+                      Builder(
+                        builder: (context) {
+                          if (selectedSlot == null) return const SizedBox.shrink();
+                          final selected = slotDetails.firstWhere(
+                            (s) => s['time']?.toString() == selectedSlot,
+                            orElse: () => const {},
+                          );
+                          final selectedIsHeld = selected.isNotEmpty &&
+                              selected['status']?.toString() == 'HELD' &&
+                              selected['isCurrent'] != true;
+                          if (!selectedIsHeld) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.orange.shade200,
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    size: 16,
+                                    color: Colors.orange.shade800,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Another user has also requested this slot. It may become unavailable if their request is confirmed first — you can still try, or pick a different slot.',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: Colors.orange.shade900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: notesController,
@@ -1573,11 +1670,32 @@ class _AppointmentsDashboardScreenState
                                     );
                                     _loadAll();
                                   } catch (e) {
+                                    // The slot list shown can go stale (someone
+                                    // else books it, or time simply passes)
+                                    // between when it was fetched and when the
+                                    // user hits Confirm. Re-fetching here and
+                                    // clearing the now-invalid selection means
+                                    // the chip grid immediately reflects what's
+                                    // actually still free, instead of leaving
+                                    // the user to tap Confirm again on the same
+                                    // slot and hit the identical rejection.
+                                    final isSlotUnavailable =
+                                        e is ApiCodedException &&
+                                        e.code == 'SLOT_UNAVAILABLE';
+                                    if (isSlotUnavailable) {
+                                      selectedSlot = null;
+                                      await loadForDate(
+                                        selectedDate,
+                                        setSheetState,
+                                      );
+                                    }
                                     setSheetState(() => submitting = false);
                                     if (!mounted) return;
                                     SnackbarUtils.showError(
                                       context,
-                                      _service.extractMessage(e),
+                                      isSlotUnavailable
+                                          ? 'That slot was just taken. Pick another free slot below and confirm again.'
+                                          : _service.extractMessage(e),
                                     );
                                   }
                                 },
@@ -1600,6 +1718,7 @@ class _AppointmentsDashboardScreenState
                       ),
                     ],
                   ],
+                  ),
                 ),
               ),
             );
