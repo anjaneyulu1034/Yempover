@@ -19,7 +19,6 @@ import 'services/resume_state_service.dart';
 import 'services/shared_prefs_service.dart';
 import 'services/token_service.dart';
 import 'services/trade_chat_service/trade_chat_service.dart';
-import 'widgets/location_permission_gate.dart';
 import 'widgets/subscription_resume_gate.dart';
 
 // Global notification plugin instance
@@ -349,29 +348,27 @@ class MyApp extends StatelessWidget {
         builder: (context, child) {
           final content = child ?? const SizedBox.shrink();
 
-          return LocationPermissionGate(
-            child: SubscriptionResumeGate(
-              child: Listener(
-                behavior: HitTestBehavior.translucent,
-                onPointerDown: (event) {
-                  final currentFocus = FocusManager.instance.primaryFocus;
-                  if (currentFocus == null || !currentFocus.hasFocus) return;
+          return SubscriptionResumeGate(
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (event) {
+                final currentFocus = FocusManager.instance.primaryFocus;
+                if (currentFocus == null || !currentFocus.hasFocus) return;
 
-                  // Don't dismiss when the tap landed on the focused field
-                  // itself (e.g. repositioning the cursor) — only when it's
-                  // genuinely outside, which is what should close the
-                  // keyboard on devices with no visible/gesture back button.
-                  final renderObject = currentFocus.context?.findRenderObject();
-                  if (renderObject is RenderBox && renderObject.attached) {
-                    final topLeft = renderObject.localToGlobal(Offset.zero);
-                    final bounds = topLeft & renderObject.size;
-                    if (bounds.contains(event.position)) return;
-                  }
+                // Don't dismiss when the tap landed on the focused field
+                // itself (e.g. repositioning the cursor) — only when it's
+                // genuinely outside, which is what should close the
+                // keyboard on devices with no visible/gesture back button.
+                final renderObject = currentFocus.context?.findRenderObject();
+                if (renderObject is RenderBox && renderObject.attached) {
+                  final topLeft = renderObject.localToGlobal(Offset.zero);
+                  final bounds = topLeft & renderObject.size;
+                  if (bounds.contains(event.position)) return;
+                }
 
-                  currentFocus.unfocus();
-                },
-                child: content,
-              ),
+                currentFocus.unfocus();
+              },
+              child: content,
             ),
           );
         },

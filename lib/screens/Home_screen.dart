@@ -4,10 +4,6 @@ import 'package:yempover_app/utils/notification_provider.dart';
 import 'package:yempover_app/utils/chat_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:geocoding/geocoding.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:google_places_flutter/google_places_flutter.dart';
-import 'package:google_places_flutter/model/prediction.dart';
 import 'package:provider/provider.dart';
 import 'package:yempover_app/models/ProductPostmain.dart';
 import 'package:yempover_app/models/get_my_profile_response.dart';
@@ -24,6 +20,7 @@ import 'package:yempover_app/widgets/safe_network_image.dart';
 import 'package:yempover_app/services/my_profile_service.dart';
 import 'package:yempover_app/services/profile_session_manager.dart';
 import 'package:yempover_app/services/category_service.dart';
+import 'package:yempover_app/services/location_service.dart';
 import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
@@ -120,8 +117,6 @@ class _HomeFilterPrefs {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const String _googleApiKey = 'AIzaSyAT3wIjV73qVXPAlgkyifnns38GztnbNF4';
-
   final ApiService _apiService = ApiService();
   final MyProfileService _myProfileService = MyProfileService();
   final PostActionService _postActionService = PostActionService();
@@ -130,7 +125,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   final ScrollController _scrollController = ScrollController();
-  final Map<String, Location?> _postLocationCache = {};
   Timer? _expiryTicker;
 
   // Data states
@@ -147,13 +141,10 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentPage = 1;
   final int _limit = 20;
 
-  // Location states
-  Position? _currentPosition;
-  String _selectedLocation = 'Fetching location...';
-  bool _isLocationLoading = false;
-  bool _locationPermissionDenied = false;
-  double? _manualLatitude;
-  double? _manualLongitude;
+  // Location: Google Maps/Places/GPS were removed app-wide — every user's
+  // reference point is this fixed Hyderabad default instead of a detected
+  // or searched one.
+  final String _selectedLocation = LocationService.defaultAddress;
 
   // Filter states
   String? _selectedTradeType;
@@ -389,9 +380,6 @@ class _HomeScreenState extends State<HomeScreen> {
             }
             return null;
           }),
-        _getCurrentLocation().catchError((e) {
-          debugPrint('🔴 Location error: $e');
-        }),
         _fetchPosts().catchError((e) {
           debugPrint('🔴 Posts fetch error: $e');
           if (ErrorMessageUtils.isSessionExpired(e)) {
@@ -558,84 +546,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return degrees * pi / 180;
   }
 
-  double? get _activeLatitude => _manualLatitude ?? _currentPosition?.latitude;
-  double? get _activeLongitude =>
-      _manualLongitude ?? _currentPosition?.longitude;
-
-  void _updatePostDistances() {
-    final refLat = _activeLatitude;
-    final refLng = _activeLongitude;
-    if (refLat == null || refLng == null || _posts.isEmpty) return;
-
-    for (var post in _posts) {
-      if (post.latitude != null && post.longitude != null) {
-        post.distance = _calculateDistance(
-          refLat,
-          refLng,
-          post.latitude!,
-          post.longitude!,
-        );
-      }
-    }
-    _sortPostsByDistance();
-    _applyFilters();
-  }
-
-  Future<void> _updatePostDistancesFromGeocoding() async {
-    final refLat = _activeLatitude;
-    final refLng = _activeLongitude;
-    if (refLat == null || refLng == null || _posts.isEmpty) return;
-
-    bool hasUpdates = false;
-
-    for (final post in _posts) {
-      if (post.distance != null) continue;
-      if ((post.latitude != null && post.longitude != null) ||
-          post.location.trim().isEmpty) {
-        continue;
-      }
-
-      final normalizedLocation = post.location.trim().toLowerCase();
-
-      Location? geocodedLocation;
-      if (_postLocationCache.containsKey(normalizedLocation)) {
-        geocodedLocation = _postLocationCache[normalizedLocation];
-      } else {
-        try {
-          final locations = await locationFromAddress(post.location.trim());
-          geocodedLocation = locations.isNotEmpty ? locations.first : null;
-          _postLocationCache[normalizedLocation] = geocodedLocation;
-        } catch (_) {
-          _postLocationCache[normalizedLocation] = null;
-          continue;
-        }
-      }
-
-      if (geocodedLocation != null) {
-        post.distance = _calculateDistance(
-          refLat,
-          refLng,
-          geocodedLocation.latitude,
-          geocodedLocation.longitude,
-        );
-        hasUpdates = true;
-      }
-    }
-
-    if (!mounted || !hasUpdates) return;
-
-    _sortPostsByDistance();
-    _applyFilters();
-  }
-
-  void _sortPostsByDistance() {
-    _posts.sort((a, b) {
-      if (a.distance == null && b.distance == null) return 0;
-      if (a.distance == null) return 1;
-      if (b.distance == null) return -1;
-      return a.distance!.compareTo(b.distance!);
-    });
-  }
+  double? get _activeLatitude => LocationService.defaultLatitude;
+  double? get _activeLongitude => LocationService.defaultLongitude;
 
   void _onScroll() {
     if (_scrollController.position.pixels >=
@@ -664,104 +576,6 @@ class _HomeScreenState extends State<HomeScreen> {
       await provider.loadUnreadCount();
     } catch (e) {
       debugPrint('🔴 Error loading chat unread count: $e');
-    }
-  }
-
-  Future<void> _getCurrentLocation() async {
-    setState(() {
-      _isLocationLoading = true;
-      _locationPermissionDenied = false;
-    });
-
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        setState(() {
-          _selectedLocation = 'Location services are disabled.';
-          _isLocationLoading = false;
-          _locationPermissionDenied = true;
-        });
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          setState(() {
-            _selectedLocation = 'Location permissions are denied.';
-            _isLocationLoading = false;
-            _locationPermissionDenied = true;
-          });
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        setState(() {
-          _selectedLocation = 'Location permissions are permanently denied.';
-          _isLocationLoading = false;
-          _locationPermissionDenied = true;
-        });
-        return;
-      }
-
-      Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-
-      setState(() {
-        _currentPosition = position;
-        _manualLatitude = null;
-        _manualLongitude = null;
-      });
-
-      _updatePostDistances();
-      _updatePostDistancesFromGeocoding();
-
-      await _getAddressFromLatLng(position);
-    } catch (e) {
-      setState(() {
-        _selectedLocation = 'Failed to get location';
-        _isLocationLoading = false;
-      });
-      debugPrint('🔴 Error getting location: $e');
-    }
-  }
-
-  Future<void> _getAddressFromLatLng(Position position) async {
-    try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-
-      if (placemarks.isNotEmpty) {
-        Placemark place = placemarks[0];
-        String address =
-            [
-                  place.street,
-                  place.locality,
-                  place.administrativeArea,
-                  place.country,
-                ]
-                .where((element) => element != null && element.isNotEmpty)
-                .join(', ')
-                .replaceAll(RegExp(r',\s*,'), ',');
-
-        setState(() {
-          _selectedLocation = address.isNotEmpty ? address : "Current Location";
-          _isLocationLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _selectedLocation = "Current Location";
-        _isLocationLoading = false;
-      });
-      debugPrint("🔴 Error getting address: $e");
     }
   }
 
@@ -909,7 +723,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _hasMore = response.pagination.page < response.pagination.pages;
           _isLoadingMore = false;
         });
-        _updatePostDistancesFromGeocoding();
       } else {
         setState(() {
           _posts = BlockedUsersCache.instance.filterByOwner(
@@ -924,7 +737,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _isLoadingPosts = false;
           _isLoadingMore = false;
         });
-        _updatePostDistancesFromGeocoding();
       }
     } catch (e) {
       setState(() {
@@ -1136,273 +948,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _selectedWishListCategory != null ||
       _selectedSortBy != 'Nearest' ||
       _isRadiusFilterEnabled;
-
-  void _showLocationOptions() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Choose Location',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            _buildLocationOption(
-              icon: Icons.my_location,
-              iconColor: Colors.blue,
-              title: 'Use My Current Location',
-              subtitle: 'Automatically detect your location',
-              onTap: () async {
-                Navigator.pop(context);
-                await _getCurrentLocation();
-              },
-            ),
-            _buildLocationOption(
-              icon: Icons.edit_location_alt,
-              iconColor: Colors.orange,
-              title: 'Enter Location Manually',
-              subtitle: 'Search for a specific place',
-              onTap: () {
-                Navigator.pop(context);
-                _showManualLocationInput();
-              },
-            ),
-
-            if (_locationPermissionDenied) ...[
-              const Divider(height: 30),
-              _buildLocationOption(
-                icon: Icons.settings,
-                iconColor: Colors.grey,
-                title: 'Open Location Settings',
-                subtitle: 'Enable location permissions',
-                onTap: () {
-                  Navigator.pop(context);
-                  Geolocator.openAppSettings();
-                },
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLocationOption({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      leading: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: iconColor.withOpacity(0.1),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: iconColor),
-      ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-      ),
-      onTap: onTap,
-    );
-  }
-
-  Future<void> _showManualLocationInput() async {
-    final controller = TextEditingController(
-      text: _selectedLocation == 'Fetching location...'
-          ? ''
-          : _selectedLocation,
-    );
-    double? selectedLat;
-    double? selectedLng;
-
-    final result = await showModalBottomSheet<Map<String, dynamic>>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-          ),
-          child: Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-            ),
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 44,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.edit_location_alt,
-                          color: Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        'Enter Location',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Search and pick your city or area',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                  ),
-                  const SizedBox(height: 20),
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade300),
-                      color: Colors.white,
-                    ),
-                    child: GooglePlaceAutoCompleteTextField(
-                      textEditingController: controller,
-                      googleAPIKey: _googleApiKey,
-                      debounceTime: 400,
-                      isLatLngRequired: true,
-                      countries: const ['in', 'us', 'ca', 'gb', 'au'],
-                      boxDecoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      inputDecoration: InputDecoration(
-                        hintText: 'Search for a location...',
-                        hintStyle: TextStyle(color: Colors.grey.shade600),
-                        border: InputBorder.none,
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color: Colors.grey.shade600,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                      ),
-                      getPlaceDetailWithLatLng: (Prediction prediction) {
-                        selectedLat = double.tryParse(prediction.lat ?? '');
-                        selectedLng = double.tryParse(prediction.lng ?? '');
-                      },
-                      itemClick: (Prediction prediction) {
-                        final selectedAddress = prediction.description ?? '';
-                        if (selectedAddress.isEmpty) return;
-                        selectedLat = double.tryParse(prediction.lat ?? '');
-                        selectedLng = double.tryParse(prediction.lng ?? '');
-                        Navigator.of(sheetContext).pop({
-                          'address': selectedAddress,
-                          'lat': selectedLat,
-                          'lng': selectedLng,
-                        });
-                      },
-                      seperatedBuilder: const Divider(height: 1),
-                      containerHorizontalPadding: 0,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    final manualAddress = result?['address']?.toString().trim() ?? '';
-    selectedLat = result?['lat'] as double?;
-    selectedLng = result?['lng'] as double?;
-    if (manualAddress.isEmpty) return;
-
-    setState(() {
-      _isLocationLoading = true;
-      _locationPermissionDenied = false;
-    });
-
-    try {
-      double? resolvedLat = selectedLat;
-      double? resolvedLng = selectedLng;
-
-      if (resolvedLat == null || resolvedLng == null) {
-        final locations = await locationFromAddress(manualAddress);
-        if (locations.isEmpty) {
-          throw Exception('Location not found');
-        }
-        resolvedLat = locations.first.latitude;
-        resolvedLng = locations.first.longitude;
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        _manualLatitude = resolvedLat;
-        _manualLongitude = resolvedLng;
-        _selectedLocation = manualAddress;
-        _isLocationLoading = false;
-      });
-
-      await _fetchPosts();
-      _updatePostDistances();
-      _updatePostDistancesFromGeocoding();
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _isLocationLoading = false;
-      });
-      SnackbarUtils.showError(
-        context,
-        'Could not resolve that location. Try a clearer address.',
-      );
-    }
-  }
 
   Future<void> _showFilterDialog() async {
     if (_filterMainCategories.isEmpty && !_isLoadingFilterCategories) {
@@ -2265,77 +1810,61 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildLocationRow() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-      child: InkWell(
-        onTap: _showLocationOptions,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFFFFFF), Color(0xFFF7FAFF)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFFFFFF), Color(0xFFF7FAFF)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFDDE6FF)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.blue.withOpacity(0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
             ),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFDDE6FF)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.blue.withOpacity(0.06),
-                blurRadius: 10,
-                offset: const Offset(0, 5),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
               ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.location_on,
-                  size: 18,
-                  color: Colors.blue.shade700,
-                ),
+              child: Icon(
+                Icons.location_on,
+                size: 18,
+                color: Colors.blue.shade700,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Location',
-                      style: TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Location',
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                  Text(
+                    _selectedLocation,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
                     ),
-                    Text(
-                      _isLocationLoading ? 'Updating...' : _selectedLocation,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                  ],
-                ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ],
               ),
-              if (_isLocationLoading)
-                const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                Icon(
-                  Icons.keyboard_arrow_down,
-                  size: 22,
-                  color: Colors.grey.shade600,
-                ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
