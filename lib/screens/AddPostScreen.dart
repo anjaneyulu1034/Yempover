@@ -1,5 +1,6 @@
 // ignore: file_names
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:yempover_app/models/my_post_model.dart';
 import 'dart:io';
@@ -14,6 +15,8 @@ import 'package:yempover_app/services/location_service.dart';
 import 'package:yempover_app/utils/error_message_utils.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:yempover_app/utils/validators.dart';
+import 'package:google_places_flutter/google_places_flutter.dart';
+import 'package:google_places_flutter/model/prediction.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
 import 'package:yempover_app/widgets/app_text_field.dart';
 
@@ -43,6 +46,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
   final CategoryService _categoryService = CategoryService();
   final AddPostService _addPostService = AddPostService();
   final MyPostsService _myPostsService = MyPostsService();
+  final LocationService _locationService = LocationService();
 
   // Set via the availability picker just before creating a "Provide
   // Service" post, so create + schedule happen as one continuous flow
@@ -56,9 +60,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
   // Form controllers
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController(
-    text: LocationService.defaultAddress,
-  );
+  final TextEditingController _locationController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _willPayAmountController =
       TextEditingController();
@@ -90,12 +92,16 @@ class _AddPostScreenState extends State<AddPostScreen> {
   String? _priceValidationError;
   String? _expiryValidationError;
 
-  // Location: Google Maps/Places/GPS were removed app-wide — every post
-  // defaults to this fixed Hyderabad point; the address text stays freely
-  // editable, but the lat/lng sent to the backend is always this default.
-  double? _selectedLatitude = LocationService.defaultLatitude;
-  double? _selectedLongitude = LocationService.defaultLongitude;
+  // Location variables
+  bool _isGettingLocation = false;
+  double? _selectedLatitude;
+  double? _selectedLongitude;
   String _selectedExpiryUnit = 'No expiry';
+
+  // Manual location search
+  final FocusNode _locationFocusNode = FocusNode();
+  bool _showLocationMinCharsHint = false;
+  static const String _googleApiKey = 'AIzaSyAT3wIjV73qVXPAlgkyifnns38GztnbNF4';
 
   // A photo is mandatory for a Product listing, but not for a Service —
   // a service listing is fine with just a description.
@@ -264,12 +270,29 @@ class _AddPostScreenState extends State<AddPostScreen> {
     _priceController.dispose();
     _willPayAmountController.dispose();
     _expiryValueController.dispose();
+    _locationFocusNode.dispose();
     _addPostService.dispose();
     super.dispose();
   }
 
   void _onLocationTextChanged() {
     final query = _locationController.text.trim();
+    final shouldShowHint = query.isNotEmpty && query.length < 4;
+
+    if (shouldShowHint != _showLocationMinCharsHint) {
+      setState(() {
+        _showLocationMinCharsHint = shouldShowHint;
+      });
+    }
+
+    if (query.length < 4 &&
+        (_selectedLatitude != null || _selectedLongitude != null)) {
+      setState(() {
+        _selectedLatitude = null;
+        _selectedLongitude = null;
+      });
+    }
+
     if (_locationValidationError != null && query.isNotEmpty) {
       setState(() {
         _locationValidationError = null;
@@ -402,6 +425,88 @@ class _AddPostScreenState extends State<AddPostScreen> {
       });
       _showErrorSnackBar('Failed to load subcategories: ${e.toString()}');
     }
+  }
+
+  // Location Methods
+  Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isGettingLocation = true;
+    });
+
+    try {
+      bool serviceEnabled = await _locationService.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showLocationServiceDialog();
+        return;
+      }
+
+      Position? position = await _locationService.getCurrentLocation();
+
+      if (position == null) {
+        _showError('Unable to get your current location');
+        return;
+      }
+
+      String? address = await _locationService.getAddressFromLatLng(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (address != null && address.isNotEmpty) {
+        setState(() {
+          _selectedLatitude = position.latitude;
+          _selectedLongitude = position.longitude;
+          _locationController.text = address;
+          _showLocationMinCharsHint = false;
+        });
+        _showSuccessSnackBar('Location updated successfully');
+      } else {
+        // Reverse-geocoding failed — keep the coordinates for submission,
+        // but never surface raw lat/lng in the visible field. Leave it for
+        // the user to type their address instead.
+        setState(() {
+          _selectedLatitude = position.latitude;
+          _selectedLongitude = position.longitude;
+        });
+        _showError(
+          'Could not determine your address. Please enter it manually.',
+        );
+      }
+    } catch (e) {
+      debugPrint('🔴 Error getting location: $e');
+      _showError('Failed to get location: ${e.toString()}');
+    } finally {
+      setState(() {
+        _isGettingLocation = false;
+      });
+    }
+  }
+
+  void _showLocationServiceDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('Location Services Disabled'),
+        content: const Text(
+          'Please enable location services to use this feature.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await Geolocator.openLocationSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 
   // Image picker with compression
@@ -993,24 +1098,116 @@ class _AddPostScreenState extends State<AddPostScreen> {
             borderRadius: BorderRadius.circular(_fieldRadius),
             color: Colors.white,
           ),
-          child: TextField(
-            controller: _locationController,
-            decoration: InputDecoration(
-              hintText: 'Enter location',
+          child: GooglePlaceAutoCompleteTextField(
+            textEditingController: _locationController,
+            focusNode: _locationFocusNode,
+            googleAPIKey: _googleApiKey,
+            debounceTime: 400,
+            isCrossBtnShown: false,
+            countries: const ['us', 'in', 'ca', 'gb', 'au'],
+            isLatLngRequired: true,
+            inputDecoration: InputDecoration(
+              hintText: 'Search address (min 4 chars) or use GPS',
               hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
               border: InputBorder.none,
               errorText: _locationValidationError,
               prefixIcon: const Icon(Icons.place_outlined, color: _primary),
+              suffixIcon: _isGettingLocation
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _primary,
+                        ),
+                      ),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.my_location, color: _primary),
+                      onPressed: _getCurrentLocation,
+                      tooltip: 'Get current location',
+                    ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 14,
               ),
             ),
+            getPlaceDetailWithLatLng: (Prediction prediction) {
+              final lat = prediction.lat;
+              final lng = prediction.lng;
+              if (lat != null && lng != null) {
+                setState(() {
+                  _selectedLatitude = double.tryParse(lat);
+                  _selectedLongitude = double.tryParse(lng);
+                });
+              }
+            },
+            itemClick: (Prediction prediction) {
+              _locationController.text = prediction.description ?? '';
+              _locationController.selection = TextSelection.fromPosition(
+                TextPosition(offset: _locationController.text.length),
+              );
+              setState(() {
+                _showLocationMinCharsHint = false;
+              });
+              _locationFocusNode.unfocus();
+            },
+            itemBuilder: (context, index, prediction) {
+              return Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.grey.shade300, width: 1),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: Icon(
+                        Icons.location_on_outlined,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        prediction.description ?? '',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.black87,
+                          fontSize: 16,
+                          height: 1.25,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+            seperatedBuilder: const Divider(height: 1, thickness: 1),
+            containerHorizontalPadding: 0,
           ),
         ),
+        if (_showLocationMinCharsHint)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              'Enter at least 4 characters to see suggestions',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
         const SizedBox(height: 4),
         Text(
-          'Defaults to Hyderabad — edit the text if needed.',
+          'Type location manually and select suggestion (after 4+ chars), or use current location',
           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
       ],

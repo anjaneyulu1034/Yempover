@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:yempover_app/widgets/app_text_field.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/api_constants.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
@@ -47,6 +48,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
   final MyPostsService _postsService = MyPostsService();
   final AddPostService _addPostService = AddPostService();
   final CategoryService _categoryService = CategoryService();
+  final LocationService _locationService = LocationService();
   final ImagePicker _imagePicker = ImagePicker();
 
   late TextEditingController _titleController;
@@ -591,15 +593,93 @@ class _EditProductScreenState extends State<EditProductScreen> {
     }
   }
 
-  // Google Maps/Places/GPS were removed app-wide — this now just resets the
-  // field to the fixed Hyderabad default instead of detecting a real
-  // position.
-  void _getCurrentLocation() {
+  Future<void> _getCurrentLocation() async {
     setState(() {
-      _locationController.text = LocationService.defaultAddress;
-      _selectedLatitude = LocationService.defaultLatitude;
-      _selectedLongitude = LocationService.defaultLongitude;
+      _isGettingLocation = true;
     });
+
+    try {
+      final serviceEnabled = await _locationService.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        _showLocationServiceDialog();
+        return;
+      }
+
+      final position = await _locationService.getCurrentLocation();
+      if (position == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to get your current location'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final address = await _locationService.getAddressFromLatLng(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _locationController.text = (address != null && address.isNotEmpty)
+            ? address
+            : '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+        _selectedLatitude = position.latitude;
+        _selectedLongitude = position.longitude;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location updated successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to get current location'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGettingLocation = false;
+        });
+      }
+    }
+  }
+
+  void _showLocationServiceDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('Location Services Disabled'),
+        content: const Text(
+          'Please enable location services to use current location.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await Geolocator.openLocationSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _removeImage(int index) {
