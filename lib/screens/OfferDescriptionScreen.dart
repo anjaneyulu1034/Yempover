@@ -981,9 +981,22 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
               const SizedBox(height: 20),
             ],
 
-            const Text(
-              'Description',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            Row(
+              children: const [
+                Text(
+                  'Description',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                SizedBox(width: 4),
+                Text(
+                  '*',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             TextField(
@@ -998,7 +1011,7 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                 });
               },
               decoration: AppInputDecoration.build(
-                label: 'Description',
+                label: 'Description *',
                 hint: 'Explain your offer and why you want to trade...',
                 errorText: _descriptionError,
                 fillColor: Colors.grey.shade50,

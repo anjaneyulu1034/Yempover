@@ -527,6 +527,7 @@ class ExistingOffer {
   final String? currency;
   final String? barterItemTitle;
   final String displayText;
+  final DateTime? createdAt;
 
   ExistingOffer({
     required this.chatId,
@@ -538,6 +539,7 @@ class ExistingOffer {
     this.currency,
     this.barterItemTitle,
     required this.displayText,
+    this.createdAt,
   });
 
   factory ExistingOffer.fromJson(Map<String, dynamic> json) {
@@ -554,6 +556,9 @@ class ExistingOffer {
       barterItemTitle: json['barterItemTitle'] as String?,
       displayText:
           json['displayText'] ?? 'You have already made an offer on this item.',
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString())
+          : null,
     );
   }
 }

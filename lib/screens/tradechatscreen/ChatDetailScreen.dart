@@ -1592,8 +1592,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   controller: descriptionController,
                   maxLines: 3,
                   decoration: const InputDecoration(
-                    labelText: 'Description',
-                    hintText: 'Optional',
+                    labelText: 'Description *',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -2041,8 +2040,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       controller: descriptionController,
                       maxLines: 3,
                       decoration: InputDecoration(
-                        labelText: 'Description',
-                        hintText: 'Optional',
+                        labelText: 'Description *',
                         border: border,
                         enabledBorder: border,
                         focusedBorder: border.copyWith(
@@ -2221,8 +2219,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     controller: descriptionController,
                     maxLines: 3,
                     decoration: InputDecoration(
-                      labelText: 'Description',
-                      hintText: 'Optional',
+                      labelText: 'Description *',
                       border: border,
                       enabledBorder: border,
                       focusedBorder: border.copyWith(
@@ -4127,7 +4124,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         .toList();
     if (myOffers.isEmpty) return null;
     myOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    return myOffers.last;
+    final latest = myOffers.last;
+    return latest.isPending ? latest : null;
   }
 
   // Tappable summary of what this chat is about (Point 7) — deep-links to
@@ -4596,6 +4594,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
     myOffers.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final latestOffer = myOffers.last;
+
+    if (!latestOffer.isPending) return const SizedBox();
     final isServiceChat = _isServiceChat;
     final recipientName = _getOtherUser().firstName;
 
@@ -5077,32 +5077,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                             _buildPostHeaderCard(),
                             if (_currentChat.listingUnavailable)
                               _buildListingUnavailableBanner(),
-                            ..._sortedMessages.map(_buildMessageBubble),
-                            // The actionable offer card (Accept/Reject/
-                            // Counter) reflects the CURRENT negotiation
-                            // state, so — like deal status below — it
-                            // belongs at the end of the timeline next to the
-                            // composer, not pinned above the whole
-                            // conversation history where it reads as if it
-                            // happened before everything shown beneath it.
-                            ..._buildOfferBannersInOrder(),
-                            if (_currentChat.hasDealVerification)
-                              DealVerificationPanel(
-                                key: ValueKey(_currentChat.id),
-                                chatId: _currentChat.id,
-                                currentUserId: widget.currentUserId,
-                                itemName: _currentChat.postTitle,
-                                offererName: _dealOffererName,
-                                receiverName: _dealReceiverName,
-                                offeredItemLabel: _dealOfferedItemLabel,
-                                otherUserName: _getOtherUser().firstName,
-                                onChatShouldRefresh:
-                                    _refreshChatWithFullScreenLoader,
-                                onDealFullyCompleted: _returnToMarketplaceAfterDealCompletion,
-                                onDealClosed: _returnToMarketplaceAfterDealNotCompleted,
-                              )
-                            else
-                              _buildDealCompletionBanner(),
+                            ..._buildTimelineWidgets(),
                           ],
                         ),
                       ),
@@ -5115,6 +5090,63 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       ),
     );
   }
+
+  List<Widget> _buildTimelineWidgets() {
+    final List<({DateTime timestamp, Widget widget})> items = [];
+
+    for (final msg in _sortedMessages) {
+      items.add((timestamp: msg.createdAt, widget: _buildMessageBubble(msg)));
+    }
+
+    final incomingOffer = _latestIncomingOfferForBanner;
+    if (incomingOffer != null) {
+      final banner = _buildOfferBanner();
+      if (banner is! SizedBox) {
+        items.add((timestamp: incomingOffer.createdAt, widget: banner));
+      }
+    }
+
+    final myOffer = _latestMyOfferForBanner;
+    if (myOffer != null) {
+      final banner = _buildMyOfferBanner();
+      if (banner is! SizedBox) {
+        items.add((timestamp: myOffer.createdAt, widget: banner));
+      }
+    }
+
+    final acceptedOffer = _currentChat.latestAcceptedOffer;
+    final dealTimestamp = acceptedOffer?.acceptedAt ??
+        acceptedOffer?.createdAt ??
+        _currentChat.updatedAt;
+
+    if (_currentChat.hasDealVerification) {
+      final verificationPanel = DealVerificationPanel(
+        key: ValueKey(_currentChat.id),
+        chatId: _currentChat.id,
+        currentUserId: widget.currentUserId,
+        itemName: _currentChat.postTitle,
+        offererName: _dealOffererName,
+        receiverName: _dealReceiverName,
+        offeredItemLabel: _dealOfferedItemLabel,
+        otherUserName: _getOtherUser().firstName,
+        onChatShouldRefresh: _refreshChatWithFullScreenLoader,
+        onDealFullyCompleted: _returnToMarketplaceAfterDealCompletion,
+        onDealClosed: _returnToMarketplaceAfterDealNotCompleted,
+      );
+      items.add((timestamp: dealTimestamp, widget: verificationPanel));
+    } else {
+      final completionBanner = _buildDealCompletionBanner();
+      if (completionBanner is! SizedBox) {
+        items.add((timestamp: dealTimestamp, widget: completionBanner));
+      }
+    }
+
+    items.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    return items.map((e) => e.widget).toList();
+  }
+
+
 
   // The chat goes INACTIVE after a reject (no offers left pending) or after
   // "Deal Not Completed" closes an accepted deal — but the backend still

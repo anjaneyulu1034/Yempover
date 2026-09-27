@@ -242,10 +242,28 @@ class ExchangeSummary {
     this.viewerIsInitiator,
   });
 
+  static String normalizeLabel(String rawLabel, String type) {
+    if (type == 'PURE_BARTER' || type == 'BARTER' || rawLabel == 'Barter') {
+      return 'Pure Product Swap';
+    }
+    if (type == 'ZERO_COINS' || rawLabel == 'Zero Coins') {
+      return 'Zero Coins';
+    }
+    if (type == 'BARTER_PLUS_COINS' || rawLabel == 'Barter + Coins') {
+      return 'Barter + Coins';
+    }
+    if (type == 'COINS' || rawLabel == 'Coins') {
+      return 'Coins';
+    }
+    return rawLabel.isNotEmpty ? rawLabel : 'Coins';
+  }
+
   factory ExchangeSummary.fromJson(Map<String, dynamic> json) {
+    final rawType = _asString(json['type']);
+    final rawLabel = _asString(json['label']);
     return ExchangeSummary(
-      type: _asString(json['type']),
-      label: _asString(json['label']),
+      type: rawType,
+      label: normalizeLabel(rawLabel, rawType),
       actualPrice: _asNullableDouble(json['actualPrice']),
       coins: _asNullableDouble(json['coins']),
       priceDifference: _asNullableDouble(json['priceDifference']),
@@ -371,9 +389,11 @@ class ValueBreakdown {
   });
 
   factory ValueBreakdown.fromJson(Map<String, dynamic> json) {
+    final rawType = _asString(json['exchangeType']);
+    final rawLabel = _asString(json['exchangeLabel']);
     return ValueBreakdown(
-      exchangeType: _asString(json['exchangeType']),
-      exchangeLabel: _asString(json['exchangeLabel']),
+      exchangeType: rawType,
+      exchangeLabel: ExchangeSummary.normalizeLabel(rawLabel, rawType),
       listingType: json['listingType']?.toString(),
       you: ValueBreakdownSide.fromJson(_asMap(json['you'])),
       them: ValueBreakdownSide.fromJson(_asMap(json['them'])),
@@ -573,6 +593,41 @@ class TradeItem {
   // Display-label counterpart to getDisplayTradeType, same service-label
   // swap.
   String getDisplayTradeTypeLabel() => _serviceLabel(getDisplayTradeType());
+
+  // Returns server exchange summary or calculates one if missing
+  ExchangeSummary get effectiveExchangeSummary {
+    if (exchangeSummary != null) return exchangeSummary!;
+
+    final hasBarter = isBarterExchange || barterProducts.isNotEmpty || hasBarterItemSnapshot;
+    final price = sellingPrice;
+
+    String type;
+    String label;
+    if (hasBarter) {
+      if (price != null && price > 0) {
+        type = 'BARTER_PLUS_COINS';
+        label = 'Barter + Coins';
+      } else {
+        type = 'PURE_BARTER';
+        label = 'Pure Product Swap';
+      }
+    } else {
+      if (price != null && price == 0) {
+        type = 'ZERO_COINS';
+        label = 'Zero Coins';
+      } else {
+        type = 'COINS';
+        label = 'Coins';
+      }
+    }
+
+    return ExchangeSummary(
+      type: type,
+      label: label,
+      coins: price,
+      actualPrice: product.price,
+    );
+  }
 }
 
 class OtherUser {
