@@ -80,6 +80,10 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
         _serviceData = parsed;
         _selectedDate = initialDate;
         _loadingService = false;
+        final opts = _durationMinutesOptions;
+        if (opts.isNotEmpty) {
+          _duration = opts.first;
+        }
       });
 
       if (!_isLookingForService) {
@@ -316,7 +320,11 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
         if (minutes.isNotEmpty) return minutes;
       }
     }
-    return const [15, 30, 45, 60];
+    final slotSize = _serviceData?['slotDurationMinutes'] ?? _serviceData?['appointmentDuration'];
+    if (slotSize is num && slotSize > 0) {
+      return [slotSize.toInt()];
+    }
+    return const [15];
   }
 
   bool _slotAvailable(Map<String, dynamic> slot) {
@@ -519,19 +527,24 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
   }
 
   Widget _buildDurationSelector() {
+    final hasMultipleOptions = _durationMinutesOptions.length > 1;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => setState(() => _showDurationOptions = !_showDurationOptions),
+          onTap: hasMultipleOptions
+              ? () => setState(() => _showDurationOptions = !_showDurationOptions)
+              : null,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: _showDurationOptions ? const Color(0xFF2E5BFF) : Colors.grey.shade400,
-                width: _showDurationOptions ? 1.6 : 1.2,
+                color: _showDurationOptions && hasMultipleOptions
+                    ? const Color(0xFF2E5BFF)
+                    : Colors.grey.shade400,
+                width: _showDurationOptions && hasMultipleOptions ? 1.6 : 1.2,
               ),
             ),
             child: Row(
@@ -549,13 +562,14 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
                     ],
                   ),
                 ),
-                Icon(_showDurationOptions ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                    color: Colors.grey[600]),
+                if (hasMultipleOptions)
+                  Icon(_showDurationOptions ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                      color: Colors.grey[600]),
               ],
             ),
           ),
         ),
-        if (_showDurationOptions) ...[
+        if (_showDurationOptions && hasMultipleOptions) ...[
           const SizedBox(height: 8),
           Container(
             width: double.infinity,

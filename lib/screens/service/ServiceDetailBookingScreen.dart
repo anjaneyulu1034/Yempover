@@ -62,7 +62,11 @@ class _ServiceDetailBookingScreenState
         if (minutes.isNotEmpty) return minutes;
       }
     }
-    return const [15, 30, 45, 60];
+    final slotSize = _serviceData?['slotDurationMinutes'] ?? _serviceData?['appointmentDuration'];
+    if (slotSize is num && slotSize > 0) {
+      return [slotSize.toInt()];
+    }
+    return const [15];
   }
   List<Map<String, dynamic>> _slots = [];
   String? _slotsUnavailableReason;
@@ -1620,11 +1624,14 @@ class _ServiceDetailBookingScreenState
                           children: [
                             InkWell(
                               borderRadius: BorderRadius.circular(12),
-                              onTap: () {
-                                setState(() {
-                                  _showDurationOptions = !_showDurationOptions;
-                                });
-                              },
+                              onTap: _durationMinutesOptions.length > 1
+                                  ? () {
+                                      setState(() {
+                                        _showDurationOptions =
+                                            !_showDurationOptions;
+                                      });
+                                    }
+                                  : null,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 12,
@@ -1633,10 +1640,14 @@ class _ServiceDetailBookingScreenState
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: _showDurationOptions
+                                    color: _showDurationOptions &&
+                                            _durationMinutesOptions.length > 1
                                         ? Colors.deepPurple
                                         : Colors.grey.shade400,
-                                    width: _showDurationOptions ? 1.6 : 1.2,
+                                    width: _showDurationOptions &&
+                                            _durationMinutesOptions.length > 1
+                                        ? 1.6
+                                        : 1.2,
                                   ),
                                 ),
                                 child: Row(
@@ -1671,17 +1682,19 @@ class _ServiceDetailBookingScreenState
                                         ],
                                       ),
                                     ),
-                                    Icon(
-                                      _showDurationOptions
-                                          ? Icons.keyboard_arrow_up
-                                          : Icons.keyboard_arrow_down,
-                                      color: Colors.grey[600],
-                                    ),
+                                    if (_durationMinutesOptions.length > 1)
+                                      Icon(
+                                        _showDurationOptions
+                                            ? Icons.keyboard_arrow_up
+                                            : Icons.keyboard_arrow_down,
+                                        color: Colors.grey[600],
+                                      ),
                                   ],
                                 ),
                               ),
                             ),
-                            if (_showDurationOptions) ...[
+                            if (_showDurationOptions &&
+                                _durationMinutesOptions.length > 1) ...[
                               const SizedBox(height: 8),
                               Container(
                                 width: double.infinity,
