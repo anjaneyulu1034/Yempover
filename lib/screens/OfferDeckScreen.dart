@@ -669,9 +669,16 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
       return;
     }
 
-    // No value-matching of any kind — a barter/both offer may be worth more
-    // or less than the listing on either side. The receiver looks at what's
-    // on the table and accepts or rejects; there's nothing to warn about.
+    // Warn the user if their selected item value exceeds the target listing price
+    if (!widget.isZeroCoin &&
+        widget.post.price > 0 &&
+        _selectedBarterItemsCoinTotal > widget.post.price) {
+      final shouldContinue = await _showHigherValueWarningDialog(
+        itemPrice: _selectedBarterItemsCoinTotal,
+        targetPrice: widget.post.price,
+      );
+      if (!shouldContinue || !mounted) return;
+    }
 
     if (widget.offerMode == OfferSubmissionMode.both) {
       final quoted = double.tryParse(_quotedPriceController.text.trim());
@@ -717,6 +724,60 @@ class _OfferDeckScreenState extends State<OfferDeckScreen> {
   }
 
 
+
+  /// Warning popup when user's offered item value is higher than target listing price.
+  Future<bool> _showHigherValueWarningDialog({
+    required double itemPrice,
+    required double targetPrice,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Item Price Higher Than Listing'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Your selected item value (${CoinFormat.amount(itemPrice.round())} Barter Dollars) '
+              'is higher than the listing price (${CoinFormat.amount(targetPrice.round())} Barter Dollars).',
+              style: const TextStyle(fontSize: 14.5, height: 1.35),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Do you want to continue with this offer?',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            style: OutlinedButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
 
   /// Purely informational notice so the user knows upfront how many coins
   /// this "Barter + Price" offer will cost them if the other party accepts it.

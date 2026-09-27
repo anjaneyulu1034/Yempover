@@ -1252,22 +1252,33 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
     Map<String, dynamic> row,
     AvailabilityPlan plan,
   ) {
-    final options = plan.durationOptions.isNotEmpty
-        ? plan.durationOptions
-        : const [
-            DurationOption(minutes: 15, label: '15 minutes', enabled: true, isDefault: true),
-            DurationOption(minutes: 30, label: '30 minutes', enabled: true, isDefault: false),
-            DurationOption(minutes: 45, label: '45 minutes', enabled: true, isDefault: false),
-            DurationOption(minutes: 60, label: '60 minutes', enabled: true, isDefault: false),
-          ];
+    final defaultOptions = const [
+      DurationOption(minutes: 15, label: '15 minutes', enabled: true, isDefault: true),
+      DurationOption(minutes: 30, label: '30 minutes', enabled: true, isDefault: false),
+      DurationOption(minutes: 45, label: '45 minutes', enabled: true, isDefault: false),
+      DurationOption(minutes: 60, label: '60 minutes', enabled: true, isDefault: false),
+    ];
+    final planMap = {for (final o in plan.durationOptions) o.minutes: o};
+    final optionList = <DurationOption>[];
+    for (final opt in defaultOptions) {
+      if (planMap.containsKey(opt.minutes)) {
+        optionList.add(planMap[opt.minutes]!);
+      } else {
+        optionList.add(opt);
+      }
+    }
+    for (final o in plan.durationOptions) {
+      if (!optionList.any((e) => e.minutes == o.minutes)) {
+        optionList.add(o);
+      }
+    }
+
     final current = row['slotDurationMinutes'] as int;
-    // A previously-saved duration might not be one of the plan's current
-    // options (e.g. expiry shortened since) — keep it selectable so the
-    // dropdown doesn't crash, the server is what actually enforces this.
-    final values = options.map((o) => o.minutes).toSet();
+    final values = optionList.map((o) => o.minutes).toSet();
     if (!values.contains(current)) {
       values.add(current);
     }
+    final sortedValues = values.toList()..sort();
 
     return Container(
       decoration: BoxDecoration(
@@ -1276,8 +1287,8 @@ class _ServiceAvailabilityScreenState extends State<ServiceAvailabilityScreen> {
       ),
       child: DropdownButtonFormField<int>(
         initialValue: current,
-        items: values.map((minutes) {
-          final option = options.firstWhere(
+        items: sortedValues.map((minutes) {
+          final option = optionList.firstWhere(
             (o) => o.minutes == minutes,
             orElse: () => DurationOption(
               minutes: minutes,

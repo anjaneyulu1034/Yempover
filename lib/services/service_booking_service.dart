@@ -306,9 +306,11 @@ class ServiceBookingService {
   Future<Map<String, dynamic>> getRescheduleOptionsForAppointment(
     String appointmentId, {
     String? date,
+    int? duration,
   }) async {
     final query = <String, String>{
       if (date != null && date.isNotEmpty) 'date': date,
+      if (duration != null) 'duration': '$duration',
     };
     final uri = Uri.parse(
       '$_servicesRoot/appointments/$appointmentId/reschedule-options',

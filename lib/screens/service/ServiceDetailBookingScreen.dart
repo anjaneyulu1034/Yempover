@@ -45,10 +45,38 @@ class _ServiceDetailBookingScreenState
 
   Map<String, dynamic>? _serviceData;
 
-  // QA BUG-2: duration choices come from the listing's own availabilityPlan,
-  // never a hardcoded list — falls back to the old fixed set only when the
-  // service response doesn't carry a plan (e.g. an older cached response).
+  int _getConfiguredDurationForDate(DateTime date) {
+    if (_serviceData != null) {
+      final rawSlots = _serviceData!['availabilitySlots'];
+      if (rawSlots is List) {
+        final weekdays = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+        final weekdayName = weekdays[date.weekday - 1];
+        for (final item in rawSlots) {
+          if (item is Map) {
+            final slotDay = item['dayOfWeek']?.toString().toUpperCase();
+            if (slotDay == weekdayName) {
+              final minutes = item['slotDurationMinutes'];
+              if (minutes is num && minutes > 0) {
+                return minutes.toInt();
+              }
+            }
+          }
+        }
+      }
+      final defaultMinutes = _serviceData!['slotDurationMinutes'] ?? _serviceData!['appointmentDuration'];
+      if (defaultMinutes is num && defaultMinutes > 0) {
+        return defaultMinutes.toInt();
+      }
+      final plan = _serviceData!['availabilityPlan'];
+      if (plan is Map && plan['defaultDurationMinutes'] is num) {
+        return (plan['defaultDurationMinutes'] as num).toInt();
+      }
+    }
+    return 15;
+  }
+
   List<int> get _durationMinutesOptions {
+    final configured = _getConfiguredDurationForDate(_selectedDate);
     final plan = _serviceData?['availabilityPlan'];
     if (plan is Map<String, dynamic>) {
       final options = plan['durationOptions'];
@@ -59,14 +87,13 @@ class _ServiceDetailBookingScreenState
             .whereType<num>()
             .map((n) => n.toInt())
             .toList();
+        if (minutes.contains(configured)) {
+          return [configured];
+        }
         if (minutes.isNotEmpty) return minutes;
       }
     }
-    final slotSize = _serviceData?['slotDurationMinutes'] ?? _serviceData?['appointmentDuration'];
-    if (slotSize is num && slotSize > 0) {
-      return [slotSize.toInt()];
-    }
-    return const [15];
+    return [configured];
   }
   List<Map<String, dynamic>> _slots = [];
   String? _slotsUnavailableReason;
@@ -129,6 +156,7 @@ class _ServiceDetailBookingScreenState
       setState(() {
         _serviceData = parsed;
         _selectedDate = initialBookingDate;
+        _duration = _getConfiguredDurationForDate(initialBookingDate);
         _serviceUiState = ServiceDetailUiState.serviceReady;
         _locationController.text = parsed['location']?.toString() ?? '';
       });
@@ -242,9 +270,11 @@ class _ServiceDetailBookingScreenState
   }
 
   Future<void> _loadSlotsForDate(DateTime date) async {
+    final configuredDuration = _getConfiguredDurationForDate(date);
     if (_isLookingForService) {
       setState(() {
         _selectedDate = DateTime(date.year, date.month, date.day);
+        _duration = configuredDuration;
         _loadingSlots = false;
         _slots = const [];
         _slotsUnavailableReason = null;
@@ -255,6 +285,7 @@ class _ServiceDetailBookingScreenState
     setState(() {
       _loadingSlots = true;
       _selectedDate = DateTime(date.year, date.month, date.day);
+      _duration = configuredDuration;
       _selectedSlot = null;
     });
 

@@ -79,11 +79,8 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
       setState(() {
         _serviceData = parsed;
         _selectedDate = initialDate;
+        _duration = _getConfiguredDurationForDate(initialDate);
         _loadingService = false;
-        final opts = _durationMinutesOptions;
-        if (opts.isNotEmpty) {
-          _duration = opts.first;
-        }
       });
 
       if (!_isLookingForService) {
@@ -196,9 +193,11 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
   }
 
   Future<void> _loadSlotsForDate(DateTime date) async {
+    final configuredDuration = _getConfiguredDurationForDate(date);
     setState(() {
       _loadingSlots = true;
       _selectedDate = DateTime(date.year, date.month, date.day);
+      _duration = configuredDuration;
       _selectedSlot = null;
     });
     widget.onChanged(null);
@@ -305,8 +304,38 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
     return slot['startTime']?.toString() ?? slot['time']?.toString() ?? 'Slot';
   }
 
-  // QA BUG-2: duration choices come from the listing's own availabilityPlan.
+  int _getConfiguredDurationForDate(DateTime date) {
+    if (_serviceData != null) {
+      final rawSlots = _serviceData!['availabilitySlots'];
+      if (rawSlots is List) {
+        final weekdays = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+        final weekdayName = weekdays[date.weekday - 1];
+        for (final item in rawSlots) {
+          if (item is Map) {
+            final slotDay = item['dayOfWeek']?.toString().toUpperCase();
+            if (slotDay == weekdayName) {
+              final minutes = item['slotDurationMinutes'];
+              if (minutes is num && minutes > 0) {
+                return minutes.toInt();
+              }
+            }
+          }
+        }
+      }
+      final defaultMinutes = _serviceData!['slotDurationMinutes'] ?? _serviceData!['appointmentDuration'];
+      if (defaultMinutes is num && defaultMinutes > 0) {
+        return defaultMinutes.toInt();
+      }
+      final plan = _serviceData!['availabilityPlan'];
+      if (plan is Map && plan['defaultDurationMinutes'] is num) {
+        return (plan['defaultDurationMinutes'] as num).toInt();
+      }
+    }
+    return 15;
+  }
+
   List<int> get _durationMinutesOptions {
+    final configured = _getConfiguredDurationForDate(_selectedDate);
     final plan = _serviceData?['availabilityPlan'];
     if (plan is Map<String, dynamic>) {
       final options = plan['durationOptions'];
@@ -317,14 +346,13 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
             .whereType<num>()
             .map((n) => n.toInt())
             .toList();
+        if (minutes.contains(configured)) {
+          return [configured];
+        }
         if (minutes.isNotEmpty) return minutes;
       }
     }
-    final slotSize = _serviceData?['slotDurationMinutes'] ?? _serviceData?['appointmentDuration'];
-    if (slotSize is num && slotSize > 0) {
-      return [slotSize.toInt()];
-    }
-    return const [15];
+    return [configured];
   }
 
   bool _slotAvailable(Map<String, dynamic> slot) {
