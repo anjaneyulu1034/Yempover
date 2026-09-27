@@ -1435,44 +1435,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 16),
 
-                      // Listed Switch
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.05),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Listed Publicly',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            Switch(
-                              value: _isListed,
-                              onChanged: (value) {
-                                setState(() {
-                                  _isListed = value;
-                                });
-                              },
-                              activeThumbColor: Colors.blue,
-                            ),
-                          ],
-                        ),
-                      ),
 
                       // Clubbing only applies to products offered in a
                       // barter — not services.
