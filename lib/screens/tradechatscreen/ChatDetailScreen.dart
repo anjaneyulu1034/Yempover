@@ -4319,6 +4319,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         ? Colors.red.shade700
         : Colors.grey.shade700;
 
+    final hasOfferedItem = latestOffer.combinedBarterItems.isNotEmpty ||
+        latestOffer.barterItemImages.isNotEmpty ||
+        (latestOffer.barterItemTitle != null &&
+            latestOffer.barterItemTitle!.trim().isNotEmpty);
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
@@ -4386,7 +4391,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             if (latestOffer.barterItemDescription != null &&
                 latestOffer.barterItemDescription!.trim().isNotEmpty)
               _buildOfferNote(latestOffer.barterItemDescription!),
-          ] else if (latestOffer.isZeroCoin) ...[
+          ] else if (latestOffer.isZeroCoin && !hasOfferedItem) ...[
             // No real item or coins on the table — offerType is still BARTER
             // for these (see backend), so without this branch they'd fall
             // into the barter-exchange preview below with an empty
@@ -4397,7 +4402,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               isServiceChat
                   ? '$senderName is requesting your service for free — no item or Barter Dollars offered in exchange.'
                   : '$senderName is requesting your product for free — no item or Barter Dollars offered in exchange.',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 10),
             Row(
@@ -4433,12 +4438,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             if (latestOffer.barterItemDescription != null &&
                 latestOffer.barterItemDescription!.trim().isNotEmpty)
               _buildOfferNote(latestOffer.barterItemDescription!),
-          ] else if (latestOffer.isBarterOffer || latestOffer.isBothOffer) ...[
+          ] else if (latestOffer.isBarterOffer ||
+              latestOffer.isBothOffer ||
+              (latestOffer.isZeroCoin && hasOfferedItem)) ...[
             Text(
               isServiceChat
                   ? '$senderName is interested in your service. Here are their thoughts:'
                   : '$senderName is interested in your product. Here are their thoughts:',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 10),
             _buildBarterExchangePreview(
@@ -4455,9 +4462,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               theirLabel: '$senderName offers',
               theirName: latestOffer.barterItemTitle,
               theirItems: latestOffer.combinedBarterItems,
-              theirPriceLabel: latestOffer.combinedBarterItems.isNotEmpty
-                  ? CoinFormat.withUnit(latestOffer.combinedBarterItemsTotalValue)
-                  : null,
+              theirPriceLabel: latestOffer.isZeroCoin
+                  ? 'Zero Barter Dollars'
+                  : (latestOffer.combinedBarterItems.isNotEmpty
+                      ? CoinFormat.withUnit(latestOffer.combinedBarterItemsTotalValue)
+                      : null),
               onTheirTap:
                   latestOffer.combinedBarterItems.length == 1 &&
                       !_isOpeningPostDetail
@@ -4471,6 +4480,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               '$senderName is offering: ${_offeredItemsLabel(latestOffer)}',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
+            if (latestOffer.isZeroCoin)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Zero Barter Dollar transaction',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
+              ),
             if (latestOffer.barterItemDescription != null &&
                 latestOffer.barterItemDescription!.trim().isNotEmpty)
               _buildOfferNote(latestOffer.barterItemDescription!),
@@ -4608,6 +4629,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         ? Colors.red.shade700
         : Colors.grey.shade700;
 
+    final hasOfferedItem = latestOffer.combinedBarterItems.isNotEmpty ||
+        latestOffer.barterItemImages.isNotEmpty ||
+        (latestOffer.barterItemTitle != null &&
+            latestOffer.barterItemTitle!.trim().isNotEmpty);
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
@@ -4691,7 +4717,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             if (latestOffer.barterItemDescription != null &&
                 latestOffer.barterItemDescription!.trim().isNotEmpty)
               _buildOfferNote(latestOffer.barterItemDescription!),
-          ] else if (latestOffer.isZeroCoin) ...[
+          ] else if (latestOffer.isZeroCoin && !hasOfferedItem) ...[
             // Mirrors the incoming card's isZeroCoin branch above — no real
             // item on your side of this offer, so skip the exchange preview
             // (which would otherwise show a broken-image placeholder) and
@@ -4729,7 +4755,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             if (latestOffer.barterItemDescription != null &&
                 latestOffer.barterItemDescription!.trim().isNotEmpty)
               _buildOfferNote(latestOffer.barterItemDescription!),
-          ] else if (latestOffer.isBarterOffer || latestOffer.isBothOffer) ...[
+          ] else if (latestOffer.isBarterOffer ||
+              latestOffer.isBothOffer ||
+              (latestOffer.isZeroCoin && hasOfferedItem)) ...[
             _buildBarterExchangePreview(
               myImage: latestOffer.barterItemImages.isNotEmpty
                   ? latestOffer.barterItemImages.first
@@ -4737,9 +4765,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               myLabel: 'You offer',
               myName: latestOffer.barterItemTitle,
               myItems: latestOffer.combinedBarterItems,
-              myPriceLabel: latestOffer.combinedBarterItems.isNotEmpty
-                  ? CoinFormat.withUnit(latestOffer.combinedBarterItemsTotalValue)
-                  : null,
+              myPriceLabel: latestOffer.isZeroCoin
+                  ? 'Zero Barter Dollars'
+                  : (latestOffer.combinedBarterItems.isNotEmpty
+                      ? CoinFormat.withUnit(latestOffer.combinedBarterItemsTotalValue)
+                      : null),
               onMyTap:
                   latestOffer.combinedBarterItems.length == 1 &&
                       !_isOpeningPostDetail
@@ -4762,6 +4792,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               'You are offering: ${_offeredItemsLabel(latestOffer)}',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
+            if (latestOffer.isZeroCoin)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Zero Barter Dollar transaction',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
+              ),
             if (latestOffer.barterItemDescription != null &&
                 latestOffer.barterItemDescription!.trim().isNotEmpty)
               _buildOfferNote(latestOffer.barterItemDescription!),
