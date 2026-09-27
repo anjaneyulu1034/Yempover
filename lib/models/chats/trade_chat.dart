@@ -156,7 +156,7 @@ extension MessageTypeExtension on MessageType {
 // Deal status from the backend exactly (see
 // GET /trade-chat/{chatId}/deal/verification). No PIN, no photos: a deal is
 // either awaiting mutual "Deal Completed" consent, or completed.
-enum DealStatus { AWAITING_HANDOVER, COMPLETED }
+enum DealStatus { AWAITING_HANDOVER, COMPLETED, CANCELLED }
 
 extension DealStatusExtension on DealStatus {
   String get value {
@@ -165,6 +165,8 @@ extension DealStatusExtension on DealStatus {
         return 'AWAITING_HANDOVER';
       case DealStatus.COMPLETED:
         return 'COMPLETED';
+      case DealStatus.CANCELLED:
+        return 'CANCELLED';
     }
   }
 
@@ -172,6 +174,12 @@ extension DealStatusExtension on DealStatus {
     switch (status) {
       case 'COMPLETED':
         return DealStatus.COMPLETED;
+      case 'CANCELLED':
+      case 'CANCELLED_BY_CLIENT':
+      case 'CANCELLED_BY_SERVICE_PROVIDER':
+      case 'REJECTED':
+      case 'REJECTED_BY_SERVICE_PROVIDER':
+        return DealStatus.CANCELLED;
       default:
         return DealStatus.AWAITING_HANDOVER;
     }
@@ -1276,6 +1284,7 @@ class DealCompletion {
   final bool iCompleted;
   final bool otherCompleted;
   final bool bothCompleted;
+  final bool isCancelled;
   final DateTime? completedAt;
   final bool canComplete;
   // Mirrors SlotGate.slotElapsed for the scheduled service flow — canComplete
@@ -1294,6 +1303,7 @@ class DealCompletion {
     required this.iCompleted,
     required this.otherCompleted,
     required this.bothCompleted,
+    this.isCancelled = false,
     this.completedAt,
     required this.canComplete,
     this.slotElapsed = true,
@@ -1305,6 +1315,7 @@ class DealCompletion {
       iCompleted: json['iCompleted'] == true,
       otherCompleted: json['otherCompleted'] == true,
       bothCompleted: json['bothCompleted'] == true,
+      isCancelled: json['isCancelled'] == true,
       completedAt: _tryParseLocal(json['completedAt']?.toString()),
       canComplete: json['canComplete'] == true,
       slotElapsed:

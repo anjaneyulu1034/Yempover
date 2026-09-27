@@ -352,18 +352,30 @@ class _PurchaseOfferScreenState extends State<PurchaseOfferScreen> {
 
             const SizedBox(height: 24),
 
-            // Description Input
-            const Text(
-              'Additional Notes (Optional)',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            Row(
+              children: const [
+                Text(
+                  'Description',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                SizedBox(width: 4),
+                Text(
+                  '*',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _descriptionController,
               maxLines: 4,
               decoration: AppInputDecoration.build(
-                label: 'Additional Notes',
-                hint: 'Add any notes or conditions for your purchase offer...',
+                label: 'Description *',
+                hint: 'Explain your offer and why you want to trade...',
                 alignLabelWithHint: true,
               ),
             ),

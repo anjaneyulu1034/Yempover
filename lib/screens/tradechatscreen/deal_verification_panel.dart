@@ -400,6 +400,38 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
     }
 
     final isDone = _isDealDone(verification);
+    final isCancelled = verification.status == DealStatus.CANCELLED ||
+        verification.completion.isCancelled ||
+        verification.completion.slotBlockedMessage?.toLowerCase().contains('cancelled') == true;
+
+    if (isCancelled) {
+      return _panelContainer(
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.red.shade200),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.cancel_outlined, color: Colors.red.shade700, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Appointment Cancelled\nThis appointment has been cancelled on the appointment screen and cannot be completed.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red.shade900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return _panelContainer(
       child: Column(

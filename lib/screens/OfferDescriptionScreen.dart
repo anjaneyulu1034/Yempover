@@ -704,14 +704,40 @@ class _OfferDescriptionScreenState extends State<OfferDescriptionScreen> {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(6),
-                              child: SafeNetworkImage(
-                                url: widget.post.processedImages.isNotEmpty
-                                    ? widget.post.processedImages.first
-                                    : widget.post.getDefaultImageUrl(),
-                                width: 40,
-                                height: 40,
-                                fit: BoxFit.cover,
-                              ),
+                              child: widget.post.processedImages.isNotEmpty
+                                  ? SafeNetworkImage(
+                                      url: widget.post.processedImages.first,
+                                      width: 40,
+                                      height: 40,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade200,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.image_not_supported_outlined,
+                                            size: 16,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                          const SizedBox(height: 1),
+                                          Text(
+                                            'No Image',
+                                            style: TextStyle(
+                                              fontSize: 7,
+                                              color: Colors.grey.shade700,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(

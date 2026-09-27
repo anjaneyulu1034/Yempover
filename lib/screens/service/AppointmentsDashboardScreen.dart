@@ -34,6 +34,22 @@ class _AppointmentsDashboardScreenState
   String? _error;
   List<Map<String, dynamic>> _providerAppointments = [];
   List<Map<String, dynamic>> _clientAppointments = [];
+  String _searchQuery = '';
+  String _selectedStatusFilter = 'ALL';
+
+  void _sortAppointmentsDesc(List<Map<String, dynamic>> list) {
+    list.sort((a, b) {
+      final dateAStr = a['slotDate']?.toString() ?? a['appointmentDate']?.toString() ?? a['createdAt']?.toString() ?? '';
+      final timeAStr = a['slotTime']?.toString() ?? a['time']?.toString() ?? '';
+      final dateBStr = b['slotDate']?.toString() ?? b['appointmentDate']?.toString() ?? b['createdAt']?.toString() ?? '';
+      final timeBStr = b['slotTime']?.toString() ?? b['time']?.toString() ?? '';
+
+      final dtA = DateTime.tryParse('$dateAStr $timeAStr'.trim()) ?? DateTime.tryParse(dateAStr) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final dtB = DateTime.tryParse('$dateBStr $timeBStr'.trim()) ?? DateTime.tryParse(dateBStr) ?? DateTime.fromMillisecondsSinceEpoch(0);
+
+      return dtB.compareTo(dtA);
+    });
+  }
 
   // Formats a slot for display from the server's own wall-clock date/time
   // strings (or a regex extraction of a raw ISO string as fallback) — never
@@ -115,8 +131,12 @@ class _AppointmentsDashboardScreenState
       if (!mounted) return;
 
       setState(() {
-        _providerAppointments = _extractList(provider);
-        _clientAppointments = _extractList(client);
+        final prov = _extractList(provider);
+        final cl = _extractList(client);
+        _sortAppointmentsDesc(prov);
+        _sortAppointmentsDesc(cl);
+        _providerAppointments = prov;
+        _clientAppointments = cl;
         _loading = false;
       });
     } catch (error) {
@@ -449,14 +469,6 @@ class _AppointmentsDashboardScreenState
     return const [];
   }
 
-  bool _isTerminalStatus(String status) {
-    return status == 'CANCELLED_BY_CLIENT' ||
-        status == 'CANCELLED_BY_SERVICE_PROVIDER' ||
-        status == 'REJECTED_BY_SERVICE_PROVIDER' ||
-        status == 'COMPLETED' ||
-        status == 'NO_SHOW';
-  }
-
   Color _getStatusColor(String status) {
     switch (status) {
       case 'REQUESTED':
@@ -564,7 +576,7 @@ class _AppointmentsDashboardScreenState
                     children: [
                       Icon(Icons.business_center, size: 18),
                       SizedBox(width: 8),
-                      Text('Provider'),
+                      Text('My Offers'),
                     ],
                   ),
                 ),
@@ -574,7 +586,7 @@ class _AppointmentsDashboardScreenState
                     children: [
                       Icon(Icons.person, size: 18),
                       SizedBox(width: 8),
-                      Text('Client'),
+                      Text('My Requests'),
                     ],
                   ),
                 ),
@@ -649,434 +661,476 @@ class _AppointmentsDashboardScreenState
     );
   }
 
-  Widget _buildList(List<Map<String, dynamic>> items, bool isProvider) {
-    if (items.isEmpty) {
-      return ListView(
-        children: [
-          SizedBox(height: MediaQuery.of(context).size.height * 0.2),
-          Center(
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    isProvider ? Icons.business_center : Icons.event_busy,
-                    size: 48,
-                    color: Colors.grey[400],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No appointments yet',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[700],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isProvider
-                      ? 'When clients book your services,\nthey will appear here'
-                      : 'Book a service to see your\nappointments here',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey[500], height: 1.5),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
+  List<Map<String, dynamic>> _getFilteredList(
+    List<Map<String, dynamic>> items,
+  ) {
+    var result = items;
+    if (_selectedStatusFilter != 'ALL') {
+      result = result.where((item) {
+        final st = (item['status']?.toString() ?? '').toUpperCase();
+        if (_selectedStatusFilter == 'CANCELLED') {
+          return st.startsWith('CANCELLED') || st.startsWith('REJECTED');
+        }
+        return st == _selectedStatusFilter;
+      }).toList();
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        final status = item['status']?.toString() ?? 'UNKNOWN';
-        final appointmentId = item['id']?.toString() ?? '';
-        final isChatLoading = _chatLoadingAppointmentId == appointmentId;
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.trim().toLowerCase();
+      result = result.where((item) {
         final serviceInfo = item['service'];
-        final serviceTitle = serviceInfo is Map
-            ? serviceInfo['title']?.toString() ?? 'Service'
-            : item['serviceTitle']?.toString() ?? 'Service';
+        final title = (serviceInfo is Map ? serviceInfo['title'] : item['serviceTitle'])?.toString().toLowerCase() ?? '';
+        final statusStr = (item['status']?.toString() ?? '').toLowerCase();
+        final clientName = _getClientName(item['client']).toLowerCase();
+        final providerName = _getProviderName(item['provider']).toLowerCase();
+        return title.contains(q) || statusStr.contains(q) || clientName.contains(q) || providerName.contains(q);
+      }).toList();
+    }
+    return result;
+  }
 
-        // Prefer the server's own wall-clock slotDate/slotTime when present
-        // (decorated appointment list rows carry these); fall back to a
-        // regex extraction of the raw appointmentDate string otherwise.
-        // Never DateTime.parse(...).toLocal() this — that re-interprets the
-        // digits against the device's timezone and is exactly what used to
-        // turn a 12:30 booking into 5:30.
-        final formattedDate = _formatSlot(
-          date: item['slotDate']?.toString(),
-          time: item['slotTime']?.toString(),
-          fallbackIso: item['appointmentDate']?.toString(),
-        );
-
-        final actions = _actionsForItem(item, isProvider);
-        final statusLabel = item['statusLabel']?.toString() ?? status;
-        final wasRescheduled = item['wasRescheduled'] == true;
-        final previousAppointmentDate = item['previousAppointmentDate']
-            ?.toString();
-        String? previousFormattedDate;
-        if (wasRescheduled &&
-            previousAppointmentDate != null &&
-            previousAppointmentDate.isNotEmpty) {
-          previousFormattedDate = _formatSlot(
-            fallbackIso: previousAppointmentDate,
-          );
+  Widget _buildFilterChip(String value, String label) {
+    final selected = _selectedStatusFilter == value;
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+          color: selected ? Colors.white : Colors.grey[800],
+        ),
+      ),
+      selected: selected,
+      selectedColor: Colors.deepPurple,
+      backgroundColor: Colors.grey[200],
+      onSelected: (val) {
+        if (val) {
+          setState(() => _selectedStatusFilter = value);
         }
+      },
+    );
+  }
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withValues(alpha: 0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 5),
+  Widget _buildEmptyState(bool isProvider) {
+    return ListView(
+      children: [
+        SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+        Center(
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isProvider ? Icons.business_center : Icons.event_busy,
+                  size: 48,
+                  color: Colors.grey[400],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No appointments found',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isProvider
+                    ? 'When clients book your services,\nthey will appear here'
+                    : 'Book a service to see your\nappointments here',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[500], height: 1.5),
               ),
             ],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Column(
-              children: [
-                // Status Header
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _getStatusColor(status).withValues(alpha: 0.1),
-                    border: Border(
-                      bottom: BorderSide(
-                        color: _getStatusColor(status).withValues(alpha: 0.2),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGridCard(Map<String, dynamic> item, bool isProvider) {
+    final status = item['status']?.toString() ?? 'UNKNOWN';
+    final serviceInfo = item['service'];
+    final serviceTitle = serviceInfo is Map
+        ? serviceInfo['title']?.toString() ?? 'Service'
+        : item['serviceTitle']?.toString() ?? 'Service';
+    final formattedDate = _formatSlot(
+      date: item['slotDate']?.toString(),
+      time: item['slotTime']?.toString(),
+      fallbackIso: item['appointmentDate']?.toString(),
+    );
+    final statusLabel = item['statusLabel']?.toString() ?? status;
+    final otherName = isProvider
+        ? _getClientName(item['client'])
+        : _getProviderName(item['provider']);
+
+    return InkWell(
+      onTap: () => _showAppointmentDetailsModal(item, isProvider),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Status Badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: _getStatusColor(status).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(_getStatusIcon(status), size: 12, color: _getStatusColor(status)),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      statusLabel,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: _getStatusColor(status),
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: _getStatusColor(status).withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _getStatusIcon(status),
-                          size: 16,
-                          color: _getStatusColor(status),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          statusLabel,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: _getStatusColor(status),
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      if (wasRescheduled)
-                        Container(
-                          margin: const EdgeInsets.only(right: 6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.indigo.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'Rescheduled',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.indigo,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      if (actions.isEmpty && _isTerminalStatus(status))
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'Completed',
-                            style: TextStyle(fontSize: 11, color: Colors.grey),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
 
-                // Content
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Service Title
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.deepPurple.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.work,
-                              size: 18,
-                              color: Colors.deepPurple,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Service',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                                Text(
-                                  serviceTitle,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 15,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+            // Service Title
+            Text(
+              serviceTitle,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const Spacer(),
 
-                      const SizedBox(height: 16),
-
-                      // Date/Time
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.calendar_month,
-                              size: 18,
-                              color: Colors.blue,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Date & Time',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                                Text(
-                                  formattedDate,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                if (previousFormattedDate != null)
-                                  Text(
-                                    'Previously: $previousFormattedDate',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[500],
-                                      decoration: TextDecoration.lineThrough,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      // Client/Provider Info (if available)
-                      if (item['client'] != null ||
-                          item['provider'] != null) ...[
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                isProvider ? Icons.person : Icons.business,
-                                size: 18,
-                                color: Colors.green,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    isProvider ? 'Client' : 'Provider',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                  Text(
-                                    isProvider
-                                        ? _getClientName(item['client'])
-                                        : _getProviderName(item['provider']),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-
-                      // Actions
-                      if (actions.isNotEmpty) ...[
-                        const SizedBox(height: 20),
-                        const Divider(height: 1),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: isChatLoading
-                                ? null
-                                : () => _openAppointmentChat(item, isProvider),
-                            icon: isChatLoading
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(
-                                    Icons.chat_bubble_outline,
-                                    size: 16,
-                                  ),
-                            label: const Text('Message'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.deepPurple,
-                              side: BorderSide(
-                                color: Colors.deepPurple.withValues(
-                                  alpha: 0.35,
-                                ),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(30),
-                              ),
-                              minimumSize: const Size(double.infinity, 46),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Column(
-                          children: actions
-                              .map(
-                                (action) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 10),
-                                  child: SizedBox(
-                                    width: double.infinity,
-                                    child: ElevatedButton(
-                                      onPressed: appointmentId.isEmpty
-                                          ? null
-                                          : () => _dispatchAction(
-                                              action,
-                                              appointmentId,
-                                              item,
-                                            ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: _getActionColor(
-                                          action,
-                                        ).withValues(alpha: 0.1),
-                                        foregroundColor: _getActionColor(
-                                          action,
-                                        ),
-                                        elevation: 0,
-                                        minimumSize: const Size(
-                                          double.infinity,
-                                          46,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            30,
-                                          ),
-                                          side: BorderSide(
-                                            color: _getActionColor(
-                                              action,
-                                            ).withValues(alpha: 0.3),
-                                          ),
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                            _getActionIcon(action),
-                                            size: 16,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(_getActionLabel(action)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ],
-                    ],
+            // Date
+            Row(
+              children: [
+                const Icon(Icons.calendar_today, size: 12, color: Colors.blue),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    formattedDate,
+                    style: TextStyle(fontSize: 10, color: Colors.grey.shade700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 4),
+
+            // Person Name
+            Row(
+              children: [
+                Icon(
+                  isProvider ? Icons.person_outline : Icons.business_outlined,
+                  size: 12,
+                  color: Colors.green,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    otherName,
+                    style: TextStyle(fontSize: 10, color: Colors.grey.shade700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Center(
+              child: Text(
+                'Tap for Details',
+                style: TextStyle(fontSize: 9, color: Colors.deepPurple.shade700, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAppointmentDetailsModal(
+    Map<String, dynamic> item,
+    bool isProvider,
+  ) {
+    final status = item['status']?.toString() ?? 'UNKNOWN';
+    final appointmentId = item['id']?.toString() ?? '';
+    final serviceInfo = item['service'];
+    final serviceTitle = serviceInfo is Map
+        ? serviceInfo['title']?.toString() ?? 'Service'
+        : item['serviceTitle']?.toString() ?? 'Service';
+    final formattedDate = _formatSlot(
+      date: item['slotDate']?.toString(),
+      time: item['slotTime']?.toString(),
+      fallbackIso: item['appointmentDate']?.toString(),
+    );
+    final statusLabel = item['statusLabel']?.toString() ?? status;
+    final actions = _actionsForItem(item, isProvider);
+    final otherName = isProvider
+        ? _getClientName(item['client'])
+        : _getProviderName(item['provider']);
+    final isChatLoading = _chatLoadingAppointmentId == appointmentId;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(status).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(_getStatusIcon(status), size: 14, color: _getStatusColor(status)),
+                        const SizedBox(width: 6),
+                        Text(
+                          statusLabel,
+                          style: TextStyle(
+                            color: _getStatusColor(status),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(modalContext),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                serviceTitle,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(Icons.calendar_month, size: 18, color: Colors.blue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      formattedDate,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    isProvider ? Icons.person : Icons.business,
+                    size: 18,
+                    color: Colors.green,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${isProvider ? 'Client' : 'Provider'}: $otherName',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 12),
+
+              // Action buttons
+              if (actions.isNotEmpty) ...[
+                const Text(
+                  'Actions',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                const SizedBox(height: 10),
+                Column(
+                  children: actions.map((action) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(modalContext);
+                            _dispatchAction(action, appointmentId, item);
+                          },
+                          icon: Icon(_getActionIcon(action), size: 18),
+                          label: Text(_getActionLabel(action)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _getActionColor(action),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // Open Chat button
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: isChatLoading
+                      ? null
+                      : () {
+                          Navigator.pop(modalContext);
+                          _openAppointmentChat(item, isProvider);
+                        },
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: const Text('Open Chat'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.deepPurple,
+                    side: const BorderSide(color: Colors.deepPurple),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildList(List<Map<String, dynamic>> rawItems, bool isProvider) {
+    final filteredItems = _getFilteredList(rawItems);
+
+    return Column(
+      children: [
+        // Auto search & Status filters
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          color: Colors.white,
+          child: Column(
+            children: [
+              TextField(
+                onChanged: (val) => setState(() => _searchQuery = val),
+                decoration: InputDecoration(
+                  hintText: 'Auto search by service, status or name...',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () => setState(() => _searchQuery = ''),
+                        )
+                      : null,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  fillColor: Colors.grey[100],
+                  filled: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(25),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildFilterChip('ALL', 'All'),
+                    const SizedBox(width: 6),
+                    _buildFilterChip('REQUESTED', 'Requested'),
+                    const SizedBox(width: 6),
+                    _buildFilterChip('CONFIRMED', 'Confirmed'),
+                    const SizedBox(width: 6),
+                    _buildFilterChip('COMPLETED', 'Completed'),
+                    const SizedBox(width: 6),
+                    _buildFilterChip('CANCELLED', 'Cancelled'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Grid View or Empty State
+        Expanded(
+          child: filteredItems.isEmpty
+              ? _buildEmptyState(isProvider)
+              : GridView.builder(
+                  padding: const EdgeInsets.all(12),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.88,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                  ),
+                  itemCount: filteredItems.length,
+                  itemBuilder: (context, index) {
+                    final item = filteredItems[index];
+                    return _buildGridCard(item, isProvider);
+                  },
+                ),
+        ),
+      ],
     );
   }
 
