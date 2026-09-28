@@ -264,6 +264,10 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
       if (isToday) {
         final hadSlotsBeforeNowFilter = slots.isNotEmpty;
         slots = slots.where((slot) {
+          final end = _slotEndDateTime(slot);
+          if (end != null) {
+            return end.isAfter(now);
+          }
           final start = _slotDateTime(slot);
           return start == null || start.isAfter(now);
         }).toList();
@@ -315,6 +319,24 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
     }
     final time = slot['startTime']?.toString() ?? slot['time']?.toString();
     return _service.parseTimeOfDay(_selectedDate, time);
+  }
+
+  DateTime? _slotEndDateTime(Map<String, dynamic> slot) {
+    final rawEnd = slot['endTime']?.toString();
+    if (rawEnd != null && rawEnd.isNotEmpty) {
+      final parsed = _service.parseTimeOfDay(_selectedDate, rawEnd);
+      if (parsed != null) return parsed;
+    }
+    final start = _slotDateTime(slot);
+    if (start != null) {
+      final rawDuration =
+          slot['slotDurationMinutes'] ?? slot['durationMinutes'] ?? _duration;
+      final durationMins = rawDuration is num
+          ? rawDuration.toInt()
+          : (int.tryParse(rawDuration?.toString() ?? '') ?? _duration);
+      return start.add(Duration(minutes: durationMins));
+    }
+    return null;
   }
 
   // QA BUG-5/6: prefer the backend's ready-made appointment label (already
@@ -373,7 +395,51 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
 
   List<int> get _durationMinutesOptions {
     final configured = _getConfiguredDurationForDate(_selectedDate);
-    return [configured];
+    final set = <int>{configured};
+    final plan = _serviceData?['availabilityPlan'];
+    if (plan is Map<String, dynamic>) {
+      final options = plan['durationOptions'];
+      if (options is List) {
+        for (final o in options) {
+          if (o is Map && o['minutes'] is num && o['enabled'] != false) {
+            set.add((o['minutes'] as num).toInt());
+          }
+        }
+      }
+    }
+    final weekly = _serviceData?['availabilitySlots'];
+    if (weekly is List) {
+      final weekdays = [
+        'MONDAY',
+        'TUESDAY',
+        'WEDNESDAY',
+        'THURSDAY',
+        'FRIDAY',
+        'SATURDAY',
+        'SUNDAY',
+      ];
+      final weekdayName = weekdays[_selectedDate.weekday - 1];
+      for (final item in weekly) {
+        if (item is Map &&
+            item['dayOfWeek']?.toString().toUpperCase() == weekdayName) {
+          final start = _service.parseTimeOfDay(
+            _selectedDate,
+            item['startTime']?.toString(),
+          );
+          final end = _service.parseTimeOfDay(
+            _selectedDate,
+            item['endTime']?.toString(),
+          );
+          if (start != null && end != null) {
+            final totalMinutes = end.difference(start).inMinutes;
+            if (totalMinutes >= 15) set.add(15);
+            if (totalMinutes >= 30) set.add(30);
+          }
+        }
+      }
+    }
+    final sorted = set.toList()..sort();
+    return sorted;
   }
 
   bool _slotAvailable(Map<String, dynamic> slot) {

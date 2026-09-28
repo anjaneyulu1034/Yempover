@@ -90,7 +90,51 @@ class _ServiceDetailBookingScreenState
 
   List<int> get _durationMinutesOptions {
     final configured = _getConfiguredDurationForDate(_selectedDate);
-    return [configured];
+    final set = <int>{configured};
+    final plan = _serviceData?['availabilityPlan'];
+    if (plan is Map<String, dynamic>) {
+      final options = plan['durationOptions'];
+      if (options is List) {
+        for (final o in options) {
+          if (o is Map && o['minutes'] is num && o['enabled'] != false) {
+            set.add((o['minutes'] as num).toInt());
+          }
+        }
+      }
+    }
+    final weekly = _serviceData?['availabilitySlots'];
+    if (weekly is List) {
+      final weekdays = [
+        'MONDAY',
+        'TUESDAY',
+        'WEDNESDAY',
+        'THURSDAY',
+        'FRIDAY',
+        'SATURDAY',
+        'SUNDAY',
+      ];
+      final weekdayName = weekdays[_selectedDate.weekday - 1];
+      for (final item in weekly) {
+        if (item is Map &&
+            item['dayOfWeek']?.toString().toUpperCase() == weekdayName) {
+          final start = _service.parseTimeOfDay(
+            _selectedDate,
+            item['startTime']?.toString(),
+          );
+          final end = _service.parseTimeOfDay(
+            _selectedDate,
+            item['endTime']?.toString(),
+          );
+          if (start != null && end != null) {
+            final totalMinutes = end.difference(start).inMinutes;
+            if (totalMinutes >= 15) set.add(15);
+            if (totalMinutes >= 30) set.add(30);
+          }
+        }
+      }
+    }
+    final sorted = set.toList()..sort();
+    return sorted;
   }
 
   List<Map<String, dynamic>> _slots = [];
@@ -380,6 +424,10 @@ class _ServiceDetailBookingScreenState
       if (isToday) {
         final hadSlotsBeforeNowFilter = slots.isNotEmpty;
         slots = slots.where((slot) {
+          final end = _slotEndDateTime(slot);
+          if (end != null) {
+            return end.isAfter(now);
+          }
           final start = _slotDateTime(slot);
           return start == null || start.isAfter(now);
         }).toList();
@@ -520,6 +568,24 @@ class _ServiceDetailBookingScreenState
     return _service.parseTimeOfDay(_selectedDate, time);
   }
 
+  DateTime? _slotEndDateTime(Map<String, dynamic> slot) {
+    final rawEnd = slot['endTime']?.toString();
+    if (rawEnd != null && rawEnd.isNotEmpty) {
+      final parsed = _service.parseTimeOfDay(_selectedDate, rawEnd);
+      if (parsed != null) return parsed;
+    }
+    final start = _slotDateTime(slot);
+    if (start != null) {
+      final rawDuration =
+          slot['slotDurationMinutes'] ?? slot['durationMinutes'] ?? _duration;
+      final durationMins = rawDuration is num
+          ? rawDuration.toInt()
+          : (int.tryParse(rawDuration?.toString() ?? '') ?? _duration);
+      return start.add(Duration(minutes: durationMins));
+    }
+    return null;
+  }
+
   // QA BUG-5/6: a slot is the actual bookable APPOINTMENT window (e.g.
   // "9:00 AM – 2:00 PM" for a 5-hour service), never the provider's whole
   // working day — and the backend now hands back that exact string, already
@@ -623,10 +689,35 @@ class _ServiceDetailBookingScreenState
       });
 
     if (items.isEmpty) return '';
-    final first = _slotDateTime(items.first);
-    final last = _slotDateTime(items.last);
-    if (first == null || last == null) return '';
-    return '${_timeFormat.format(first)} – ${_timeFormat.format(last)}';
+    final first = items.first;
+    final last = items.last;
+    final firstDt = _slotDateTime(first);
+    if (firstDt == null) return '';
+
+    final firstLabel = first['startTimeLabel']?.toString() ??
+        (first['startTime'] != null
+            ? AppDateFormat.timeOfDay(first['startTime'].toString())
+            : _timeFormat.format(firstDt));
+
+    final lastEndLabel = last['endTimeLabel']?.toString() ??
+        (last['endTime'] != null
+            ? AppDateFormat.timeOfDay(last['endTime'].toString())
+            : null);
+
+    if (lastEndLabel != null && lastEndLabel.isNotEmpty) {
+      return '$firstLabel – $lastEndLabel';
+    }
+
+    final lastEndDt = _slotEndDateTime(last);
+    if (lastEndDt != null) {
+      return '$firstLabel – ${_timeFormat.format(lastEndDt)}';
+    }
+
+    final lastDt = _slotDateTime(last);
+    if (lastDt != null && lastDt != firstDt) {
+      return '$firstLabel – ${_timeFormat.format(lastDt)}';
+    }
+    return firstLabel;
   }
 
   Widget _buildPeriodTab(_SlotPeriod period, int count, bool selected) {
@@ -817,6 +908,39 @@ class _ServiceDetailBookingScreenState
           physics: const NeverScrollableScrollPhysics(),
           children: periodSlots.map(_buildSlotChip).toList(),
         ),
+        if (_selectedSlot != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF1FF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFF2E5BFF).withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.check_circle,
+                  size: 18,
+                  color: Color(0xFF2E5BFF),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Selected Slot: ${_slotLabel(_selectedSlot!)}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF2E5BFF),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -1769,6 +1893,7 @@ class _ServiceDetailBookingScreenState
                                                 _duration = value;
                                                 _showDurationOptions = false;
                                               });
+                                              _loadSlotsForDate(_selectedDate);
                                             },
                                             child: Container(
                                               width: double.infinity,
