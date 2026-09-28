@@ -28,6 +28,7 @@ class WalletBalanceProvider extends ChangeNotifier {
   // screen opened before the app-level bootstrap has run still ends up
   // connected instead of silently missing live updates.
   Future<void> ensureLive() async {
+    if (await _tokenService.isGuestUser()) return;
     if (!_liveStarted) {
       _liveStarted = true;
       _socketService.on('wallet:updated', _handleWalletUpdated);
@@ -60,6 +61,7 @@ class WalletBalanceProvider extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
+    if (await _tokenService.isGuestUser()) return;
     _isLoading = true;
     notifyListeners();
     try {

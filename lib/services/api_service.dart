@@ -59,6 +59,13 @@ class ApiService {
     var response = await _requestWithConnectionRetry(() => request(token));
 
     if (response.statusCode == 401) {
+      final isGuest = await _tokenService.isGuestUser();
+      if (isGuest) {
+        debugPrint(
+          '🛡️ ApiService: 401 received while in guest mode — skipping token refresh and logout',
+        );
+        return response;
+      }
       final code = _responseErrorCode(response);
       if (code == null || code == 'TOKEN_EXPIRED') {
         debugPrint(
@@ -86,6 +93,14 @@ class ApiService {
     SubscriptionGate.checkResponse(response);
 
     return response;
+  }
+
+  Future<void> _handleUnauthorized() async {
+    final isGuest = await _tokenService.isGuestUser();
+    if (!isGuest) {
+      debugPrint('🔴 ApiService: Unauthorized - token may be expired');
+      await _tokenService.clearTokens();
+    }
   }
 
   // The shared http.Client is kept alive for the app's whole lifetime and
@@ -152,8 +167,7 @@ class ApiService {
 
       // Handle unrecoverable 401 after refresh-retry.
       if (response.statusCode == 401) {
-        debugPrint('🔴 ApiService: Unauthorized - token may be expired');
-        await _tokenService.clearTokens();
+        await _handleUnauthorized();
       }
 
       return response;
@@ -196,8 +210,7 @@ class ApiService {
 
       // Handle unrecoverable 401 after refresh-retry.
       if (response.statusCode == 401) {
-        debugPrint('🔴 ApiService: Unauthorized - token may be expired');
-        await _tokenService.clearTokens();
+        await _handleUnauthorized();
       }
 
       return response;
@@ -237,8 +250,7 @@ class ApiService {
 
       // Handle unrecoverable 401 after refresh-retry.
       if (response.statusCode == 401) {
-        debugPrint('🔴 ApiService: Unauthorized - token may be expired');
-        await _tokenService.clearTokens();
+        await _handleUnauthorized();
       }
 
       return response;
@@ -289,8 +301,7 @@ class ApiService {
 
       // Handle unrecoverable 401 after refresh-retry.
       if (response.statusCode == 401) {
-        debugPrint('🔴 ApiService: Unauthorized - token may be expired');
-        await _tokenService.clearTokens();
+        await _handleUnauthorized();
       }
 
       return response;
@@ -332,8 +343,7 @@ class ApiService {
 
       // Handle unrecoverable 401 after refresh-retry.
       if (response.statusCode == 401) {
-        debugPrint('🔴 ApiService: Unauthorized - token may be expired');
-        await _tokenService.clearTokens();
+        await _handleUnauthorized();
       }
 
       return response;
@@ -390,13 +400,20 @@ class ApiService {
 
       // Handle 401 Unauthorized - token expired or invalid
       if (response.statusCode == 401) {
-        debugPrint('🔴 ApiService: Unauthorized - token may be expired');
-        // Clear invalid token
-        await _tokenService.clearTokens();
-        throw ApiException(
-          'Session expired. Please login again.',
-          statusCode: 401,
-        );
+        final isGuest = await _tokenService.isGuestUser();
+        if (!isGuest) {
+          debugPrint('🔴 ApiService: Unauthorized - token may be expired');
+          await _tokenService.clearTokens();
+          throw ApiException(
+            'Session expired. Please login again.',
+            statusCode: 401,
+          );
+        } else {
+          throw ApiException(
+            'Unauthorized',
+            statusCode: 401,
+          );
+        }
       }
 
       final Map<String, dynamic> responseData = json.decode(response.body);
@@ -496,13 +513,17 @@ class ApiService {
           throw ApiException(message, statusCode: 401);
         }
 
-        debugPrint('🔴 ApiService: Unauthorized - token may be expired');
-        // Clear invalid token
-        await _tokenService.clearTokens();
-        throw ApiException(
-          'Session expired. Please login again.',
-          statusCode: 401,
-        );
+        final isGuest = await _tokenService.isGuestUser();
+        if (!isGuest) {
+          debugPrint('🔴 ApiService: Unauthorized - token may be expired');
+          await _tokenService.clearTokens();
+          throw ApiException(
+            'Session expired. Please login again.',
+            statusCode: 401,
+          );
+        } else {
+          throw ApiException(message, statusCode: 401);
+        }
       }
 
       // Check if response has success status

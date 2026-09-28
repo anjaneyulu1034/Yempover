@@ -39,10 +39,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
 
   void _loginAsGuest() {
-    debugPrint('Ã°Å¸Å¸Â£ LoginScreen: _loginAsGuest() called');
+    debugPrint('🟣 LoginScreen: _loginAsGuest() called');
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Guest Mode'),
         content: const Text(
           'You are now browsing as a guest. Some features may be limited.',
@@ -50,17 +50,19 @@ class _LoginScreenState extends State<LoginScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              debugPrint('Ã°Å¸Å¸Â£ LoginScreen: Guest mode cancelled');
-              Navigator.pop(context);
+              debugPrint('🟣 LoginScreen: Guest mode cancelled');
+              Navigator.pop(dialogContext);
             },
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () async {
-              debugPrint('Ã°Å¸Å¸Â£ LoginScreen: Continuing as guest');
+              debugPrint('🟣 LoginScreen: Continuing as guest');
               await _tokenService.enableGuestMode();
               if (!mounted) return;
-              Navigator.pop(context); // Close dialog
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext); // Close dialog
+              }
               _navigateToHomeScreen(); // Navigate to home screen
             },
             style: ElevatedButton.styleFrom(

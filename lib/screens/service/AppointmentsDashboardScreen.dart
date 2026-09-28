@@ -136,7 +136,7 @@ class _AppointmentsDashboardScreenState
       final startStr = DateFormat('hh:mm a').format(startTime);
       final endStr = DateFormat('hh:mm a').format(endTime);
 
-      return '$startStr - $endStr (EST)';
+      return '$startStr - $endStr (IST)';
     } catch (_) {
       return t;
     }
@@ -2443,17 +2443,21 @@ class _AppointmentsDashboardScreenState
                 const <Map<String, dynamic>>[];
 
             return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  16,
-                  16,
-                  MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(sheetContext).size.height * 0.85,
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    16,
+                    16,
+                    MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                     const Text(
                       'Reschedule Slot',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -2679,10 +2683,11 @@ class _AppointmentsDashboardScreenState
                   ],
                 ),
               ),
-            );
-          },
-        );
-      },
-    );
+            ),
+          );
+        },
+      );
+    },
+  );
   }
 }

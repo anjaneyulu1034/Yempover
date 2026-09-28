@@ -17,6 +17,11 @@ class SessionManager {
 
   static Future<void> forceLogout() async {
     if (_loggingOut) return;
+    final isGuest = await TokenService().isGuestUser();
+    if (isGuest) {
+      debugPrint('🛡️ SessionManager: forceLogout called in guest mode, ignoring');
+      return;
+    }
     _loggingOut = true;
     try {
       await TokenService().clearTokens();

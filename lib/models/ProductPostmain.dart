@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import 'package:yempover_app/constants/api_constants.dart';
 import 'package:yempover_app/utils/post_availability_utils.dart';
 
@@ -542,7 +542,48 @@ class ExistingOffer {
     this.createdAt,
   });
 
+  static String _formatDisplayTextInIndianTime(String text, DateTime? createdAt) {
+    if (text.isEmpty) return text;
+    final regex = RegExp(
+      r'previously on ([^.]+?)(?=\s+and|\.|$)',
+      caseSensitive: false,
+    );
+    final match = regex.firstMatch(text);
+    if (match == null) return text;
+
+    final datePattern = DateFormat('EEE, d MMM yyyy, h:mm a');
+
+    if (createdAt != null) {
+      // Indian Standard Time (IST) is UTC + 5:30
+      final istTime = createdAt.toUtc().add(const Duration(hours: 5, minutes: 30));
+      final formatted = datePattern.format(istTime);
+      return text.replaceFirst(match.group(0)!, 'previously on $formatted');
+    }
+
+    final rawDateStr = match.group(1)?.trim();
+    if (rawDateStr != null && rawDateStr.isNotEmpty) {
+      try {
+        final parsedUtc = datePattern.parseUtc(rawDateStr);
+        final istTime = parsedUtc.add(const Duration(hours: 5, minutes: 30));
+        final formatted = datePattern.format(istTime);
+        return text.replaceFirst(rawDateStr, formatted);
+      } catch (_) {
+        // Fall back to original text on parse failure
+      }
+    }
+
+    return text;
+  }
+
   factory ExistingOffer.fromJson(Map<String, dynamic> json) {
+    final rawText =
+        json['displayText']?.toString() ?? 'You have already made an offer on this item.';
+    final parsedCreatedAt = json['createdAt'] != null
+        ? DateTime.tryParse(json['createdAt'].toString())
+        : null;
+
+    final resolvedText = _formatDisplayTextInIndianTime(rawText, parsedCreatedAt);
+
     return ExistingOffer(
       chatId: json['chatId'] ?? '',
       chatStatus: json['chatStatus'] ?? '',
@@ -554,11 +595,8 @@ class ExistingOffer {
           : null,
       currency: json['currency'] as String?,
       barterItemTitle: json['barterItemTitle'] as String?,
-      displayText:
-          json['displayText'] ?? 'You have already made an offer on this item.',
-      createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'].toString())
-          : null,
+      displayText: resolvedText,
+      createdAt: parsedCreatedAt,
     );
   }
 }

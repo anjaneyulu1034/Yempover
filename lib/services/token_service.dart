@@ -123,8 +123,14 @@ class TokenService {
     }
   }
 
+  Future<void> clearGuestMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_isGuestKey);
+    debugPrint('🔐 TokenService: Guest mode cleared');
+  }
+
   // Clear tokens on logout - FIXED: Ensure all data is cleared properly
-  Future<void> clearTokens() async {
+  Future<void> clearTokens({bool clearGuest = false}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
@@ -136,7 +142,9 @@ class TokenService {
       // Also clear any other potential user-related data
       await prefs.remove('user_profile');
       await prefs.remove('is_logged_in');
-      await prefs.remove(_isGuestKey);
+      if (clearGuest) {
+        await prefs.remove(_isGuestKey);
+      }
 
       debugPrint('🔐 TokenService: All tokens cleared successfully');
     } catch (e) {

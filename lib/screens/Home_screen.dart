@@ -180,12 +180,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _scrollController.addListener(_onScroll);
     BlockedUsersCache.instance.addListener(_onBlockedUsersChanged);
     _startExpiryTicker();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _initializeData();
+      final isGuest = await _tokenService.isGuestUser();
       // App-level: connect the socket and start tracking the live wallet
       // balance once, here, rather than each coin-showing screen doing its
       // own fetch — Home is reached after every login/cold-start resume.
-      if (mounted) {
+      if (mounted && !isGuest) {
         Provider.of<WalletBalanceProvider>(
           context,
           listen: false,
@@ -378,7 +379,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!_isGuestUser)
           _fetchMyProfile().catchError((e) {
             debugPrint('🔴 Profile fetch error: $e');
-            if (ErrorMessageUtils.isSessionExpired(e)) {
+            if (!_isGuestUser && ErrorMessageUtils.isSessionExpired(e)) {
               _handleSessionExpired();
             }
             return null;
@@ -388,7 +389,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }),
         _fetchPosts().catchError((e) {
           debugPrint('🔴 Posts fetch error: $e');
-          if (ErrorMessageUtils.isSessionExpired(e)) {
+          if (!_isGuestUser && ErrorMessageUtils.isSessionExpired(e)) {
             _handleSessionExpired();
           }
         }),
@@ -508,6 +509,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _handleSessionExpired() {
+    if (_isGuestUser) return;
     if (mounted) {
       showDialog(
         context: context,
@@ -782,7 +784,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _isLoadingProfile = false);
       debugPrint('🔴 Error fetching profile: $e');
 
-      if (ErrorMessageUtils.isSessionExpired(e)) {
+      if (!_isGuestUser && ErrorMessageUtils.isSessionExpired(e)) {
         _handleSessionExpired();
       } else if (mounted) {
         SnackbarUtils.showError(
@@ -927,7 +929,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       debugPrint('🔴 Error fetching posts: $e');
 
-      if (ErrorMessageUtils.isSessionExpired(e)) {
+      if (!_isGuestUser && ErrorMessageUtils.isSessionExpired(e)) {
         _handleSessionExpired();
       } else if (mounted) {
         SnackbarUtils.showError(
