@@ -188,6 +188,9 @@ class AddPostService {
           'validFrom': request.validFrom,
         if (request.validUntil != null && request.validUntil!.isNotEmpty)
           'validUntil': request.validUntil,
+        if (request.barterStatus != null && request.barterStatus!.isNotEmpty)
+          'barterStatus': request.barterStatus,
+        'allowBarter': request.barterStatus == 'OPEN_FOR_BARTER',
         'status': request.status,
         'price': request.price,
         if (request.availabilitySlots != null)
