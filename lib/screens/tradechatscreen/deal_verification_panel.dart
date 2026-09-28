@@ -39,6 +39,7 @@ class DealVerificationPanel extends StatefulWidget {
   // The other chat participant's first name — used in place of the generic
   // "the other user" wording so waiting/reassurance copy names them directly.
   final String? otherUserName;
+  final VoidCallback? onMakeOffer;
 
   const DealVerificationPanel({
     super.key,
@@ -52,6 +53,7 @@ class DealVerificationPanel extends StatefulWidget {
     this.receiverName,
     this.offeredItemLabel,
     this.otherUserName,
+    this.onMakeOffer,
   });
 
   @override
@@ -83,12 +85,18 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
   void initState() {
     super.initState();
     _socketService.on('deal:updated', _handleDealUpdated);
+    _socketService.on('deal_cancelled', _handleDealUpdated);
+    _socketService.on('deal:cancelled', _handleDealUpdated);
+    _socketService.on('chat_updated', _handleDealUpdated);
     _fetchVerification();
   }
 
   @override
   void dispose() {
     _socketService.off('deal:updated', _handleDealUpdated);
+    _socketService.off('deal_cancelled', _handleDealUpdated);
+    _socketService.off('deal:cancelled', _handleDealUpdated);
+    _socketService.off('chat_updated', _handleDealUpdated);
     _slotCountdownTimer?.cancel();
     super.dispose();
   }
@@ -413,20 +421,44 @@ class _DealVerificationPanelState extends State<DealVerificationPanel> {
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: Colors.red.shade200),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(Icons.cancel_outlined, color: Colors.red.shade700, size: 22),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Appointment Cancelled\nThis appointment has been cancelled on the appointment screen and cannot be completed.',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.red.shade900,
+              Row(
+                children: [
+                  Icon(Icons.cancel_outlined, color: Colors.red.shade700, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Appointment Cancelled\nThis appointment has been cancelled on the appointment screen and cannot be completed.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (widget.onMakeOffer != null) ...[
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: widget.onMakeOffer,
+                  icon: const Icon(Icons.request_page, size: 18),
+                  label: const Text(
+                    'Make Offer Again',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E5BFF),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

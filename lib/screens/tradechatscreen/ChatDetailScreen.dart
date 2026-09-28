@@ -134,9 +134,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   // for the owner, during an in-flight negotiation (either direction), once
   // accepted/completed, when the listing is unavailable, or when blocked —
   // and already true again for the interested user right after the owner
-  // rejects an offer or cancels an accepted deal. Not recomputed
-  // client-side, so it can't drift from what the server actually allows.
-  bool get _canMakeNewOffer => _currentChat.canMakeOffer;
+  bool get _canMakeNewOffer =>
+      !_currentChat.isOwner &&
+      !_currentChat.isBlocked &&
+      !_isReferenceUnavailable &&
+      (_currentChat.canMakeOffer || _currentChat.isAppointmentCancelled);
 
   // Whether THIS user is the one who would pay coins if a PRICE/BOTH offer
   // in this chat is accepted — mirrors the backend's deriveTerms rule
@@ -5211,6 +5213,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         onChatShouldRefresh: _refreshChatWithFullScreenLoader,
         onDealFullyCompleted: _returnToMarketplaceAfterDealCompletion,
         onDealClosed: _returnToMarketplaceAfterDealNotCompleted,
+        onMakeOffer: _canMakeNewOffer ? _showMakeOfferDialog : null,
       );
       items.add((timestamp: dealTimestamp, widget: verificationPanel));
     } else {
@@ -5261,7 +5264,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       );
     }
 
-    if (_currentChat.isActive) {
+    if (_currentChat.isActive && !_currentChat.isAppointmentCancelled) {
       return _buildMessageInput();
     }
 
@@ -5299,6 +5302,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           ),
         ),
       );
+    }
+
+    if (_currentChat.isActive) {
+      return _buildMessageInput();
     }
 
     return const SizedBox();

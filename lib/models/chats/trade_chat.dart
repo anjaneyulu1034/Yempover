@@ -691,6 +691,11 @@ class ServiceAppointmentSnapshot {
       (slotRangeLabel != null && slotRangeLabel!.isNotEmpty)
       ? slotRangeLabel!
       : '$displayTime – $displayEndTime';
+
+  bool get isCancelled =>
+      status != null &&
+      (status!.toUpperCase().startsWith('CANCELLED') ||
+          status!.toUpperCase().startsWith('REJECTED'));
 }
 
 // Server-authoritative gate on "Deal Completed" for the scheduled service
@@ -1390,6 +1395,7 @@ class DealVerification {
   // doesn't, for an optional countdown. Null when the deal has no booked
   // slot, or on a response predating this — treat null as "no gate".
   final SlotGate? slotGate;
+  final bool? canMakeOffer;
 
   DealVerification({
     required this.chatId,
@@ -1403,6 +1409,7 @@ class DealVerification {
     required this.completion,
     this.closeDealPrompt,
     this.slotGate,
+    this.canMakeOffer,
   });
 
   factory DealVerification.fromJson(Map<String, dynamic> json) {
@@ -1430,6 +1437,7 @@ class DealVerification {
       slotGate: json['slotGate'] is Map
           ? SlotGate.fromJson(Map<String, dynamic>.from(json['slotGate'] as Map))
           : null,
+      canMakeOffer: json['canMakeOffer'] as bool?,
     );
   }
 }
@@ -1997,6 +2005,11 @@ class TradeChat {
   bool get isCancelled => status == ChatStatus.CANCELLED;
   bool get isArchived => status == ChatStatus.ARCHIVED;
   bool get isInactive => status == ChatStatus.INACTIVE && !isCompleted;
+  bool get isAppointmentCancelled =>
+      appointment?.isCancelled == true ||
+      dealVerification?.status == DealStatus.CANCELLED ||
+      (slotGate != null &&
+          slotGate!.message?.toLowerCase().contains('cancelled') == true);
   // Whether the new Deal PIN flow applies to this chat — it exists once an
   // offer has been accepted. Chats without it fall back to the legacy
   // "Deal Ready to Complete" banner (see ChatDetailScreen).
