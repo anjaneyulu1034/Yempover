@@ -2241,7 +2241,7 @@ class _AppointmentsDashboardScreenState
               maxLines: 3,
               maxLength: 500,
               decoration: const InputDecoration(
-                labelText: 'Reason (optional)',
+                labelText: 'Reason *',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -2255,11 +2255,15 @@ class _AppointmentsDashboardScreenState
           ElevatedButton(
             onPressed: () {
               final reason = reasonController.text.trim();
+              if (reason.isEmpty) {
+                SnackbarUtils.showError(dialogContext, 'Reason is required');
+                return;
+              }
               Navigator.pop(dialogContext);
               _handleAction(
                 appointmentId: appointmentId,
                 action: 'reject',
-                reason: reason.isEmpty ? null : reason,
+                reason: reason,
               );
             },
             style: ElevatedButton.styleFrom(
@@ -2576,7 +2580,7 @@ class _AppointmentsDashboardScreenState
                         maxLines: 2,
                         maxLength: 500,
                         decoration: const InputDecoration(
-                          labelText: 'Reason (optional)',
+                          labelText: 'Reason *',
                           border: OutlineInputBorder(),
                         ),
                       ),
@@ -2590,6 +2594,14 @@ class _AppointmentsDashboardScreenState
                                   submitting)
                               ? null
                               : () async {
+                                  final reasonText = notesController.text.trim();
+                                  if (reasonText.isEmpty) {
+                                    SnackbarUtils.showError(
+                                      sheetContext,
+                                      'Reason is required',
+                                    );
+                                    return;
+                                  }
                                   setSheetState(() => submitting = true);
                                   try {
                                     final response = await _service
@@ -2600,7 +2612,7 @@ class _AppointmentsDashboardScreenState
                                           ),
                                           appointmentTime: selectedSlot!,
                                           duration: duration,
-                                          reason: notesController.text.trim(),
+                                          reason: reasonText,
                                         );
                                     if (!mounted) return;
                                     Navigator.pop(sheetContext);

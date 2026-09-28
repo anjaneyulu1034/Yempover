@@ -1611,6 +1611,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     return;
                   }
 
+                  final descTrimmed = descriptionController.text.trim();
+                  if (descTrimmed.isEmpty) {
+                    setDialogState(() => dialogError = 'Description is required');
+                    return;
+                  }
+
                   final parsed = double.tryParse(trimmed);
                   if (parsed == null) {
                     setDialogState(
@@ -1968,6 +1974,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     // instead of the user writing a fresh one for this counter.
     final descriptionController = TextEditingController();
     List<UserItem> selectedItems = [];
+    String? dialogError;
 
     final result = await showDialog<bool>(
       context: context,
@@ -1995,6 +2002,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (dialogError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          dialogError!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
                     OutlinedButton.icon(
                       onPressed: () async {
                         final picked = await _pickCounterBarterItems(
@@ -2039,6 +2058,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     TextField(
                       controller: descriptionController,
                       maxLines: 3,
+                      onChanged: (_) {
+                        if (dialogError != null) {
+                          setDialogState(() => dialogError = null);
+                        }
+                      },
                       decoration: InputDecoration(
                         labelText: 'Description *',
                         border: border,
@@ -2076,7 +2100,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 ElevatedButton(
                   onPressed: selectedItems.isEmpty
                       ? null
-                      : () => Navigator.pop(context, true),
+                      : () {
+                          final descTrimmed = descriptionController.text.trim();
+                          if (descTrimmed.isEmpty) {
+                            setDialogState(() => dialogError = 'Description is required');
+                            return;
+                          }
+                          Navigator.pop(context, true);
+                        },
                   child: const Text('Send Counter'),
                 ),
               ],
@@ -2086,7 +2117,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       },
     );
 
-    if (result != true || selectedItems.isEmpty) return;
+    if (result != true || selectedItems.isEmpty || descriptionController.text.trim().isEmpty) return;
 
     await _createCounterOffer(
       originalOffer: originalOffer,
@@ -2278,6 +2309,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               ),
               ElevatedButton(
                 onPressed: () {
+                  final descTrimmed = descriptionController.text.trim();
+                  if (descTrimmed.isEmpty) {
+                    setDialogState(() => dialogError = 'Description is required');
+                    return;
+                  }
+
                   final trimmedPrice = priceController.text.trim();
                   if (trimmedPrice.isEmpty) {
                     setDialogState(() => dialogError = 'Enter Barter Dollars to pay');
