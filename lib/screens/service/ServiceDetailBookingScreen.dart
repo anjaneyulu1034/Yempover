@@ -55,7 +55,9 @@ class _ServiceDetailBookingScreenState
           if (item is Map) {
             final slotDay = item['dayOfWeek']?.toString().toUpperCase();
             if (slotDay == weekdayName) {
-              final minutes = item['slotDurationMinutes'];
+              final minutes = item['slotDurationMinutes'] ??
+                  item['appointmentDurationMinutes'] ??
+                  item['appointmentDuration'];
               if (minutes is num && minutes > 0) {
                 return minutes.toInt();
               }
@@ -77,6 +79,7 @@ class _ServiceDetailBookingScreenState
 
   List<int> get _durationMinutesOptions {
     final configured = _getConfiguredDurationForDate(_selectedDate);
+    final standardDurations = <int>{15, 30, 45, 60, 90, 120, 180, 240, 300, 360, 420, 480};
     final plan = _serviceData?['availabilityPlan'];
     if (plan is Map<String, dynamic>) {
       final options = plan['durationOptions'];
@@ -87,13 +90,14 @@ class _ServiceDetailBookingScreenState
             .whereType<num>()
             .map((n) => n.toInt())
             .toList();
-        if (minutes.contains(configured)) {
-          return [configured];
+        if (minutes.isNotEmpty) {
+          standardDurations.addAll(minutes);
         }
-        if (minutes.isNotEmpty) return minutes;
       }
     }
-    return [configured];
+    standardDurations.add(configured);
+    final sorted = standardDurations.toList()..sort();
+    return sorted;
   }
   List<Map<String, dynamic>> _slots = [];
   String? _slotsUnavailableReason;

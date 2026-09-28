@@ -2362,15 +2362,34 @@ class _AppointmentsDashboardScreenState
           }
         }
 
+        final weekdays = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+        final weekdayName = weekdays[resolvedDate.weekday - 1];
+        int? dayDuration;
+        for (final item in weekly) {
+          if (item['dayOfWeek']?.toString().toUpperCase() == weekdayName) {
+            final mins = item['slotDurationMinutes'] ??
+                item['appointmentDurationMinutes'] ??
+                item['appointmentDuration'];
+            if (mins is num && mins > 0) {
+              dayDuration = mins.toInt();
+              break;
+            }
+          }
+        }
+
         setSheetState(() {
           current ??= currentMap;
           weeklyAvailability = weekly;
           specialDates = special;
           availability = availabilityMap;
           selectedDate = resolvedDate;
-          duration ??= currentMap?['durationMinutes'] is num
-              ? (currentMap!['durationMinutes'] as num).toInt()
-              : null;
+          if (dayDuration != null) {
+            duration = dayDuration;
+          } else {
+            duration ??= currentMap?['durationMinutes'] is num
+                ? (currentMap!['durationMinutes'] as num).toInt()
+                : 15;
+          }
           // Pre-select the currently-held slot (isCurrent) the first time
           // through, or the just-picked date's own slot if it carries one.
           final slotDetails =
