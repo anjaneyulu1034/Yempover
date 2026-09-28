@@ -177,7 +177,11 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
       }
     }
 
-    final next = _nextAvailableDate(from: now, to: upperBound, weekdays: weekdays);
+    final next = _nextAvailableDate(
+      from: now,
+      to: upperBound,
+      weekdays: weekdays,
+    );
     return next ?? now;
   }
 
@@ -220,28 +224,41 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
           return slot;
         }).toList();
         if (data['available'] == false) {
-          unavailableReason = data['reason']?.toString() ??
+          unavailableReason =
+              data['reason']?.toString() ??
               data['message']?.toString() ??
               'No slots available on this date';
         }
       } else if (data is List) {
-        slots = data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        slots = data
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       } else if (data is Map<String, dynamic>) {
         if (data['available'] == false) {
-          unavailableReason = data['reason']?.toString() ??
+          unavailableReason =
+              data['reason']?.toString() ??
               data['message']?.toString() ??
               'No slots available on this date';
         }
-        for (final source in [data['slots'], data['availableSlots'], data['items']]) {
+        for (final source in [
+          data['slots'],
+          data['availableSlots'],
+          data['items'],
+        ]) {
           if (source is List) {
-            slots = source.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+            slots = source
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
             break;
           }
         }
       }
 
       final now = DateTime.now();
-      final isToday = now.year == _selectedDate.year &&
+      final isToday =
+          now.year == _selectedDate.year &&
           now.month == _selectedDate.month &&
           now.day == _selectedDate.day;
       if (isToday) {
@@ -251,7 +268,8 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
           return start == null || start.isAfter(now);
         }).toList();
         if (slots.isEmpty && hadSlotsBeforeNowFilter) {
-          unavailableReason = 'No remaining slots for today. Please select another date.';
+          unavailableReason =
+              'No remaining slots for today. Please select another date.';
         }
       }
 
@@ -287,7 +305,13 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
       final hour = int.tryParse(match.group(1)!);
       final minute = int.tryParse(match.group(2)!);
       if (hour == null || minute == null) continue;
-      return DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, hour, minute);
+      return DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+        hour,
+        minute,
+      );
     }
     final time = slot['startTime']?.toString() ?? slot['time']?.toString();
     return _service.parseTimeOfDay(_selectedDate, time);
@@ -308,13 +332,22 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
     if (_serviceData != null) {
       final rawSlots = _serviceData!['availabilitySlots'];
       if (rawSlots is List) {
-        final weekdays = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+        final weekdays = [
+          'MONDAY',
+          'TUESDAY',
+          'WEDNESDAY',
+          'THURSDAY',
+          'FRIDAY',
+          'SATURDAY',
+          'SUNDAY',
+        ];
         final weekdayName = weekdays[date.weekday - 1];
         for (final item in rawSlots) {
           if (item is Map) {
             final slotDay = item['dayOfWeek']?.toString().toUpperCase();
             if (slotDay == weekdayName) {
-              final minutes = item['slotDurationMinutes'] ??
+              final minutes =
+                  item['slotDurationMinutes'] ??
                   item['appointmentDurationMinutes'] ??
                   item['appointmentDuration'];
               if (minutes is num && minutes > 0) {
@@ -324,7 +357,9 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
           }
         }
       }
-      final defaultMinutes = _serviceData!['slotDurationMinutes'] ?? _serviceData!['appointmentDuration'];
+      final defaultMinutes =
+          _serviceData!['slotDurationMinutes'] ??
+          _serviceData!['appointmentDuration'];
       if (defaultMinutes is num && defaultMinutes > 0) {
         return defaultMinutes.toInt();
       }
@@ -338,25 +373,7 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
 
   List<int> get _durationMinutesOptions {
     final configured = _getConfiguredDurationForDate(_selectedDate);
-    final standardDurations = <int>{15, 30, 45, 60, 90, 120, 180, 240, 300, 360, 420, 480};
-    final plan = _serviceData?['availabilityPlan'];
-    if (plan is Map<String, dynamic>) {
-      final options = plan['durationOptions'];
-      if (options is List && options.isNotEmpty) {
-        final minutes = options
-            .whereType<Map>()
-            .map((o) => o['minutes'])
-            .whereType<num>()
-            .map((n) => n.toInt())
-            .toList();
-        if (minutes.isNotEmpty) {
-          standardDurations.addAll(minutes);
-        }
-      }
-    }
-    standardDurations.add(configured);
-    final sorted = standardDurations.toList()..sort();
-    return sorted;
+    return [configured];
   }
 
   bool _slotAvailable(Map<String, dynamic> slot) {
@@ -407,7 +424,9 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
       _selectedSlot = slot;
       _duration = duration;
     });
-    widget.onChanged(SelectedServiceSlot(dateTime: dt, durationMinutes: duration));
+    widget.onChanged(
+      SelectedServiceSlot(dateTime: dt, durationMinutes: duration),
+    );
   }
 
   void _emitLookingForServiceSelection() {
@@ -418,7 +437,9 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
       _proposedTime.hour,
       _proposedTime.minute,
     );
-    widget.onChanged(SelectedServiceSlot(dateTime: dateTime, durationMinutes: _duration));
+    widget.onChanged(
+      SelectedServiceSlot(dateTime: dateTime, durationMinutes: _duration),
+    );
   }
 
   Widget _buildPeriodTab(_SlotPeriod period, int count, bool selected) {
@@ -428,12 +449,13 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
       child: InkWell(
         onTap: enabled
             ? () => setState(() {
-                  _selectedSlotPeriod = period;
-                  if (_selectedSlot != null && _periodForSlot(_selectedSlot!) != period) {
-                    _selectedSlot = null;
-                    widget.onChanged(null);
-                  }
-                })
+                _selectedSlotPeriod = period;
+                if (_selectedSlot != null &&
+                    _periodForSlot(_selectedSlot!) != period) {
+                  _selectedSlot = null;
+                  widget.onChanged(null);
+                }
+              })
             : null,
         borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
@@ -443,7 +465,9 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
             color: selected ? const Color(0xFFEAF1FF) : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? const Color(0xFF2E5BFF) : const Color(0xFFE5E7EB),
+              color: selected
+                  ? const Color(0xFF2E5BFF)
+                  : const Color(0xFFE5E7EB),
               width: selected ? 1.8 : 1.2,
             ),
           ),
@@ -476,19 +500,22 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
   Widget _buildSlotChip(Map<String, dynamic> slot) {
     final available = _slotAvailable(slot);
     final selectedSlot = _selectedSlot;
-    final selected = selectedSlot != null && _slotLabel(selectedSlot) == _slotLabel(slot);
+    final selected =
+        selectedSlot != null && _slotLabel(selectedSlot) == _slotLabel(slot);
 
     final bg = selected
         ? const Color(0xFF2E5BFF)
         : available
-            ? Colors.white
-            : const Color(0xFFF3F4F6);
-    final borderColor = selected ? const Color(0xFF2E5BFF) : const Color(0xFFE5E7EB);
+        ? Colors.white
+        : const Color(0xFFF3F4F6);
+    final borderColor = selected
+        ? const Color(0xFF2E5BFF)
+        : const Color(0xFFE5E7EB);
     final fg = selected
         ? Colors.white
         : available
-            ? const Color(0xFF111827)
-            : const Color(0xFF9CA3AF);
+        ? const Color(0xFF111827)
+        : const Color(0xFF9CA3AF);
 
     return InkWell(
       onTap: available ? () => _selectSlot(slot) : null,
@@ -511,9 +538,15 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
   }
 
   Widget _buildSlotGrid() {
-    final morningCount = _slotsForPeriod(_SlotPeriod.morning).where(_slotAvailable).length;
-    final afternoonCount = _slotsForPeriod(_SlotPeriod.afternoon).where(_slotAvailable).length;
-    final eveningCount = _slotsForPeriod(_SlotPeriod.evening).where(_slotAvailable).length;
+    final morningCount = _slotsForPeriod(
+      _SlotPeriod.morning,
+    ).where(_slotAvailable).length;
+    final afternoonCount = _slotsForPeriod(
+      _SlotPeriod.afternoon,
+    ).where(_slotAvailable).length;
+    final eveningCount = _slotsForPeriod(
+      _SlotPeriod.evening,
+    ).where(_slotAvailable).length;
 
     final periodSlots = _slotsForPeriod(_selectedSlotPeriod).toList()
       ..sort((a, b) {
@@ -528,11 +561,23 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
       children: [
         Row(
           children: [
-            _buildPeriodTab(_SlotPeriod.morning, morningCount, _selectedSlotPeriod == _SlotPeriod.morning),
+            _buildPeriodTab(
+              _SlotPeriod.morning,
+              morningCount,
+              _selectedSlotPeriod == _SlotPeriod.morning,
+            ),
             const SizedBox(width: 10),
-            _buildPeriodTab(_SlotPeriod.afternoon, afternoonCount, _selectedSlotPeriod == _SlotPeriod.afternoon),
+            _buildPeriodTab(
+              _SlotPeriod.afternoon,
+              afternoonCount,
+              _selectedSlotPeriod == _SlotPeriod.afternoon,
+            ),
             const SizedBox(width: 10),
-            _buildPeriodTab(_SlotPeriod.evening, eveningCount, _selectedSlotPeriod == _SlotPeriod.evening),
+            _buildPeriodTab(
+              _SlotPeriod.evening,
+              eveningCount,
+              _selectedSlotPeriod == _SlotPeriod.evening,
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -566,7 +611,8 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
         InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: hasMultipleOptions
-              ? () => setState(() => _showDurationOptions = !_showDurationOptions)
+              ? () =>
+                    setState(() => _showDurationOptions = !_showDurationOptions)
               : null,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
@@ -588,15 +634,28 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Duration', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                      Text(
+                        'Duration',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
                       const SizedBox(height: 2),
-                      Text('$_duration minutes', style: const TextStyle(fontSize: 16, color: Colors.black87)),
+                      Text(
+                        '$_duration minutes',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.black87,
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 if (hasMultipleOptions)
-                  Icon(_showDurationOptions ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                      color: Colors.grey[600]),
+                  Icon(
+                    _showDurationOptions
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: Colors.grey[600],
+                  ),
               ],
             ),
           ),
@@ -627,14 +686,23 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
                   },
                   child: Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    color: isSelected ? const Color(0xFF2E5BFF).withValues(alpha: 0.08) : Colors.transparent,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    color: isSelected
+                        ? const Color(0xFF2E5BFF).withValues(alpha: 0.08)
+                        : Colors.transparent,
                     child: Text(
                       '$value minutes',
                       style: TextStyle(
                         fontSize: 15,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                        color: isSelected ? const Color(0xFF2E5BFF) : Colors.black87,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                        color: isSelected
+                            ? const Color(0xFF2E5BFF)
+                            : Colors.black87,
                       ),
                     ),
                   ),
@@ -682,7 +750,10 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
           children: [
             Icon(Icons.access_time, color: Color(0xFF2E5BFF)),
             SizedBox(width: 10),
-            Text('Pick a time slot', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(
+              'Pick a time slot',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -691,7 +762,11 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
             DateTime? initialDate;
             if (_isLookingForService) {
               initialDate = _selectedDate;
-            } else if (_isSelectableBookingDate(_selectedDate, firstDate, upperBound)) {
+            } else if (_isSelectableBookingDate(
+              _selectedDate,
+              firstDate,
+              upperBound,
+            )) {
               initialDate = _selectedDate;
             } else {
               initialDate = _nextAvailableDate(
@@ -728,7 +803,13 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
             );
             if (picked == null) return;
             if (_isLookingForService) {
-              setState(() => _selectedDate = DateTime(picked.year, picked.month, picked.day));
+              setState(
+                () => _selectedDate = DateTime(
+                  picked.year,
+                  picked.month,
+                  picked.day,
+                ),
+              );
               _emitLookingForServiceSelection();
             } else {
               _loadSlotsForDate(picked);
@@ -745,7 +826,10 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
                 Icon(Icons.calendar_month, color: Colors.grey[600]),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(_dateFormat.format(_selectedDate), style: const TextStyle(fontSize: 15)),
+                  child: Text(
+                    _dateFormat.format(_selectedDate),
+                    style: const TextStyle(fontSize: 15),
+                  ),
                 ),
                 Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
               ],
@@ -756,7 +840,10 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
         if (_isLookingForService) ...[
           InkWell(
             onTap: () async {
-              final picked = await showTimePicker(context: context, initialTime: _proposedTime);
+              final picked = await showTimePicker(
+                context: context,
+                initialTime: _proposedTime,
+              );
               if (picked == null) return;
               setState(() => _proposedTime = picked);
               _emitLookingForServiceSelection();
@@ -802,7 +889,8 @@ class _ServiceSlotPickerState extends State<ServiceSlotPicker> {
                   Icon(Icons.info_outline, size: 32, color: Colors.grey[400]),
                   const SizedBox(height: 8),
                   Text(
-                    _slotsUnavailableReason ?? 'No slots available for selected date',
+                    _slotsUnavailableReason ??
+                        'No slots available for selected date',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey[600]),
                   ),

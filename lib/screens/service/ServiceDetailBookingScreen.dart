@@ -49,13 +49,22 @@ class _ServiceDetailBookingScreenState
     if (_serviceData != null) {
       final rawSlots = _serviceData!['availabilitySlots'];
       if (rawSlots is List) {
-        final weekdays = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+        final weekdays = [
+          'MONDAY',
+          'TUESDAY',
+          'WEDNESDAY',
+          'THURSDAY',
+          'FRIDAY',
+          'SATURDAY',
+          'SUNDAY',
+        ];
         final weekdayName = weekdays[date.weekday - 1];
         for (final item in rawSlots) {
           if (item is Map) {
             final slotDay = item['dayOfWeek']?.toString().toUpperCase();
             if (slotDay == weekdayName) {
-              final minutes = item['slotDurationMinutes'] ??
+              final minutes =
+                  item['slotDurationMinutes'] ??
                   item['appointmentDurationMinutes'] ??
                   item['appointmentDuration'];
               if (minutes is num && minutes > 0) {
@@ -65,7 +74,9 @@ class _ServiceDetailBookingScreenState
           }
         }
       }
-      final defaultMinutes = _serviceData!['slotDurationMinutes'] ?? _serviceData!['appointmentDuration'];
+      final defaultMinutes =
+          _serviceData!['slotDurationMinutes'] ??
+          _serviceData!['appointmentDuration'];
       if (defaultMinutes is num && defaultMinutes > 0) {
         return defaultMinutes.toInt();
       }
@@ -79,26 +90,9 @@ class _ServiceDetailBookingScreenState
 
   List<int> get _durationMinutesOptions {
     final configured = _getConfiguredDurationForDate(_selectedDate);
-    final standardDurations = <int>{15, 30, 45, 60, 90, 120, 180, 240, 300, 360, 420, 480};
-    final plan = _serviceData?['availabilityPlan'];
-    if (plan is Map<String, dynamic>) {
-      final options = plan['durationOptions'];
-      if (options is List && options.isNotEmpty) {
-        final minutes = options
-            .whereType<Map>()
-            .map((o) => o['minutes'])
-            .whereType<num>()
-            .map((n) => n.toInt())
-            .toList();
-        if (minutes.isNotEmpty) {
-          standardDurations.addAll(minutes);
-        }
-      }
-    }
-    standardDurations.add(configured);
-    final sorted = standardDurations.toList()..sort();
-    return sorted;
+    return [configured];
   }
+
   List<Map<String, dynamic>> _slots = [];
   String? _slotsUnavailableReason;
   DateTime _selectedDate = DateTime.now();
@@ -576,11 +570,14 @@ class _ServiceDetailBookingScreenState
 
   _SlotPeriod _periodForSlot(Map<String, dynamic> slot) {
     final dt = _slotDateTime(slot);
-    final hour = dt?.hour ??
-        _service.parseTimeOfDay(
+    final hour =
+        dt?.hour ??
+        _service
+            .parseTimeOfDay(
               _selectedDate,
               slot['startTime']?.toString() ?? slot['time']?.toString(),
-            )?.hour ??
+            )
+            ?.hour ??
         12;
     if (hour < 12) return _SlotPeriod.morning;
     if (hour < 17) return _SlotPeriod.afternoon;
@@ -698,16 +695,16 @@ class _ServiceDetailBookingScreenState
     final bg = selected
         ? const Color(0xFF2E5BFF)
         : available
-            ? Colors.white
-            : const Color(0xFFF3F4F6);
+        ? Colors.white
+        : const Color(0xFFF3F4F6);
     final borderColor = selected
         ? const Color(0xFF2E5BFF)
         : const Color(0xFFE5E7EB);
     final fg = selected
         ? Colors.white
         : available
-            ? const Color(0xFF111827)
-            : const Color(0xFF9CA3AF);
+        ? const Color(0xFF111827)
+        : const Color(0xFF9CA3AF);
 
     return InkWell(
       onTap: available
@@ -740,12 +737,15 @@ class _ServiceDetailBookingScreenState
   }
 
   Widget _buildSlotPicker() {
-    final morningCount =
-        _slotsForPeriod(_SlotPeriod.morning).where(_slotAvailable).length;
-    final afternoonCount =
-        _slotsForPeriod(_SlotPeriod.afternoon).where(_slotAvailable).length;
-    final eveningCount =
-        _slotsForPeriod(_SlotPeriod.evening).where(_slotAvailable).length;
+    final morningCount = _slotsForPeriod(
+      _SlotPeriod.morning,
+    ).where(_slotAvailable).length;
+    final afternoonCount = _slotsForPeriod(
+      _SlotPeriod.afternoon,
+    ).where(_slotAvailable).length;
+    final eveningCount = _slotsForPeriod(
+      _SlotPeriod.evening,
+    ).where(_slotAvailable).length;
 
     // Show every slot for the period, not just the bookable ones — a slot
     // someone else already has confirmed should still be visible, just
@@ -846,7 +846,10 @@ class _ServiceDetailBookingScreenState
     final quote = double.tryParse(quoteText);
     if (quote == null || quote <= 0) {
       setState(() => _quoteError = 'Please enter the amount you want to offer');
-      SnackbarUtils.showErrorToast(context, 'Please enter the amount you want to offer');
+      SnackbarUtils.showErrorToast(
+        context,
+        'Please enter the amount you want to offer',
+      );
       return;
     }
     if (quoteText.length > Validators.maxAmountLength) {
@@ -1675,11 +1678,13 @@ class _ServiceDetailBookingScreenState
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: _showDurationOptions &&
+                                    color:
+                                        _showDurationOptions &&
                                             _durationMinutesOptions.length > 1
                                         ? Colors.deepPurple
                                         : Colors.grey.shade400,
-                                    width: _showDurationOptions &&
+                                    width:
+                                        _showDurationOptions &&
                                             _durationMinutesOptions.length > 1
                                         ? 1.6
                                         : 1.2,
@@ -1741,7 +1746,9 @@ class _ServiceDetailBookingScreenState
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.grey.withValues(alpha: 0.14),
+                                      color: Colors.grey.withValues(
+                                        alpha: 0.14,
+                                      ),
                                       blurRadius: 8,
                                       offset: const Offset(0, 3),
                                     ),
@@ -1749,66 +1756,70 @@ class _ServiceDetailBookingScreenState
                                 ),
                                 child: Column(
                                   children: List.generate(
-                                      _durationMinutesOptions.length, (index) {
-                                    final options = _durationMinutesOptions;
-                                    final value = options[index];
-                                    final isSelected = _duration == value;
-                                    return Column(
-                                      children: [
-                                        InkWell(
-                                          onTap: () {
-                                            setState(() {
-                                              _duration = value;
-                                              _showDurationOptions = false;
-                                            });
-                                          },
-                                          child: Container(
-                                            width: double.infinity,
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 14,
-                                              vertical: 12,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: isSelected
-                                                  ? Colors.deepPurple.withValues(
-                                                      alpha: 0.08,
-                                                    )
-                                                  : Colors.transparent,
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    '$value minutes',
-                                                    style: TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight: isSelected
-                                                          ? FontWeight.w600
-                                                          : FontWeight.w500,
-                                                      color: isSelected
-                                                          ? Colors.deepPurple
-                                                          : Colors.black87,
+                                    _durationMinutesOptions.length,
+                                    (index) {
+                                      final options = _durationMinutesOptions;
+                                      final value = options[index];
+                                      final isSelected = _duration == value;
+                                      return Column(
+                                        children: [
+                                          InkWell(
+                                            onTap: () {
+                                              setState(() {
+                                                _duration = value;
+                                                _showDurationOptions = false;
+                                              });
+                                            },
+                                            child: Container(
+                                              width: double.infinity,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 12,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: isSelected
+                                                    ? Colors.deepPurple
+                                                          .withValues(
+                                                            alpha: 0.08,
+                                                          )
+                                                    : Colors.transparent,
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      '$value minutes',
+                                                      style: TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight: isSelected
+                                                            ? FontWeight.w600
+                                                            : FontWeight.w500,
+                                                        color: isSelected
+                                                            ? Colors.deepPurple
+                                                            : Colors.black87,
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
-                                                if (isSelected)
-                                                  const Icon(
-                                                    Icons.check,
-                                                    color: Colors.deepPurple,
-                                                    size: 18,
-                                                  ),
-                                              ],
+                                                  if (isSelected)
+                                                    const Icon(
+                                                      Icons.check,
+                                                      color: Colors.deepPurple,
+                                                      size: 18,
+                                                    ),
+                                                ],
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                        if (index != options.length - 1)
-                                          Divider(
-                                            height: 1,
-                                            color: Colors.grey.shade200,
-                                          ),
-                                      ],
-                                    );
-                                  }),
+                                          if (index != options.length - 1)
+                                            Divider(
+                                              height: 1,
+                                              color: Colors.grey.shade200,
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
                             ],
