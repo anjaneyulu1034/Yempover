@@ -694,12 +694,14 @@ class _ServiceDetailBookingScreenState
     final firstDt = _slotDateTime(first);
     if (firstDt == null) return '';
 
-    final firstLabel = first['startTimeLabel']?.toString() ??
+    final firstLabel =
+        first['startTimeLabel']?.toString() ??
         (first['startTime'] != null
             ? AppDateFormat.timeOfDay(first['startTime'].toString())
             : _timeFormat.format(firstDt));
 
-    final lastEndLabel = last['endTimeLabel']?.toString() ??
+    final lastEndLabel =
+        last['endTimeLabel']?.toString() ??
         (last['endTime'] != null
             ? AppDateFormat.timeOfDay(last['endTime'].toString())
             : null);
