@@ -6,6 +6,7 @@ import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/utils/app_date_format.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:yempover_app/utils/validators.dart';
+import 'package:yempover_app/utils/wallet_offer_guard.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:yempover_app/widgets/coin_icon.dart';
@@ -989,6 +990,13 @@ class _ServiceDetailBookingScreenState
       SnackbarUtils.showErrorToast(context, _invalidReason);
       return;
     }
+
+    final canAfford = await WalletOfferGuard.ensureCanAfford(
+      context,
+      requiredCoins: quote,
+      itemName: _serviceData?['title']?.toString(),
+    );
+    if (!canAfford) return;
 
     setState(() => _booking = true);
 

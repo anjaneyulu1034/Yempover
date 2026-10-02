@@ -2,6 +2,7 @@
 import 'package:yempover_app/services/service_booking_service.dart';
 import 'package:yempover_app/services/token_service.dart';
 import 'package:yempover_app/services/trade_chat_service/trade_chat_service.dart';
+import 'package:yempover_app/models/chats/trade_chat.dart';
 import 'package:yempover_app/screens/tradechatscreen/ChatDetailScreen.dart';
 import 'package:yempover_app/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
@@ -463,10 +464,22 @@ class _AppointmentsDashboardScreenState
     setState(() => _chatLoadingAppointmentId = appointmentId);
 
     try {
-      final chat = await _chatService.initiateChat(
-        responderId: responderId,
-        serviceId: serviceId,
-      );
+      final directChatId = item['chatId']?.toString() ?? item['tradeChatId']?.toString();
+      TradeChat fullChat;
+
+      if (directChatId != null && directChatId.isNotEmpty) {
+        fullChat = await _chatService.getChatById(directChatId);
+      } else {
+        final chat = await _chatService.initiateChat(
+          responderId: responderId,
+          serviceId: serviceId,
+        );
+        try {
+          fullChat = await _chatService.getChatById(chat.id);
+        } catch (_) {
+          fullChat = chat;
+        }
+      }
 
       if (!mounted) return;
 
@@ -474,7 +487,7 @@ class _AppointmentsDashboardScreenState
         context,
         MaterialPageRoute(
           builder: (_) => ChatDetailScreen(
-            chat: chat,
+            chat: fullChat,
             currentUserId: currentUserId,
             onChatUpdated: (_) {},
           ),
@@ -522,9 +535,28 @@ class _AppointmentsDashboardScreenState
 
   // Drives button visibility off the server's `actions` object when present
   // (the source of truth — it already accounts for who's viewing and what
+  bool _isSlotInFuture(Map<String, dynamic> item) {
+    if (item['slotElapsed'] == false) return true;
+    final rawDate = item['appointmentDate']?.toString();
+    if (rawDate != null && rawDate.isNotEmpty) {
+      final dt = DateTime.tryParse(rawDate);
+      if (dt != null) {
+        final duration = (item['duration'] as num?)?.toInt() ?? 30;
+        final endsAt = dt.toLocal().add(Duration(minutes: duration));
+        if (DateTime.now().isBefore(endsAt)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // Drives button visibility off the server's `actions` object when present
+  // (the source of truth — it already accounts for who's viewing and what
   // status allows). Falls back to the old hardcoded status-based rules only
   // for appointments loaded before this field existed.
   List<String> _actionsForItem(Map<String, dynamic> item, bool isProvider) {
+    List<String> result;
     final actions = item['actions'];
     if (actions is Map) {
       const keyForAction = {
@@ -535,15 +567,20 @@ class _AppointmentsDashboardScreenState
         'complete': 'canComplete',
         'no-show': 'canMarkNoShow',
       };
-      return _actionOrder
+      result = _actionOrder
           .where((action) => actions[keyForAction[action]] == true)
           .toList();
+    } else {
+      final status = item['status']?.toString() ?? 'UNKNOWN';
+      result = isProvider
+          ? _legacyProviderActions(status)
+          : _legacyClientActions(status);
     }
 
-    final status = item['status']?.toString() ?? 'UNKNOWN';
-    return isProvider
-        ? _legacyProviderActions(status)
-        : _legacyClientActions(status);
+    if (_isSlotInFuture(item)) {
+      result.remove('complete');
+    }
+    return result;
   }
 
   List<String> _legacyProviderActions(String status) {
@@ -551,7 +588,7 @@ class _AppointmentsDashboardScreenState
       case 'REQUESTED':
         return ['confirm', 'reject'];
       case 'CONFIRMED':
-        return ['complete', 'no-show', 'cancel'];
+        return ['no-show', 'cancel'];
       default:
         return const [];
     }
